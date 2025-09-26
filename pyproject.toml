@@ -1,0 +1,40 @@
+[project]
+name = "conjuror"
+requires-python = ">=3.11"
+version = "0.1.0"
+description = "Medical Physics Synthetic Image generator and RT Plan generator"
+authors = [
+    {name = "Joao Silveira", email = "jsilveira@radformation.com"},
+    {name = "James Kerns", email = "jkerns@radformation.com"}
+]
+readme = "readme.rst"
+license = "MIT"
+keywords = ["medical", "physics", "image", "analysis", "RT Plan"]
+
+dependencies = [
+    "pydicom>=2.0",
+    "numpy>=2.0",
+    "plotly",
+    "scikit-image",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+docs = [
+    "sphinx-autobuild>=2021.3.14",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-design>=0.6.0",
+    "sphinx>=7.1.2",
+    "furo>=2024.8.6",
+]
+developer = [
+    "nox>=2024.4.15",
+    "parameterized>=0.9.0",
+    "pytest>=8.3.2",
+    "pytest-cov>=5.0.0",
+    "pytest-xdist>=3.6.1",
+    "pylinac"
+]
+
+[tool.ruff]
+target-version = "py311"

@@ -1,0 +1,53 @@
+image: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+
+definitions:
+  caches:
+    precommit: ~/.cache/pre-commit
+    nox-build-docs: .nox/build_docs
+
+  steps:
+    - step: &bb-runner
+        runs-on:
+          - self.hosted
+          - linux
+          - radmachine
+
+    - step: &pre-commit-checks
+        name: Pre-commit Checks
+        <<: *bb-runner
+        script:
+          - uv pip install pre-commit
+          - uv tool run pre-commit run --all-files
+        caches:
+          - precommit
+
+    - step: &build-docs
+        name: Build Docs
+        <<: *bb-runner
+        condition:
+          changesets:
+            includePaths:
+              - "**.py"
+              - "docs/**"
+        script:
+          - uv run nox -s build_docs
+        caches:
+          - nox-build-docs
+
+pipelines:
+
+  custom:
+    publish-package:
+      - step:
+          name: Build & Push to PYPI
+          <<: *bb-runner
+          image: ghcr.io/astral-sh/uv:bookworm
+          script:
+            - uv build
+            - uv publish  # token is an env var
+
+  pull-requests:
+    '**':
+      - step: *pre-commit-checks
+      - parallel:
+          - step: *build-docs
