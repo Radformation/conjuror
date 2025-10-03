@@ -2,7 +2,8 @@ from datetime import datetime
 
 import numpy as np
 from numpy import ndarray
-from pydicom import FileMetaDataset, Dataset
+from pydicom import Dataset
+from pydicom.dataset import FileMetaDataset
 from pydicom.uid import generate_uid, RTImageStorage, ExplicitVRLittleEndian, SecondaryCaptureImageStorage
 
 
