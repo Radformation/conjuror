@@ -6,8 +6,7 @@ import pydicom
 from matplotlib.figure import Figure
 from parameterized import parameterized
 
-from pylinac.core.image_generator import AS1200Image
-from pylinac.plan_generator.dicom import (
+from conjuror.plans.dicom import (
     FluenceMode,
     HalcyonPlanGenerator,
     OvertravelError,
@@ -15,12 +14,13 @@ from pylinac.plan_generator.dicom import (
     TrueBeamBeam,
     TrueBeamPlanGenerator,
 )
-from pylinac.plan_generator.mlc import (
+from conjuror.plans.mlc import (
     MLCShaper,
     interpolate_control_points,
     next_sacrifice_shift,
     split_sacrifice_travel,
 )
+from conjuror.images.simulators import AS1200Image
 from tests.utils import get_file_from_cloud_test_repo
 
 RT_PLAN_FILE = get_file_from_cloud_test_repo(["plan_generator", "Murray-plan.dcm"])

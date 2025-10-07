@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import base64
-import concurrent.futures
 import contextlib
 import hashlib
-import multiprocessing
 import os
 import os.path as osp
-import pprint
 import shutil
 import time
 from collections.abc import Sequence
@@ -22,7 +19,6 @@ from google.cloud import storage
 from py_linq import Enumerable
 from requests import ReadTimeout
 
-from pylinac.core import image
 from tests import DELETE_FILES
 
 GCP_BUCKET_NAME = "pylinac_test_files"
@@ -273,93 +269,6 @@ class FromURLTesterMixin(MixinTesterBase):
 
     def test_from_url(self):
         self.klass.from_url(self.full_url, **self.url_kwargs)
-
-
-class DataBankMixin:
-    """Mixin class for running through a bank of images/datasets. No details are tested; only pass/fail results.
-
-    DATA_DIR must be set and is a relative location.
-    ``file_should_be_processed()`` should be overloaded if the criteria is not an Image.
-    ``test_all()`` should be overloaded to pass an analysis function. Because of the pool executor, methods nor attrs can be passed.
-    ``executor`` can be either 'ProcessPoolExecutor' or 'ThreadPoolExecutor'.
-    ``workers`` specifies how many workers (threads or processes) will be started.
-
-    This class walks through a directory and runs through the files, analyzing them if the file should be analyzed.
-    Note that an executor is started **per directory** rather than one executor for all the files.
-    This is on purpose.
-    Some test runs, seemingly due to the executor, bog down when running a very large number of files. By opening a new executor at
-    every directory, memory leaks are minimized.
-    """
-
-    DATA_BANK_DIR = osp.abspath(
-        osp.join(osp.abspath(__file__), "..", "..", "..", "pylinac test files")
-    )
-    DATA_DIR = []
-    executor = "ProcessPoolExecutor"
-    workers = multiprocessing.cpu_count() - 1
-    print_success_path = False
-    write_failures_to_file = False
-
-    @classmethod
-    def setUpClass(cls):
-        cls.DATA_DIR = osp.join(cls.DATA_BANK_DIR, *cls.DATA_DIR)
-        if not osp.isdir(cls.DATA_DIR):
-            raise NotADirectoryError(f"Directory {cls.DATA_DIR} is not valid")
-
-    def file_should_be_processed(self, filepath):
-        """Decision of whether file should be run. Returns boolean."""
-        try:
-            image.load(filepath)
-            return True
-        except Exception:
-            return False
-
-    def test_all(self, func):
-        """Test method that runs through the bank data in an executor pool.
-
-        Parameters
-        ----------
-        func : A function that processes the filepath and determines if it passes. Must return ``Success`` if passed.
-        """
-        passes = 0
-        fails = []
-        start = time.time()
-        futures = {}
-        # open an executor
-        with getattr(concurrent.futures, self.executor)(
-            max_workers=self.workers
-        ) as exec:
-            # walk through datasets
-            for pdir, sdir, files in os.walk(self.DATA_DIR):
-                for file in files:
-                    # if the file needs processing, submit it into the queue
-                    filepath = osp.join(pdir, file)
-                    if self.file_should_be_processed(filepath):
-                        future = exec.submit(func, filepath)
-                        futures[future] = filepath
-
-            # return results
-            for test_num, future in enumerate(concurrent.futures.as_completed(futures)):
-                stuff_to_print = [test_num, future.result()]
-                if future.result() == "Success":
-                    passes += 1
-                    if self.print_success_path:
-                        stuff_to_print.append(futures[future])
-                else:
-                    fails += [futures[future]]
-                print(*stuff_to_print)
-
-        end = time.time() - start
-        print(
-            f"Processing of {test_num} files took {end:3.1f}s ({end / test_num:3.2f}s/item). {passes} passed; {len(fails)} failed."
-        )
-        if len(fails) > 0:
-            pprint.pprint(f"Failures: {fails}")
-            if self.write_failures_to_file:
-                with open(f"failures_{osp.basename(self.DATA_DIR)}.txt", mode="w") as f:
-                    for file in fails:
-                        f.write(file + "\n")
-                print("Failures written to file")
 
 
 class FigData(TypedDict):
