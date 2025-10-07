@@ -58,7 +58,7 @@ MLC_DISTAL_BOUNDARIES = list(np.arange(-140, 140 + 1, 10))
 MLC_PROXIMAL_BOUNDARIES = list(np.arange(-145, 145 + 1, 10))
 
 
-class _Beam(ABC):
+class Beam(ABC):
     """Represents a DICOM beam dataset. Has methods for creating the dataset and adding control points.
     Generally not created on its own but rather under the hood as part of a PlanGenerator object.
 
@@ -278,7 +278,7 @@ class _Beam(ABC):
         return beam
 
 
-class TrueBeamBeam(_Beam):
+class TrueBeamBeam(Beam):
     """Represents a DICOM beam dataset for a TrueBeam. Has methods for creating the dataset and adding control points.
     Generally not created on its own but rather under the hood as part of a PlanGenerator object.
 
@@ -387,7 +387,7 @@ class TrueBeamBeam(_Beam):
         )
 
 
-class HalcyonBeam(_Beam):
+class HalcyonBeam(Beam):
     """A beam representing a Halcyon. Halcyons have dual MLC stacks, no X-jaws, no couch rotation, etc."""
 
     def __init__(
@@ -615,7 +615,7 @@ class PlanGenerator(ABC):
     def _validate_machine_type(self, beam_sequence: Sequence):
         pass
 
-    def add_beam(self, beam: HalcyonBeam | TrueBeamBeam):
+    def add_beam(self, beam: Beam):
         """Add a beam to the plan using the Beam object. Although public,
         this is a low-level method that is used by the higher-level methods like add_open_field_beam.
         This handles the associated metadata like the referenced beam sequence and fraction group sequence.
