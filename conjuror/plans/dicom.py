@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
 import numpy as np
 import pydicom
@@ -598,7 +598,7 @@ class PlanGenerator(ABC):
         self._validate_machine_type(ds.BeamSequence)
 
     @classmethod
-    def from_rt_plan_file(cls, rt_plan_file: str | Path, **kwargs) -> PlanGenerator:
+    def from_rt_plan_file(cls, rt_plan_file: str | Path, **kwargs) -> Self:
         """Load an existing RTPLAN file and create a new plan based on it.
 
         Parameters
