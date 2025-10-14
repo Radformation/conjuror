@@ -123,11 +123,11 @@ def plot_fluences(
     ----------
     plan : pydicom.Dataset
         The RT Plan dataset. Must contain BeamSequence.
-    width_mm : int
+    width_mm : float
         The width of the fluence map in mm. Use smaller values for faster calculation.
     resolution_mm : float, optional
         The resolution of the fluence map in mm. Smaller values will take longer to calculate.
-    dtype : type, optional
+    dtype : np.dtype, optional
         The data type of the fluence map. Default is uint16.
     show : bool, optional
         Whether to show the plots. Default is True.

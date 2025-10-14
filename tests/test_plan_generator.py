@@ -804,9 +804,9 @@ class TestMLCShaper(TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         # simplistic MLC setup
-        cls.leaf_boundaries: list[float] = np.arange(
+        cls.leaf_boundaries: tuple[float, ...] = tuple(np.arange(
             start=-200, stop=201, step=5
-        ).tolist()
+        ).astype(float))
 
     def test_init(self):
         MLCShaper(

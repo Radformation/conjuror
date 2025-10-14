@@ -2,7 +2,7 @@ import dataclasses
 import datetime
 import math
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
@@ -13,7 +13,7 @@ import pydicom
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 from pydicom.dataset import Dataset
-from pydicom.sequence import Sequence
+from pydicom.sequence import Sequence as DicomSequence
 from pydicom.uid import generate_uid
 
 from ..images.layers import ArrayLayer
@@ -23,18 +23,20 @@ from .fluence import generate_fluences, plot_fluences
 from .mlc import MLCShaper
 
 
+# MLC boundaries are immutable by design, so they are stored as tuples.
+# However, pydicom expects lists, so these are converted to lists when necessary (Beam).
 MLC_BOUNDARIES_TB_MIL120 = (
-    list(np.arange(-200, -100 + 1, 10))
-    + list(np.arange(-95, 95 + 1, 5))
-    + list(np.arange(100, 200 + 1, 10))
+    tuple(np.arange(-200, -100 + 1, 10).astype(float))
+    + tuple(np.arange(-95, 95 + 1, 5).astype(float))
+    + tuple(np.arange(100, 200 + 1, 10).astype(float))
 )
 MLC_BOUNDARIES_TB_HD120 = (
-    list(np.arange(-110, -40 + 1, 5))
-    + list(np.arange(-37.5, 37.5 + 1, 2.5))
-    + list(np.arange(40, 110 + 1, 5))
+    tuple(np.arange(-110, -40 + 1, 5).astype(float))
+    + tuple(np.arange(-37.5, 37.5 + 1, 2.5).astype(float))
+    + tuple(np.arange(40, 110 + 1, 5).astype(float))
 )
-MLC_BOUNDARIES_HAL_DIST = list(np.arange(-140, 140 + 1, 10))
-MLC_BOUNDARIES_HAL_PROX = list(np.arange(-145, 145 + 1, 10))
+MLC_BOUNDARIES_HAL_DIST = tuple(np.arange(-140, 140 + 1, 10).astype(float))
+MLC_BOUNDARIES_HAL_PROX = tuple(np.arange(-145, 145 + 1, 10).astype(float))
 
 
 @dataclasses.dataclass
@@ -77,7 +79,7 @@ class TrueBeamMachine:
     mlc_is_hd: bool
 
     @property
-    def mlc_boundaries(self) -> list[float]:
+    def mlc_boundaries(self) -> tuple[float,...]:
         return MLC_BOUNDARIES_TB_HD120 if self.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
 
     def __init__(self, mlc_is_hd: bool, machine_specs: MachineSpecs = DEFAULT_SPECS_TB):
@@ -135,13 +137,13 @@ class Beam(ABC):
 
     def __init__(
         self,
-        beam_limiting_device_sequence: Sequence,
+        beam_limiting_device_sequence: DicomSequence,
         beam_name: str,
         energy: float,
         fluence_mode: FluenceMode,
         dose_rate: int,
-        metersets: list[float],
-        gantry_angles: float | list[float],
+        metersets: Sequence[float],
+        gantry_angles: float | Sequence[float],
         coll_angle: float,
         beam_limiting_device_positions: dict[str, list],
         couch_vrt: float,
@@ -152,7 +154,7 @@ class Beam(ABC):
         """
         Parameters
         ----------
-        beam_limiting_device_sequence : Sequence
+        beam_limiting_device_sequence : DicomSequence
             The beam_limiting_device_sequence as defined in the template plan.
         beam_name : str
             The name of the beam. Must be less than 16 characters.
@@ -162,9 +164,9 @@ class Beam(ABC):
             The fluence mode of the beam.
         dose_rate : int
             The dose rate of the beam.
-        metersets : list[float]
+        metersets : Sequence[float]
             The meter sets for each control point.
-        gantry_angles : Union[float, list[float]]
+        gantry_angles : Union[float, Sequence[float]]
             The gantry angle(s) of the beam. If a single number, it's assumed to be a static beam. If multiple numbers, it's assumed to be a dynamic beam.
         coll_angle : float
             The collimator angle.
@@ -248,7 +250,7 @@ class Beam(ABC):
         cp0.ControlPointIndex = 0
         cp0.NominalBeamEnergy = energy
         cp0.DoseRateSet = dose_rate
-        beam_limiting_device_position_sequence = Sequence()
+        beam_limiting_device_position_sequence = DicomSequence()
         for key, values in bld_positions.items():
             beam_limiting_device_position = Dataset()
             beam_limiting_device_position.RTBeamLimitingDeviceType = key
@@ -280,7 +282,7 @@ class Beam(ABC):
                 cp.GantryAngle = gantry_angles[cp_idx]
                 cp.GantryRotationDirection = gantry_direction[cp_idx].value
 
-            bld_position_sequence = Sequence()
+            bld_position_sequence = DicomSequence()
             for bld, positions in bld_positions.items():
                 if not dict_bld_is_static[bld]:
                     bld_position = Dataset()
@@ -301,7 +303,7 @@ class Beam(ABC):
         beam_name: str,
         beam_type: str,
         fluence_mode: FluenceMode,
-        beam_limiting_device_sequence: Sequence,
+        beam_limiting_device_sequence: DicomSequence,
         number_of_control_points: int,
     ) -> Dataset:
         beam = Dataset()
@@ -320,7 +322,7 @@ class Beam(ABC):
         elif fluence_mode == FluenceMode.SRS:
             primary_fluence_mode1.FluenceMode = "NON_STANDARD"
             primary_fluence_mode1.FluenceModeID = "SRS"
-        beam.PrimaryFluenceModeSequence = Sequence((primary_fluence_mode1,))
+        beam.PrimaryFluenceModeSequence = DicomSequence((primary_fluence_mode1,))
 
         # Beam Limiting Device Sequence
         beam.BeamLimitingDeviceSequence = beam_limiting_device_sequence
@@ -338,7 +340,7 @@ class Beam(ABC):
         beam.NumberOfControlPoints = number_of_control_points
 
         # Control Point Sequence
-        beam.ControlPointSequence = Sequence()
+        beam.ControlPointSequence = DicomSequence()
         return beam
 
 
@@ -356,8 +358,8 @@ class TrueBeamBeam(Beam):
         energy: float,
         fluence_mode: FluenceMode,
         dose_rate: int,
-        metersets: list[float],
-        gantry_angles: float | list[float],
+        metersets: Sequence[float],
+        gantry_angles: float | Sequence[float],
         x1: float,
         x2: float,
         y1: float,
@@ -382,9 +384,9 @@ class TrueBeamBeam(Beam):
             The fluence mode of the beam.
         dose_rate : int
             The dose rate of the beam.
-        metersets : list[float]
+        metersets : Sequence[float]
             The meter sets for each control point. The length must match the number of control points in mlc_positions.
-        gantry_angles : Union[float, list[float]]
+        gantry_angles : Union[float, Sequence[float]]
             The gantry angle(s) of the beam. If a single number, it's assumed to be a static beam. If multiple numbers, it's assumed to be a dynamic beam.
         x1 : float
             The left jaw position.
@@ -422,9 +424,9 @@ class TrueBeamBeam(Beam):
         mlc = Dataset()
         mlc.RTBeamLimitingDeviceType = "MLCX"
         mlc.NumberOfLeafJawPairs = 60
-        mlc.LeafPositionBoundaries = MLC_BOUNDARIES_TB_HD120 if mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
+        mlc.LeafPositionBoundaries = list(MLC_BOUNDARIES_TB_HD120 if mlc_is_hd else MLC_BOUNDARIES_TB_MIL120)
 
-        bld_sequence = Sequence((jaw_x, jaw_y, jaw_asymx, jaw_asymy, mlc))
+        bld_sequence = DicomSequence((jaw_x, jaw_y, jaw_asymx, jaw_asymy, mlc))
 
         beam_limiting_device_positions = {
             "ASYMX": [[x1, x2]],
@@ -455,8 +457,8 @@ class HalcyonBeam(Beam):
     def __init__(
         self,
         beam_name: str,
-        metersets: list[float],
-        gantry_angles: float | list[float],
+        metersets: Sequence[float],
+        gantry_angles: float | Sequence[float],
         distal_mlc_positions: list[list[float]],
         proximal_mlc_positions: list[list[float]],
         coll_angle: float,
@@ -469,9 +471,9 @@ class HalcyonBeam(Beam):
         ----------
         beam_name : str
             The name of the beam. Must be less than 16 characters.
-        metersets : list[float]
+        metersets : Sequence[float]
             The meter sets for each control point. The length must match the number of control points in mlc_positions.
-        gantry_angles : Union[float, list[float]]
+        gantry_angles : Union[float, Sequence[float]]
             The gantry angle(s) of the beam. If a single number, it's assumed to be a static beam. If multiple numbers, it's assumed to be a dynamic beam.
         distal_mlc_positions : list[list[float]]
             The distal MLC positions for each control point. This is the x-position of each leaf for each control point.
@@ -495,12 +497,12 @@ class HalcyonBeam(Beam):
         mlc_x1 = Dataset()
         mlc_x1.RTBeamLimitingDeviceType = "MLCX1"
         mlc_x1.NumberOfLeafJawPairs = 28
-        mlc_x1.LeafPositionBoundaries = MLC_BOUNDARIES_HAL_DIST
+        mlc_x1.LeafPositionBoundaries = list(MLC_BOUNDARIES_HAL_DIST)
         mlc_x2 = Dataset()
         mlc_x2.RTBeamLimitingDeviceType = "MLCX2"
         mlc_x2.NumberOfLeafJawPairs = 29
-        mlc_x2.LeafPositionBoundaries = MLC_BOUNDARIES_HAL_PROX
-        bld_sequence = Sequence((jaw_x, jaw_y, mlc_x1, mlc_x2))
+        mlc_x2.LeafPositionBoundaries = list(MLC_BOUNDARIES_HAL_PROX)
+        bld_sequence = DicomSequence((jaw_x, jaw_y, mlc_x1, mlc_x2))
 
         beam_limiting_device_positions = {
             "X": [[-140, 140]],
@@ -612,7 +614,7 @@ class PlanGenerator(ABC):
         patient_setup = Dataset()
         patient_setup.PatientPosition = "HFS"
         patient_setup.PatientSetupNumber = 0
-        self.ds.PatientSetupSequence = Sequence((patient_setup,))
+        self.ds.PatientSetupSequence = DicomSequence((patient_setup,))
 
         # Dose Reference Sequence
         dose_ref1 = Dataset()
@@ -624,7 +626,7 @@ class PlanGenerator(ABC):
         dose_ref1.DeliveryMaximumDose = 20.0
         dose_ref1.TargetPrescriptionDose = 40.0
         dose_ref1.TargetMaximumDose = 20.0
-        self.ds.DoseReferenceSequence = Sequence((dose_ref1,))
+        self.ds.DoseReferenceSequence = DicomSequence((dose_ref1,))
 
         # Fraction Group Sequence
         frxn_gp1 = Dataset()
@@ -632,12 +634,12 @@ class PlanGenerator(ABC):
         frxn_gp1.NumberOfFractionsPlanned = 1
         frxn_gp1.NumberOfBeams = 0
         frxn_gp1.NumberOfBrachyApplicationSetups = 0
-        frxn_gp1.ReferencedBeamSequence = Sequence()
-        self.ds.FractionGroupSequence = Sequence((frxn_gp1,))
+        frxn_gp1.ReferencedBeamSequence = DicomSequence()
+        self.ds.FractionGroupSequence = DicomSequence((frxn_gp1,))
 
         # Clear beam sequence
         # This will be filled with the custom beams
-        self.ds.BeamSequence = Sequence()
+        self.ds.BeamSequence = DicomSequence()
 
         # Machine name
         self.machine_name = ds.BeamSequence[0].TreatmentMachineName
@@ -660,7 +662,7 @@ class PlanGenerator(ABC):
         return cls(ds, **kwargs)
 
     @abstractmethod
-    def _validate_machine_type(self, beam_sequence: Sequence):
+    def _validate_machine_type(self, beam_sequence: DicomSequence):
         pass
 
     def add_beam(self, beam: Beam):
@@ -784,7 +786,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
         )
         self.machine = TrueBeamMachine(mlc_is_hd, machine_specs=machine_specs)
 
-    def _validate_machine_type(self, beam_sequence: Sequence):
+    def _validate_machine_type(self, beam_sequence: DicomSequence):
         has_valid_mlc_data: bool = any(
             bld.RTBeamLimitingDeviceType == "MLCX"
             for bs in beam_sequence
@@ -1806,7 +1808,7 @@ class HalcyonPlanGenerator(PlanGenerator):
         )
         self.machine = HalcyonMachine(machine_specs=machine_specs)
 
-    def _validate_machine_type(self, beam_sequence: Sequence):
+    def _validate_machine_type(self, beam_sequence: DicomSequence):
         has_valid_mlc_data: bool = any(
             bld.RTBeamLimitingDeviceType == "MLCX1"
             for bs in beam_sequence
@@ -2130,7 +2132,7 @@ class VmatTestT2:
         dynamic_beam = self._truebeam_beam(
             "VMAT-T2-Dyn",
             cumulative_mu,
-            list(gantry_angles),
+            gantry_angles,
             mlc_positions_a,
             mlc_positions_b,
         )
