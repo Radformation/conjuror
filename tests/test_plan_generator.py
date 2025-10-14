@@ -12,7 +12,7 @@ from conjuror.plans.dicom import (
     OvertravelError,
     Stack,
     TrueBeamBeam,
-    TrueBeamPlanGenerator,
+    TrueBeamPlanGenerator, VmatTestT2,
 )
 from conjuror.plans.mlc import (
     MLCShaper,
@@ -677,6 +677,12 @@ class TestPlanPrefabs(TestCase):
                 mu=250,
             )
 
+    def test_vmat_t2(self):
+        self.pg.add_vmat_t2()
+        dcm = self.pg.as_dicom()
+        self.assertEqual(len(dcm.BeamSequence), 2)
+
+
 
 HALCYON_MLC_INDEX = {
     Stack.DISTAL: -2,
@@ -1128,4 +1134,163 @@ class TestInterpolateControlPoints(TestCase):
                 interpolation_ratios=[-0.5],
                 sacrifice_chunks=[5],
                 max_overtravel=140,
+            )
+
+class TestVmatT2(TestCase):
+    def test_defaults(self):
+        VmatTestT2()
+        pass
+
+    def test_plot(self):
+        test = VmatTestT2()
+        test.plot_control_points()
+        pass
+
+    def test_replicate_original_test(self):
+        original_file = get_file_from_cloud_test_repo(
+            ["plan_generator", "VMAT", "Millennium", "T2_DoseRateGantrySpeed_M120_TB_Rev02.dcm"])
+        beam_name_dyn = "T2_DR_GS"
+        beam_name_ref = "OpenBeam"
+        max_gantry_speed = 4.8
+        max_dose_rate = 600
+
+        # Extract data from the original plan
+        ds = pydicom.dcmread(original_file)
+        beam_sequence = ds.BeamSequence
+        beam_idx = [bs.BeamName == beam_name_dyn for bs in beam_sequence].index(True)
+        beam_meterset = int(
+            ds.FractionGroupSequence[0].ReferencedBeamSequence[beam_idx].BeamMeterset
+        )
+        beam = beam_sequence[beam_idx]
+        control_point_sequence = beam.ControlPointSequence
+        plan_gantry_angle = np.array([cp.GantryAngle for cp in control_point_sequence])
+        gantry_angle_var = (180 - plan_gantry_angle) % 360
+        plan_cumulative_meterset_weight = np.array(
+            [cp.CumulativeMetersetWeight for cp in control_point_sequence]
+        )
+        plan_cumulative_meterset = plan_cumulative_meterset_weight * beam_meterset
+        plan_mlc_position = np.array(
+            [
+                bld.LeafJawPositions
+                for cp in control_point_sequence
+                for bld in cp.BeamLimitingDevicePositionSequence
+                if bld.RTBeamLimitingDeviceType == "MLCX"
+            ]
+        )
+
+        # Derive the input parameters
+        gantry_motion = np.append(0, np.abs(np.diff(gantry_angle_var)))
+        dose_motion = np.append(0, np.abs(np.diff(plan_cumulative_meterset)))
+        time_to_deliver_gantry = gantry_motion / max_gantry_speed
+        time_to_deliver_mu = dose_motion / (max_dose_rate / 60)
+        time_to_deliver = np.max((time_to_deliver_gantry, time_to_deliver_mu), axis=0)
+        gantry_speed = gantry_motion / time_to_deliver  #
+        dose_rate = dose_motion / time_to_deliver * 60
+        gantry_speeds = gantry_speed[2:-1:2]
+        dose_rates = dose_rate[2:-1:2]
+        start_gantry_offset = float(180 - plan_gantry_angle[0])
+        gantry_motion_per_transition = float(gantry_motion[1])
+        gantry_rotation_clockwise = bool(
+            plan_gantry_angle[1] - plan_gantry_angle[0] > 0
+        )
+        mu_per_segment = float(dose_motion[2])
+        mu_per_transition = float(dose_motion[1])
+        correct_fluence = False
+        mlc_span = float(2 * plan_mlc_position[0, 0])
+        mlc_gap = float(plan_mlc_position[2, 1] - plan_mlc_position[3, -1])
+        mlc_motion_reverse = bool(plan_mlc_position[0, 0] > 0)
+        jaw_padding = 0
+
+        # Run
+        test = VmatTestT2(
+            tuple(dose_rates),
+            tuple(gantry_speeds),
+            mu_per_segment,
+            mu_per_transition,
+            correct_fluence,
+            gantry_motion_per_transition,
+            gantry_rotation_clockwise,
+            start_gantry_offset,
+            mlc_span,
+            mlc_motion_reverse,
+            mlc_gap,
+            jaw_padding,
+            max_dose_rate,
+            max_gantry_speed,
+        )
+
+        # Assert dynamic beam
+        cps = test.beams[0].ds.ControlPointSequence
+        gantry_angle = [cp.GantryAngle for cp in cps]
+        cumulative_meterset_weight = [cp.CumulativeMetersetWeight for cp in cps]
+        mlc_position = np.array(
+            [cp.BeamLimitingDevicePositionSequence[-1].LeafJawPositions for cp in cps]
+        )
+        self.assertTrue(np.allclose(gantry_angle, plan_gantry_angle))
+        self.assertTrue(
+            np.allclose(cumulative_meterset_weight, plan_cumulative_meterset_weight)
+        )
+        self.assertTrue(np.allclose(mlc_position, plan_mlc_position))
+
+        # Assert reference beam
+        beam_idx = [bs.BeamName == beam_name_ref for bs in beam_sequence].index(True)
+        beam = beam_sequence[beam_idx]
+        cps = beam.ControlPointSequence
+        plan_gantry_angle = cps[0].GantryAngle
+        plan_cumulative_meterset_weight = [cp.CumulativeMetersetWeight for cp in cps]
+        plan_mlc_position = (
+            cps[0].BeamLimitingDevicePositionSequence[-1].LeafJawPositions
+        )
+        cps = test.beams[1].ds.ControlPointSequence
+        gantry_angle = cps[0].GantryAngle
+        cumulative_meterset_weight = [cp.CumulativeMetersetWeight for cp in cps]
+        mlc_position = cps[0].BeamLimitingDevicePositionSequence[-1].LeafJawPositions
+        self.assertTrue(np.allclose(gantry_angle, plan_gantry_angle))
+        self.assertTrue(
+            np.allclose(cumulative_meterset_weight, plan_cumulative_meterset_weight)
+        )
+        self.assertTrue(np.allclose(mlc_position, plan_mlc_position))
+
+    def test_adding_static_beams(self):
+        static_angles = (0, 90, 270, 180)
+        test = VmatTestT2(dynamic_delivery_at_static_gantry=static_angles)
+        expected_number_of_beams = 6  # dynamic, reference, 4x static
+        actual_number_of_beams = len(test.beams)
+        self.assertEqual(actual_number_of_beams, expected_number_of_beams)
+
+        for idx, expected_angle in enumerate(static_angles):
+            actual_angle = test.beams[idx + 2].ds.ControlPointSequence[0].GantryAngle
+            self.assertEqual(actual_angle, expected_angle)
+
+    def test_error_if_gantry_speeds_and_dose_rates_have_different_sizes(self):
+        gantry_speeds = (1, 2, 3)
+        dose_rates = (1, 2)
+        with self.assertRaises(ValueError):
+            VmatTestT2(gantry_speeds, dose_rates)
+
+    def test_error_if_gantry_speeds_above_max(self):
+        gantry_speeds = (1, 2, 5)
+        dose_rates = (1, 2, 3)
+        max_gantry_speed = 4
+        with self.assertRaises(ValueError):
+            VmatTestT2(gantry_speeds, dose_rates, max_gantry_speed=max_gantry_speed)
+
+    def test_error_if_dose_rates_above_max(self):
+        gantry_speeds = (1, 2, 5)
+        dose_rates = (1, 2, 300)
+        max_dose_rate = 100
+        with self.assertRaises(ValueError):
+            VmatTestT2(gantry_speeds, dose_rates, max_dose_rate=max_dose_rate)
+
+    def test_error_if_axis_not_maxed_out(self):
+        gantry_speeds = (5, 1, 1)
+        dose_rates = (1, 300, 1)
+        max_gantry_speed = 5
+        max_dose_rate = 300
+        with self.assertRaises(ValueError):
+            VmatTestT2(
+                gantry_speeds,
+                dose_rates,
+                max_gantry_speed=max_gantry_speed,
+                max_dose_rate=max_dose_rate,
             )

@@ -9,6 +9,7 @@ from typing import Literal, Self
 
 import numpy as np
 import pydicom
+from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence
@@ -643,6 +644,10 @@ class PlanGenerator(ABC):
         dose_reference_uid = self.ds.DoseReferenceSequence[0].DoseReferenceUID
         referenced_beam.ReferencedDoseReferenceUID = dose_reference_uid
         self.ds.FractionGroupSequence[0].ReferencedBeamSequence.append(referenced_beam)
+
+    def add_beams(self, beams: list[Beam]):
+        for beam in beams:
+            self.add_beam(beam)
 
     def to_file(self, filename: str | Path) -> None:
         """Write the DICOM dataset to file"""
@@ -1699,6 +1704,51 @@ class TrueBeamPlanGenerator(PlanGenerator):
         )
         self.add_beam(beam)
 
+    def add_vmat_t2(self,
+        dose_rates: tuple[float, ...] = (600, 600, 600, 600, 500, 400, 200),
+        gantry_speeds: tuple[float, ...] = (3, 4, 5, 6, 6, 6, 6),
+        mu_per_segment: float = 48,
+        mu_per_transition: float = 8,
+        correct_fluence: bool = True,
+        gantry_motion_per_transition: float = 10,
+        gantry_rotation_clockwise: bool = True,
+        start_gantry_offset: float = 1,
+        mlc_span: float = 138,
+        mlc_motion_reverse: bool = True,
+        mlc_gap: float = 2,
+        jaw_padding: float = 0,
+        energy: float = 6,
+        fluence_mode: FluenceMode = FluenceMode.STANDARD,
+        max_dose_rate: int = 600,
+        max_gantry_speed: float = 6,
+        reference_beam_mu: float = 100,
+        reference_beam_add_before: bool = False,
+        dynamic_delivery_at_static_gantry: tuple[float, ...] = (),
+        ):
+        vmat = VmatTestT2(
+            dose_rates = dose_rates,
+            gantry_speeds = gantry_speeds,
+            mu_per_segment = mu_per_segment,
+            mu_per_transition = mu_per_transition,
+            correct_fluence = correct_fluence,
+            gantry_motion_per_transition = gantry_motion_per_transition,
+            gantry_rotation_clockwise = gantry_rotation_clockwise,
+            start_gantry_offset = start_gantry_offset,
+            mlc_span = mlc_span,
+            mlc_motion_reverse = mlc_motion_reverse,
+            mlc_gap = mlc_gap,
+            jaw_padding = jaw_padding,
+            energy = energy,
+            fluence_mode = fluence_mode,
+            max_dose_rate = max_dose_rate,
+            max_gantry_speed = max_gantry_speed,
+            reference_beam_mu = reference_beam_mu,
+            reference_beam_add_before = reference_beam_add_before,
+            dynamic_delivery_at_static_gantry = dynamic_delivery_at_static_gantry,
+            is_mlc_hd=self._is_mlc_hd,
+        )
+        self.add_beams(vmat.beams)
+
 
 class HalcyonPlanGenerator(PlanGenerator):
     """A class to generate a plan with two beams stacked on top of each other such as the Halcyon. This
@@ -1879,3 +1929,352 @@ class HalcyonPlanGenerator(PlanGenerator):
 
 class OvertravelError(ValueError):
     pass
+
+class VmatTestT2:
+    # constant
+    MIN_GANTRY_OFFSET = 0.1
+
+    # public field
+    beams: list[Beam]
+    dynamic_beam_idx: int
+    reference_beam_idx: int
+
+    def __init__(
+        self,
+        dose_rates: tuple[float, ...] = (600, 600, 600, 600, 500, 400, 200),
+        gantry_speeds: tuple[float, ...] = (3, 4, 5, 6, 6, 6, 6),
+        mu_per_segment: float = 48,
+        mu_per_transition: float = 8,
+        correct_fluence: bool = True,
+        gantry_motion_per_transition: float = 10,
+        gantry_rotation_clockwise: bool = True,
+        start_gantry_offset: float = 1,
+        mlc_span: float = 138,
+        mlc_motion_reverse: bool = True,
+        mlc_gap: float = 2,
+        jaw_padding: float = 0,
+        energy: float = 6,
+        fluence_mode: FluenceMode = FluenceMode.STANDARD,
+        max_dose_rate: int = 600,
+        max_gantry_speed: float = 6,
+        is_mlc_hd: bool = False,
+        reference_beam_mu: float = 100,
+        reference_beam_add_before: bool = False,
+        dynamic_delivery_at_static_gantry: tuple[float, ...] = (),
+    ):
+        """Create a plan like Clif Ling T2 test. The defaults use an optimized selection for a TrueBeam.
+
+        Parameters
+        ----------
+        dose_rates : tuple
+            The dose rates to test in MU/min. Each dose rate will have its own ROI.
+        gantry_speeds : tuple
+            The gantry speeds to tests in deg/sec. Each gantry speed will have its own ROI.
+        mu_per_segment : float
+            The number of MUs to deliver to each ROI
+        mu_per_transition : float
+            The number of MUs to deliver during while the MLCs move from one ROI to the next.
+        correct_fluence : bool
+            The original T2 plans have an incorrect fluence on the initial and final transitions.
+            Use False to replicate the original plans, otherwise use True to have a more uniform fluence.
+        gantry_motion_per_transition : float
+            The number of degrees that the gantry should rotate while the MLCs move from one ROI to the next.
+        gantry_rotation_clockwise : bool
+            The direction of the gantry rotation. If True, the gantry will rotate clockwise
+        start_gantry_offset : float
+            The initial gantry offset in degrees. E.g. If start_gantry_offset=1 and gantry_rotation_clockwise=True,
+            then start angle = 181 IEC. If gantry_rotation_clockwise=False, then start angle = 179 IEC
+        mlc_span : float
+            The total size of the field in mm. Initial/final MLC position = +/- mlc_span/2
+        mlc_motion_reverse : bool
+            The direction of MLC motion. If False, the leaves move in positive direction (IEC)
+            from -mlc_span/2 to +mlc_span/2. If True, the leaves move in negative direction (IEC)
+            from +mlc_span/2 to -mlc_span/2.
+        mlc_gap : float
+            The MLC gap between ROIs in mm. This creates a darker region to help visualizing the ROIs boundaries.
+        jaw_padding : float
+            The added jaw position in mm with respect to the initial/final MLC positions
+        energy : float
+            The energy of the beam.
+        fluence_mode : FluenceMode
+            The fluence mode of the beam.
+        max_dose_rate : int
+            The max dose rate. This is used to compute the control point sequence to achieve the test dose_rates
+        max_gantry_speed : float
+            The max gantry speed. This is used to compute the control point sequence to achieve the test gantry_speeds
+        is_mlc_hd : bool
+            Defines if linac has an HD MLC (required by the DICOM standard)
+        reference_beam_mu : float
+            The number of MU's to be delivered in the reference beam (static beam)
+        reference_beam_add_before : bool
+            Whether to add the reference_beam before or after the dynamic beam. If True, the gantry angle is set to
+            the initial gantry angle of the dynamic beam. If False, the gantry angle is set to the final gantry angle
+            of the dynamic beam.
+        dynamic_delivery_at_static_gantry : tuple
+            There is one beam created for each static gantry angle. These beams contain the same control point sequence
+            as the dynamic beam, but the gantry angle is replaced by a single value. There will be no modulation of
+            dose rate and gantry speeds, and can be used as an alternative reference beam.
+        """
+
+        # store parameters common to all beams
+        self._is_mlc_hd = is_mlc_hd
+        self._energy = energy
+        self._fluence_mode = fluence_mode
+        self._max_dose_rate = max_dose_rate
+        self._max_gantry_speed = max_gantry_speed
+        mlc_boundaries = (
+            MLC_120HDMIL_BOUNDARIES if is_mlc_hd else MLC_120HDMIL_BOUNDARIES
+        )
+        self._y1 = mlc_boundaries[0]
+        self._y2 = mlc_boundaries[-1]
+        self._x1 = -(mlc_span / 2 + jaw_padding)
+        self._x2 = mlc_span / 2 + jaw_padding
+
+        # convert/cast variables
+        gantry_speeds = np.array(gantry_speeds)
+        dose_rates = np.array(dose_rates)
+        mu_per_sec = dose_rates / 60
+
+        # Verify that gantry speeds and dose rates have the same size:
+        if len(gantry_speeds) != len(dose_rates):
+            raise ValueError("gantry_speeds and dose_rates must have the same length")
+
+        gantry_speeds_normalized = gantry_speeds / max_gantry_speed
+        dose_rates_normalized = dose_rates / max_dose_rate
+        # Verify that there are no requested speeds above limit
+        if np.any(gantry_speeds_normalized > 1):
+            raise ValueError("Requested gantry_speeds cannot exceed max_gantry_speed")
+        if np.any(dose_rates_normalized > 1):
+            raise ValueError("Requested dose_rates cannot exceed max_dose_rate")
+        # Verify that at least one axis is maxed out for all control points
+        if not np.all(
+            np.max((gantry_speeds_normalized, dose_rates_normalized), axis=0) == 1
+        ):
+            raise ValueError("At least one axis must be maxed out")
+
+        # calculate unmodulated variables
+        num_segments = len(gantry_speeds)
+        time_to_deliver_segments = mu_per_segment / mu_per_sec
+        gantry_motion_per_segment = gantry_speeds * time_to_deliver_segments
+        segment_width = (mlc_span + mlc_gap) / num_segments
+
+        # This is the modulation computation
+        # delivery motion scheme (T is transition, D is Dose, numbers are index of calculated values (1-based))
+        # CP    0 1 2 3 4 5 6 7 8 9
+        # G     0 T 1 T 2 T 3 T 4 T
+        # D     0 * D T D T D T D *     , * On the 1st and last transition the dose needs to be scaled to the mlc motion to prevent overdosage
+        # MLC   0 * 0 T 0 T 0 T 0 0     , * The first transition is smaller by mlc_gap
+
+        gantry_motion = np.insert(
+            gantry_motion_per_segment,
+            np.arange(0, num_segments + 1),
+            gantry_motion_per_transition,
+        )
+        gantry_motion = np.append(0, gantry_motion)
+
+        dose_motion = 1.0 * np.tile([mu_per_segment, mu_per_transition], num_segments)
+        dose_motion = np.append([0, mu_per_transition], dose_motion)
+        if correct_fluence:
+            dose_motion[[1, -1]] = mu_per_transition * (1 - mlc_gap / segment_width)
+
+        mlc_motion_ini = [0, segment_width - mlc_gap]
+        mlc_motion_mid = np.tile([0, segment_width], num_segments - 1)
+        mlc_motion_end = [0, 0]
+        mlc_motion = np.concatenate((mlc_motion_ini, mlc_motion_mid, mlc_motion_end))
+
+        # Extra verifications on the computed variables
+        gantry_angles_without_offset = np.cumsum(gantry_motion)
+        if gantry_angles_without_offset[-1] > 360 - 2 * self.MIN_GANTRY_OFFSET:
+            msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
+            raise ValueError(msg)
+        gantry_angles_var = gantry_angles_without_offset + start_gantry_offset
+        if gantry_angles_without_offset[-1] > 360 - self.MIN_GANTRY_OFFSET:
+            msg = "The gantry rotation exceeds 360 degrees. Reduce the start_gantry_offset"
+            raise ValueError(msg)
+
+        # Finalize values
+        cumulative_mu = np.cumsum(dose_motion)
+        mlc_positions = np.cumsum(mlc_motion) - mlc_span / 2
+        if mlc_motion_reverse:
+            mlc_positions = -mlc_positions
+        mlc_positions_b = mlc_positions
+        mlc_positions_a = -np.flip(mlc_positions)
+        gantry_angles = (180 - gantry_angles_var) % 360
+        if gantry_rotation_clockwise:
+            gantry_angles = 360 - gantry_angles
+
+        # Store final values
+        self._gantry_angles = gantry_angles
+        self._cumulative_mu = cumulative_mu
+        self._mlc_positions_a = mlc_positions_a
+        self._mlc_positions_b = mlc_positions_b
+
+        # Create dynamic beam
+        dynamic_beam = self._truebeam_beam(
+            "VMAT-T2-Dyn",
+            cumulative_mu,
+            list(gantry_angles),
+            mlc_positions_a,
+            mlc_positions_b,
+        )
+
+        # Create reference beam
+        reference_meterset = [0, reference_beam_mu]
+        reference_gantry_angle = float(
+            gantry_angles[0 if reference_beam_add_before else -1]
+        )
+        reference_mlc_positions_a = 2 * [mlc_positions_a[0]]
+        reference_mlc_positions_b = 2 * [mlc_positions_b[-1]]
+        reference_beam = self._truebeam_beam(
+            "VMAT-T2-Ref",
+            reference_meterset,
+            reference_gantry_angle,
+            reference_mlc_positions_a,
+            reference_mlc_positions_b,
+        )
+
+        # Append the dynamic and reference beams according to the order defined in init
+        beams: list[Beam | None] = 2 * [None]
+        self.dynamic_beam_idx = 1 if reference_beam_add_before else 0
+        self.reference_beam_idx = 0 if reference_beam_add_before else 1
+        beams[self.dynamic_beam_idx] = dynamic_beam
+        beams[self.reference_beam_idx] = reference_beam
+
+        # Add static beams
+        for gantry_angle in dynamic_delivery_at_static_gantry:
+            beam = self._truebeam_beam(
+                f"VMAT-T2-Sta-{gantry_angle:03d}",
+                cumulative_mu,
+                [gantry_angle],
+                mlc_positions_a,
+                mlc_positions_b,
+            )
+            beams.append(beam)
+
+        self.beams = beams
+
+    def _truebeam_beam(
+        self, beam_name, metersets, gantry_angles, mlc_positions_a, mlc_positions_b
+    ):
+        # Expand mlc positions for all leaves
+        beam_mlc_position_a = np.tile(mlc_positions_a, (60, 1))
+        beam_mlc_position_b = np.tile(mlc_positions_b, (60, 1))
+        beam_mlc_positions = np.vstack((beam_mlc_position_b, beam_mlc_position_a))
+        beam_mlc_positions = beam_mlc_positions.transpose().tolist()
+
+        return TrueBeamBeam(
+            is_mlc_hd=self._is_mlc_hd,
+            beam_name=beam_name,
+            energy=self._energy,
+            fluence_mode=self._fluence_mode,
+            dose_rate=self._max_dose_rate,
+            metersets=metersets,
+            gantry_angles=gantry_angles,
+            x1=self._x1,
+            x2=self._x2,
+            y1=self._y1,
+            y2=self._y2,
+            mlc_positions=beam_mlc_positions,
+            coll_angle=0,
+            couch_vrt=0,
+            couch_lat=0,
+            couch_lng=0,
+            couch_rot=0,
+        )
+
+    def plot_control_points(
+        self,
+        max_dose_rate: float = None,
+        max_gantry_speed: float = None,
+        max_mlc_speed: float = 25,
+    ):
+        max_dose_rate = (max_dose_rate or self._max_dose_rate) / 60
+        max_gantry_speed = max_gantry_speed or self._max_gantry_speed
+
+        (cumulative_meterset, gantry_angles, mlc_positions) = get_control_points(
+            self.beams[self.dynamic_beam_idx]
+        )
+
+        dose_motion = np.append(0, np.abs(np.diff(cumulative_meterset)))
+        gantry_angle_var = (180 - gantry_angles) % 360
+        gantry_motion = np.append(0, np.abs(np.diff(gantry_angle_var)))
+        mlc_zeros = np.zeros((mlc_positions.shape[0], 1))
+        mlc_motion = np.hstack((mlc_zeros, np.diff(mlc_positions, axis=1)))
+
+        # ttd = time to deliver
+        ttd_dose = dose_motion / max_dose_rate
+        ttd_gantry = gantry_motion / max_gantry_speed
+        ttd_mlc = mlc_motion / max_mlc_speed
+        times_to_deliver = np.vstack((ttd_dose, ttd_gantry, ttd_mlc))
+        time_to_deliver = np.max(np.abs(times_to_deliver), axis=0)
+
+        dose_rate = dose_motion / time_to_deliver * 60
+        gantry_speed = gantry_motion / time_to_deliver
+        mlc_speed = mlc_motion / time_to_deliver
+
+        num_rows, num_cols = 4, 3
+
+        # Positions
+        plot_delta = 0
+        plt.subplot(num_rows, num_cols, 1 + plot_delta)
+        plt.plot(cumulative_meterset, cumulative_meterset)
+        plt.subplot(num_rows, num_cols, 2 + plot_delta)
+        plt.plot(cumulative_meterset, gantry_angles)
+        plt.subplot(num_rows, num_cols, 3 + plot_delta)
+        plt.plot(cumulative_meterset, mlc_positions[0, :])
+        plt.plot(cumulative_meterset, mlc_positions[-1, :])
+
+        # Motions
+        plot_delta += num_cols
+        plt.subplot(num_rows, num_cols, 1 + plot_delta)
+        plt.step(cumulative_meterset, dose_motion)
+        plt.subplot(num_rows, num_cols, 2 + plot_delta)
+        plt.step(cumulative_meterset, gantry_motion)
+        plt.subplot(num_rows, num_cols, 3 + plot_delta)
+        plt.step(cumulative_meterset, mlc_motion[0, :])
+        plt.step(cumulative_meterset, mlc_motion[-1, :])
+
+        # Time to deliver
+        plot_delta += num_cols
+        plt.subplot(num_rows, num_cols, 1 + plot_delta)
+        plt.step(cumulative_meterset, time_to_deliver)
+        plt.subplot(num_rows, num_cols, 2 + plot_delta)
+        plt.step(cumulative_meterset, time_to_deliver)
+        plt.subplot(num_rows, num_cols, 3 + plot_delta)
+        plt.step(cumulative_meterset, time_to_deliver)
+
+        # Speeds
+        plot_delta += num_cols
+        plt.subplot(num_rows, num_cols, 1 + plot_delta)
+        plt.step(cumulative_meterset, dose_rate)
+        plt.subplot(num_rows, num_cols, 2 + plot_delta)
+        plt.step(cumulative_meterset, gantry_speed)
+        plt.subplot(num_rows, num_cols, 3 + plot_delta)
+        plt.step(cumulative_meterset, mlc_speed[0, :])
+        plt.step(cumulative_meterset, mlc_speed[-1, :])
+
+        plt.show()
+        pass
+
+def get_control_points(beam: Beam):
+    cps = beam.ds.ControlPointSequence
+    num_cp = len(cps)
+    cumulative_meterset_weight = np.full(num_cp, np.nan)
+    gantry_angles = np.full(num_cp, np.nan)
+    mlc_positions = np.full((120, num_cp), np.nan)
+    for idx_cp in range(num_cp):
+        cp = cps[idx_cp]
+        cumulative_meterset_weight[idx_cp] = cp.CumulativeMetersetWeight
+
+        if "GantryAngle" in cp:
+            gantry_angles[idx_cp] = cp.GantryAngle
+
+        for bld in cp.BeamLimitingDevicePositionSequence:
+            if bld.RTBeamLimitingDeviceType == "MLCX":
+                mlc_positions[:, idx_cp] = bld.LeafJawPositions
+
+    # if the axis is static all elements except the first will be nan, so replace with first value
+    gantry_angles[np.isnan(gantry_angles)] = gantry_angles[0]
+    cumulative_meterset = cumulative_meterset_weight * beam.meterset
+    return cumulative_meterset, gantry_angles, mlc_positions
+
