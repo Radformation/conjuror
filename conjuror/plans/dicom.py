@@ -1,9 +1,9 @@
-import dataclasses
 import datetime
 import math
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Literal, Self
@@ -39,7 +39,7 @@ MLC_BOUNDARIES_HAL_DIST = tuple(np.arange(-140, 140 + 1, 10).astype(float))
 MLC_BOUNDARIES_HAL_PROX = tuple(np.arange(-145, 145 + 1, 10).astype(float))
 
 
-@dataclasses.dataclass
+@dataclass(frozen=True)
 class MachineSpecs:
     """
     This class is a dataclass holding machine specs
@@ -51,7 +51,7 @@ class MachineSpecs:
     max_mlc_position : float
         The max mlc position in mm
     max_mlc_overtravel : float
-        The maximum distance the MLC leaves can overtravel from each other as well as the jaw size (for tail exposure protection).
+        The maximum distance in mm the MLC leaves can overtravel from each other as well as the jaw size (for tail exposure protection).
     max_mlc_speed : float
         The maximum speed of the MLC leaves in mm/s.
     """
@@ -62,7 +62,7 @@ class MachineSpecs:
     max_mlc_speed: float
 
     def replace(self, **overrides) -> Self:
-        return dataclasses.replace(self, **overrides)
+        return replace(self, **overrides)
 
 
 DEFAULT_SPECS_TB = MachineSpecs(
@@ -74,26 +74,22 @@ DEFAULT_SPECS_HAL = MachineSpecs(
 )
 
 
+@dataclass
 class TrueBeamMachine:
-    machine_specs: MachineSpecs
     mlc_is_hd: bool
+    machine_specs: MachineSpecs = DEFAULT_SPECS_TB
 
     @property
     def mlc_boundaries(self) -> tuple[float,...]:
         return MLC_BOUNDARIES_TB_HD120 if self.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
 
-    def __init__(self, mlc_is_hd: bool, machine_specs: MachineSpecs = DEFAULT_SPECS_TB):
-        self.mlc_is_hd = mlc_is_hd
-        self.machine_specs = machine_specs
 
-
+@dataclass
 class HalcyonMachine:
-    machine_specs: MachineSpecs
+    machine_specs: MachineSpecs = DEFAULT_SPECS_HAL
     mlc_boundaries_dist = MLC_BOUNDARIES_HAL_DIST
     mlc_boundaries_prox = MLC_BOUNDARIES_HAL_PROX
 
-    def __init__(self, machine_specs: MachineSpecs = DEFAULT_SPECS_HAL):
-        self.machine_specs = machine_specs
 
 DEFAULT_TRUEBEAM_MIL120 = TrueBeamMachine(mlc_is_hd=False)
 DEFAULT_TRUEBEAM_HD120 = TrueBeamMachine(mlc_is_hd=True)
@@ -694,7 +690,7 @@ class PlanGenerator(ABC):
         referenced_beam.ReferencedDoseReferenceUID = dose_reference_uid
         self.ds.FractionGroupSequence[0].ReferencedBeamSequence.append(referenced_beam)
 
-    def add_beams(self, beams: list[Beam]):
+    def add_beams(self, beams: list[Beam]) -> None:
         for beam in beams:
             self.add_beam(beam)
 
@@ -1743,7 +1739,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
         )
         self.add_beam(beam)
 
-    def add_vmat_t2(self,
+    def add_vmat_drgs(self,
         dose_rates: tuple[float, ...] = (600, 600, 600, 600, 500, 400, 200),
         gantry_speeds: tuple[float, ...] = (3, 4, 5, 6, 6, 6, 6),
         mu_per_segment: float = 48,
@@ -1760,8 +1756,8 @@ class TrueBeamPlanGenerator(PlanGenerator):
         reference_beam_mu: float = 100,
         reference_beam_add_before: bool = False,
         dynamic_delivery_at_static_gantry: tuple[float, ...] = (),
-        ):
-        vmat = VmatTestT2(
+        ) -> None:
+        vmat = VMATDRGS(
             machine=self.machine,
             dose_rates = dose_rates,
             gantry_speeds = gantry_speeds,
@@ -1957,8 +1953,8 @@ class HalcyonPlanGenerator(PlanGenerator):
 class OvertravelError(ValueError):
     pass
 
-class VmatTestT2:
-    """Create beams for Clif Ling VMAT T2 tests."""
+class VMATDRGS:
+    """Create beams like Clif Ling VMAT DRGS test."""
 
     # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.
     MIN_GANTRY_OFFSET = 0.1
@@ -1992,7 +1988,7 @@ class VmatTestT2:
         reference_beam_add_before: bool = False,
         dynamic_delivery_at_static_gantry: tuple[float, ...] = (),
     ):
-        """Create beams for Clif Ling VMAT T2 tests. The defaults use an optimized selection for a TrueBeam.
+        """Create beams like Clif Ling VMAT DRGS tests. The defaults use an optimized selection for a TrueBeam.
 
         Parameters
         ----------
@@ -2005,7 +2001,7 @@ class VmatTestT2:
         mu_per_transition : float
             The number of MUs to deliver during while the MLCs move from one ROI to the next.
         correct_fluence : bool
-            The original T2 plans have an incorrect fluence on the initial and final transitions.
+            The original DRGS plans have an incorrect fluence on the initial and final transitions.
             Use False to replicate the original plans, otherwise use True to have a more uniform fluence.
         gantry_motion_per_transition : float
             The number of degrees that the gantry should rotate while the MLCs move from one ROI to the next.
@@ -2021,7 +2017,7 @@ class VmatTestT2:
             from -mlc_span/2 to +mlc_span/2. If True, the leaves move in negative direction (IEC)
             from +mlc_span/2 to -mlc_span/2.
         mlc_gap : float
-            The MLC gap between ROIs in mm. This creates a darker region to help visualizing the ROIs boundaries.
+            The MLC gap between ROIs in mm. This creates a darker region to help visualize the ROIs boundaries.
         jaw_padding : float
             The added jaw position in mm with respect to the initial/final MLC positions
         energy : float
@@ -2029,7 +2025,7 @@ class VmatTestT2:
         fluence_mode : FluenceMode
             The fluence mode of the beam.
         max_dose_rate : int
-            The max dose rate. This is used to compute the control point sequence to achieve the test dose_rates
+            The max dose rate in MU/min. This is used to compute the control point sequence to achieve the test dose_rates
         reference_beam_mu : float
             The number of MU's to be delivered in the reference beam (static beam)
         reference_beam_add_before : bool
@@ -2113,7 +2109,7 @@ class VmatTestT2:
             msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
             raise ValueError(msg)
         gantry_angles_var = gantry_angles_without_offset + initial_gantry_offset
-        if gantry_angles_without_offset[-1] > 360 - self.MIN_GANTRY_OFFSET:
+        if gantry_angles_var[-1] > 360 - self.MIN_GANTRY_OFFSET:
             msg = "The gantry rotation exceeds 360 degrees. Reduce the initial_gantry_offset"
             raise ValueError(msg)
 
@@ -2145,11 +2141,11 @@ class VmatTestT2:
 
         # Create reference beam
         reference_meterset = [0, reference_beam_mu]
-        reference_gantry_angle = float(
+        reference_gantry_angle = [float(
             gantry_angles[0 if reference_beam_add_before else -1]
-        )
-        reference_mlc_positions_a = 2 * [mlc_positions_a[0]]
-        reference_mlc_positions_b = 2 * [mlc_positions_b[-1]]
+        )]
+        reference_mlc_positions_a = 2 * [float(mlc_positions_a[0])]
+        reference_mlc_positions_b = 2 * [float(mlc_positions_b[-1])]
         reference_beam = self._truebeam_beam(
             "VMAT-T2-Ref",
             reference_meterset,
@@ -2179,8 +2175,12 @@ class VmatTestT2:
         self.beams = beams
 
     def _truebeam_beam(
-        self, beam_name, metersets, gantry_angles, mlc_positions_a, mlc_positions_b
-    ):
+        self, beam_name: str,
+        metersets: Sequence[float],
+        gantry_angles: Sequence[float],
+        mlc_positions_a: Sequence[float],
+        mlc_positions_b: Sequence[float]
+    ) -> TrueBeamBeam:
         """Multiple similar beams are created for the VMAT test.
         Common parameters are stored as attributes, whereas the dynamic axes
         are passed as arguments to this method."""
@@ -2213,9 +2213,9 @@ class VmatTestT2:
 
     def plot_control_points(
         self,
-        specs: MachineSpecs = None,
-        max_dose_rate: float = None,
-    ):
+        specs: MachineSpecs | None = None,
+        max_dose_rate: float | None = None,
+    ) -> None:
         """Plot the control points
         Rows: Absolute position, relative motion, time to deliver, speed
         Cols: MU, Gantry, MLC
@@ -2226,7 +2226,7 @@ class VmatTestT2:
         max_dose_rate = (max_dose_rate or self._max_dose_rate) / 60
         specs = specs or self._machine.machine_specs
 
-        (cumulative_meterset, gantry_angles, mlc_positions) = _get_control_points(
+        cumulative_meterset, gantry_angles, mlc_positions = _get_control_points(
             self.beams[self.dynamic_beam_idx]
         )
 
@@ -2298,7 +2298,7 @@ class VmatTestT2:
         plt.show()
         pass
 
-def _get_control_points(beam: Beam):
+def _get_control_points(beam: Beam) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
     """This is a helper function to get the control points from a beam."""
     # This is a quick implementation, it should be polished once there are more
     # procedures using this (e.g. method within beam).

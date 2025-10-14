@@ -12,7 +12,7 @@ from conjuror.plans.dicom import (
     OvertravelError,
     Stack,
     TrueBeamBeam,
-    TrueBeamPlanGenerator, VmatTestT2,
+    TrueBeamPlanGenerator, VMATDRGS,
     TrueBeamMachine, DEFAULT_TRUEBEAM_HD120,
     DEFAULT_SPECS_TB,
 )
@@ -680,7 +680,7 @@ class TestPlanPrefabs(TestCase):
             )
 
     def test_vmat_t2(self):
-        self.pg.add_vmat_t2()
+        self.pg.add_vmat_drgs()
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 2)
 
@@ -1140,13 +1140,11 @@ class TestInterpolateControlPoints(TestCase):
 
 class TestVmatT2(TestCase):
     def test_defaults(self):
-        VmatTestT2(DEFAULT_TRUEBEAM_HD120)
-        pass
+        VMATDRGS(DEFAULT_TRUEBEAM_HD120)
 
     def test_plot(self):
-        test = VmatTestT2(DEFAULT_TRUEBEAM_HD120)
+        test = VMATDRGS(DEFAULT_TRUEBEAM_HD120)
         test.plot_control_points()
-        pass
 
     def test_replicate_original_test(self):
         original_file = get_file_from_cloud_test_repo(
@@ -1205,7 +1203,7 @@ class TestVmatT2(TestCase):
 
         # Run
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
-        test = VmatTestT2(
+        test = VMATDRGS(
             TrueBeamMachine(False, specs),
             tuple(dose_rates),
             tuple(gantry_speeds),
@@ -1256,7 +1254,7 @@ class TestVmatT2(TestCase):
 
     def test_adding_static_beams(self):
         static_angles = (0, 90, 270, 180)
-        test = VmatTestT2(DEFAULT_TRUEBEAM_HD120, dynamic_delivery_at_static_gantry=static_angles)
+        test = VMATDRGS(DEFAULT_TRUEBEAM_HD120, dynamic_delivery_at_static_gantry=static_angles)
         expected_number_of_beams = 6  # dynamic, reference, 4x static
         actual_number_of_beams = len(test.beams)
         self.assertEqual(actual_number_of_beams, expected_number_of_beams)
@@ -1269,11 +1267,12 @@ class TestVmatT2(TestCase):
         gantry_speeds = (1, 2, 3)
         dose_rates = (1, 2)
         with self.assertRaises(ValueError):
-            VmatTestT2(DEFAULT_TRUEBEAM_HD120,gantry_speeds, dose_rates)
+            VMATDRGS(DEFAULT_TRUEBEAM_HD120, gantry_speeds, dose_rates)
 
     def test_error_if_initial_gantry_offset_less_than_min(self):
+        initial_gantry_offset = 0
         with self.assertRaises(ValueError):
-            VmatTestT2(DEFAULT_TRUEBEAM_HD120,initial_gantry_offset=0)
+            VMATDRGS(DEFAULT_TRUEBEAM_HD120, initial_gantry_offset=initial_gantry_offset)
 
     def test_error_if_gantry_speeds_above_max(self):
         gantry_speeds = (1, 2, 5)
@@ -1282,14 +1281,14 @@ class TestVmatT2(TestCase):
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
         machine = TrueBeamMachine(False, specs)
         with self.assertRaises(ValueError):
-            VmatTestT2(machine, gantry_speeds, dose_rates)
+            VMATDRGS(machine, gantry_speeds, dose_rates)
 
     def test_error_if_dose_rates_above_max(self):
         gantry_speeds = (1, 2, 5)
         dose_rates = (1, 2, 300)
         max_dose_rate = 100
         with self.assertRaises(ValueError):
-            VmatTestT2(DEFAULT_TRUEBEAM_HD120, gantry_speeds, dose_rates, max_dose_rate=max_dose_rate)
+            VMATDRGS(DEFAULT_TRUEBEAM_HD120, gantry_speeds, dose_rates, max_dose_rate=max_dose_rate)
 
     def test_error_if_axis_not_maxed_out(self):
         gantry_speeds = (5, 1, 1)
@@ -1299,7 +1298,7 @@ class TestVmatT2(TestCase):
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
         machine = TrueBeamMachine(False, specs)
         with self.assertRaises(ValueError):
-            VmatTestT2(
+            VMATDRGS(
                 machine,
                 gantry_speeds,
                 dose_rates,
@@ -1309,4 +1308,4 @@ class TestVmatT2(TestCase):
     def test_error_if_rotation_larger_than_360(self):
         mu_per_segment = 100
         with self.assertRaises(ValueError):
-            VmatTestT2(DEFAULT_TRUEBEAM_HD120, mu_per_segment=mu_per_segment)
+            VMATDRGS(DEFAULT_TRUEBEAM_HD120, mu_per_segment=mu_per_segment)
