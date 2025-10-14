@@ -1,4 +1,4 @@
-from abc import ABC
+from dataclasses import dataclass
 
 import numpy as np
 from plotly import graph_objects as go
@@ -17,28 +17,38 @@ def generate_file_metadata() -> Dataset:
     return file_meta
 
 
-class Simulator(ABC):
-    """Abstract class for an image simulator"""
-
+@dataclass
+class Imager:
+    """Data class for an imager"""
     pixel_size: float
-    shape: (int, int)
-    image: np.ndarray
+    shape: tuple[int, int]
 
-    def __init__(self, sid: float = 1500):
+IMAGER_AS500 = Imager(pixel_size = 0.78125, shape = (384, 512))
+IMAGER_AS1000 = Imager(pixel_size = 0.390625, shape = (768, 1024))
+IMAGER_AS1200 = Imager(pixel_size = 0.336, shape = (1280, 1280))
+
+
+class Simulator:
+    """Class for an image simulator"""
+
+    def __init__(self, imager: Imager, sid: float = 1500):
         """
 
         Parameters
         ----------
-        sid
+        imager : Imager
+            Imager to be simulated
+        sid : float
             Source to image distance in mm.
         """
-        self.image = np.zeros(self.shape, np.uint16)
+        self.imager = imager
         self.sid = sid
+        self.image = np.zeros(imager.shape, np.uint16)
         self.mag_factor = sid / 1000
 
     def add_layer(self, layer: Layer) -> None:
         """Add a layer to the image"""
-        self.image = layer.apply(self.image, self.pixel_size, self.mag_factor)
+        self.image = layer.apply(self.image, self.imager.pixel_size, self.mag_factor)
 
     def as_dicom(
         self,
@@ -59,7 +69,7 @@ class Simulator(ABC):
             gantry=gantry_angle,
             coll=coll_angle,
             couch=table_angle,
-            dpi=25.4 / self.pixel_size,
+            dpi=25.4 / self.imager.pixel_size,
             extra_tags=tags or {},
         )
 
@@ -79,10 +89,10 @@ class Simulator(ABC):
         fig.add_heatmap(
             z=self.image,
             colorscale="gray",
-            x0=-self.image.shape[1] / 2 * self.pixel_size,
-            dx=self.pixel_size,
-            y0=-self.image.shape[0] / 2 * self.pixel_size,
-            dy=self.pixel_size,
+            x0=-self.image.shape[1] / 2 * self.imager.pixel_size,
+            dx=self.imager.pixel_size,
+            y0=-self.image.shape[0] / 2 * self.imager.pixel_size,
+            dy=self.imager.pixel_size,
         )
         fig.update_layout(
             yaxis_constrain="domain",
@@ -97,22 +107,3 @@ class Simulator(ABC):
         return fig
 
 
-class AS500Image(Simulator):
-    """Simulates an AS500 EPID image."""
-
-    pixel_size: float = 0.78125
-    shape: (int, int) = (384, 512)
-
-
-class AS1000Image(Simulator):
-    """Simulates an AS1000 EPID image."""
-
-    pixel_size: float = 0.390625
-    shape: (int, int) = (768, 1024)
-
-
-class AS1200Image(Simulator):
-    """Simulates an AS1200 EPID image."""
-
-    pixel_size: float = 0.336
-    shape: (int, int) = (1280, 1280)

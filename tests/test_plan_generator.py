@@ -6,6 +6,7 @@ import pydicom
 from matplotlib.figure import Figure
 from parameterized import parameterized
 
+from conjuror.images.simulators import IMAGER_AS1200
 from conjuror.plans.dicom import (
     FluenceMode,
     HalcyonPlanGenerator,
@@ -22,7 +23,6 @@ from conjuror.plans.mlc import (
     next_sacrifice_shift,
     split_sacrifice_travel,
 )
-from conjuror.images.simulators import AS1200Image
 from tests.utils import get_file_from_cloud_test_repo
 
 RT_PLAN_FILE = get_file_from_cloud_test_repo(["plan_generator", "Murray-plan.dcm"])
@@ -147,12 +147,12 @@ class TestPlanGenerator(TestCase):
         )
         pg.add_open_field_beam(x1=100, x2=200, y1=100, y2=200, mu=100)
         # test that non-inverted array is 0
-        pg_dcm = pg.to_dicom_images(simulator=AS1200Image, invert=False)
+        pg_dcm = pg.to_dicom_images(imager=IMAGER_AS1200, invert=False)
         non_inverted_array = pg_dcm[0].pixel_array
         # when inverted, the corner should NOT be 0
         self.assertAlmostEqual(float(non_inverted_array[0, 0]), 0)
 
-        pg_dcm = pg.to_dicom_images(simulator=AS1200Image, invert=True)
+        pg_dcm = pg.to_dicom_images(imager=IMAGER_AS1200, invert=True)
         inverted_array = pg_dcm[0].pixel_array
         # when inverted, the corner should NOT be 0
         self.assertAlmostEqual(float(inverted_array[0, 0]), 1000)
