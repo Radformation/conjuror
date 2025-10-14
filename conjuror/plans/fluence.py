@@ -18,7 +18,7 @@ def generate_fluences(
     ----------
     rt_plan : pydicom.Dataset
         The RT Plan dataset. Must contain BeamSequence.
-    width_mm : int
+    width_mm : float
         The width of the fluence map in mm. Use smaller values for faster calculation.
     resolution_mm : float, optional
         The resolution of the fluence map in mm. Smaller values will take longer to calculate.

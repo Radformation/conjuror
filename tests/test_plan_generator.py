@@ -1271,6 +1271,10 @@ class TestVmatT2(TestCase):
         with self.assertRaises(ValueError):
             VmatTestT2(DEFAULT_TRUEBEAM_HD120,gantry_speeds, dose_rates)
 
+    def test_error_if_initial_gantry_offset_less_than_min(self):
+        with self.assertRaises(ValueError):
+            VmatTestT2(DEFAULT_TRUEBEAM_HD120,initial_gantry_offset=0)
+
     def test_error_if_gantry_speeds_above_max(self):
         gantry_speeds = (1, 2, 5)
         dose_rates = (1, 2, 3)
@@ -1301,3 +1305,8 @@ class TestVmatT2(TestCase):
                 dose_rates,
                 max_dose_rate=max_dose_rate,
             )
+
+    def test_error_if_rotation_larger_than_360(self):
+        mu_per_segment = 100
+        with self.assertRaises(ValueError):
+            VmatTestT2(DEFAULT_TRUEBEAM_HD120, mu_per_segment=mu_per_segment)

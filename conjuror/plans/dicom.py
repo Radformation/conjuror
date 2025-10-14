@@ -1751,7 +1751,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
         correct_fluence: bool = True,
         gantry_motion_per_transition: float = 10,
         gantry_rotation_clockwise: bool = True,
-        start_gantry_offset: float = 1,
+        initial_gantry_offset: float = 1,
         mlc_span: float = 138,
         mlc_motion_reverse: bool = True,
         mlc_gap: float = 2,
@@ -1770,7 +1770,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             correct_fluence = correct_fluence,
             gantry_motion_per_transition = gantry_motion_per_transition,
             gantry_rotation_clockwise = gantry_rotation_clockwise,
-            start_gantry_offset = start_gantry_offset,
+            initial_gantry_offset = initial_gantry_offset,
             mlc_span = mlc_span,
             mlc_motion_reverse = mlc_motion_reverse,
             mlc_gap = mlc_gap,
@@ -1958,10 +1958,14 @@ class OvertravelError(ValueError):
     pass
 
 class VmatTestT2:
-    # constant
+    """Create beams for Clif Ling VMAT T2 tests."""
+
+    # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.
     MIN_GANTRY_OFFSET = 0.1
 
-    # public field
+    # The reference beam may be acquired prior to or following the dynamic beam
+    # (as specified by the reference_beam_add_before argument).
+    # These attributes record the indices of the respective beams.
     beams: list[Beam]
     dynamic_beam_idx: int
     reference_beam_idx: int
@@ -1976,7 +1980,7 @@ class VmatTestT2:
         correct_fluence: bool = True,
         gantry_motion_per_transition: float = 10.,
         gantry_rotation_clockwise: bool = True,
-        start_gantry_offset: float = 1.,
+        initial_gantry_offset: float = 1.,
         mlc_span: float = 138.,
         mlc_motion_reverse: bool = True,
         mlc_gap: float = 2.,
@@ -1988,7 +1992,7 @@ class VmatTestT2:
         reference_beam_add_before: bool = False,
         dynamic_delivery_at_static_gantry: tuple[float, ...] = (),
     ):
-        """Create a plan like Clif Ling T2 test. The defaults use an optimized selection for a TrueBeam.
+        """Create beams for Clif Ling VMAT T2 tests. The defaults use an optimized selection for a TrueBeam.
 
         Parameters
         ----------
@@ -2007,8 +2011,8 @@ class VmatTestT2:
             The number of degrees that the gantry should rotate while the MLCs move from one ROI to the next.
         gantry_rotation_clockwise : bool
             The direction of the gantry rotation. If True, the gantry will rotate clockwise
-        start_gantry_offset : float
-            The initial gantry offset in degrees. E.g. If start_gantry_offset=1 and gantry_rotation_clockwise=True,
+        initial_gantry_offset : float
+            The initial gantry offset in degrees. E.g. If initial_gantry_offset=1 and gantry_rotation_clockwise=True,
             then start angle = 181 IEC. If gantry_rotation_clockwise=False, then start angle = 179 IEC
         mlc_span : float
             The total size of the field in mm. Initial/final MLC position = +/- mlc_span/2
@@ -2054,9 +2058,11 @@ class VmatTestT2:
         dose_rates = np.array(dose_rates)
         mu_per_sec = dose_rates / 60
 
-        # Verify that gantry speeds and dose rates have the same size:
+        # Verify inputs:
         if len(gantry_speeds) != len(dose_rates):
             raise ValueError("gantry_speeds and dose_rates must have the same length")
+        if initial_gantry_offset < self.MIN_GANTRY_OFFSET:
+            raise ValueError(f"The initial gantry offset cannot be smaller than {self.MIN_GANTRY_OFFSET} deg. Using 180 deg can cause ambiguity in the rotation direction.")
 
         gantry_speeds_normalized = gantry_speeds / machine.machine_specs.max_gantry_speed
         dose_rates_normalized = dose_rates / max_dose_rate
@@ -2086,7 +2092,7 @@ class VmatTestT2:
 
         gantry_motion = np.insert(
             gantry_motion_per_segment,
-            np.arange(0, num_segments + 1),
+            range(num_segments + 1),
             gantry_motion_per_transition,
         )
         gantry_motion = np.append(0, gantry_motion)
@@ -2106,9 +2112,9 @@ class VmatTestT2:
         if gantry_angles_without_offset[-1] > 360 - 2 * self.MIN_GANTRY_OFFSET:
             msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
             raise ValueError(msg)
-        gantry_angles_var = gantry_angles_without_offset + start_gantry_offset
+        gantry_angles_var = gantry_angles_without_offset + initial_gantry_offset
         if gantry_angles_without_offset[-1] > 360 - self.MIN_GANTRY_OFFSET:
-            msg = "The gantry rotation exceeds 360 degrees. Reduce the start_gantry_offset"
+            msg = "The gantry rotation exceeds 360 degrees. Reduce the initial_gantry_offset"
             raise ValueError(msg)
 
         # Finalize values
@@ -2175,6 +2181,10 @@ class VmatTestT2:
     def _truebeam_beam(
         self, beam_name, metersets, gantry_angles, mlc_positions_a, mlc_positions_b
     ):
+        """Multiple similar beams are created for the VMAT test.
+        Common parameters are stored as attributes, whereas the dynamic axes
+        are passed as arguments to this method."""
+
         # Expand mlc positions for all leaves
         beam_mlc_position_a = np.tile(mlc_positions_a, (60, 1))
         beam_mlc_position_b = np.tile(mlc_positions_b, (60, 1))
@@ -2206,10 +2216,17 @@ class VmatTestT2:
         specs: MachineSpecs = None,
         max_dose_rate: float = None,
     ):
+        """Plot the control points
+        Rows: Absolute position, relative motion, time to deliver, speed
+        Cols: MU, Gantry, MLC
+        """
+        # This is used mostly for visual inspection during development
+        # Axis labeling could be improved
+
         max_dose_rate = (max_dose_rate or self._max_dose_rate) / 60
         specs = specs or self._machine.machine_specs
 
-        (cumulative_meterset, gantry_angles, mlc_positions) = get_control_points(
+        (cumulative_meterset, gantry_angles, mlc_positions) = _get_control_points(
             self.beams[self.dynamic_beam_idx]
         )
 
@@ -2236,16 +2253,21 @@ class VmatTestT2:
         plot_delta = 0
         plt.subplot(num_rows, num_cols, 1 + plot_delta)
         plt.plot(cumulative_meterset, cumulative_meterset)
+        plt.title("MU")
+        plt.ylabel("Absolute")
         plt.subplot(num_rows, num_cols, 2 + plot_delta)
         plt.plot(cumulative_meterset, gantry_angles)
+        plt.title("Gantry")
         plt.subplot(num_rows, num_cols, 3 + plot_delta)
         plt.plot(cumulative_meterset, mlc_positions[0, :])
         plt.plot(cumulative_meterset, mlc_positions[-1, :])
+        plt.title("MLC")
 
         # Motions
         plot_delta += num_cols
         plt.subplot(num_rows, num_cols, 1 + plot_delta)
         plt.step(cumulative_meterset, dose_motion)
+        plt.ylabel("Motion")
         plt.subplot(num_rows, num_cols, 2 + plot_delta)
         plt.step(cumulative_meterset, gantry_motion)
         plt.subplot(num_rows, num_cols, 3 + plot_delta)
@@ -2256,6 +2278,7 @@ class VmatTestT2:
         plot_delta += num_cols
         plt.subplot(num_rows, num_cols, 1 + plot_delta)
         plt.step(cumulative_meterset, time_to_deliver)
+        plt.ylabel("Delivery time")
         plt.subplot(num_rows, num_cols, 2 + plot_delta)
         plt.step(cumulative_meterset, time_to_deliver)
         plt.subplot(num_rows, num_cols, 3 + plot_delta)
@@ -2265,6 +2288,7 @@ class VmatTestT2:
         plot_delta += num_cols
         plt.subplot(num_rows, num_cols, 1 + plot_delta)
         plt.step(cumulative_meterset, dose_rate)
+        plt.ylabel("Speed")
         plt.subplot(num_rows, num_cols, 2 + plot_delta)
         plt.step(cumulative_meterset, gantry_speed)
         plt.subplot(num_rows, num_cols, 3 + plot_delta)
@@ -2274,7 +2298,10 @@ class VmatTestT2:
         plt.show()
         pass
 
-def get_control_points(beam: Beam):
+def _get_control_points(beam: Beam):
+    """This is a helper function to get the control points from a beam."""
+    # This is a quick implementation, it should be polished once there are more
+    # procedures using this (e.g. method within beam).
     cps = beam.ds.ControlPointSequence
     num_cp = len(cps)
     cumulative_meterset_weight = np.full(num_cp, np.nan)
