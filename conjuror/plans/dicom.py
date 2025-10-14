@@ -340,15 +340,9 @@ class Beam(ABC):
         return beam
 
 
-class TrueBeamBeam(Beam):
-    """Represents a DICOM beam dataset for a TrueBeam. Has methods for creating the dataset and adding control points.
-    Generally not created on its own but rather under the hood as part of a PlanGenerator object.
-
-    It contains enough independent logic steps that it's worth separating out from the PlanGenerator class.
-    """
-
-    def __init__(
-        self,
+    @classmethod
+    def for_truebeam(
+        cls,
         mlc_is_hd: bool,
         beam_name: str,
         energy: float,
@@ -366,7 +360,7 @@ class TrueBeamBeam(Beam):
         couch_lat: float,
         couch_lng: float,
         couch_rot: float,
-    ):
+    ) -> Self:
         """
         Parameters
         ----------
@@ -430,7 +424,7 @@ class TrueBeamBeam(Beam):
             "MLCX": mlc_positions,
         }
 
-        super().__init__(
+        return cls(
             beam_limiting_device_sequence=bld_sequence,
             beam_name=beam_name,
             energy=energy,
@@ -447,11 +441,9 @@ class TrueBeamBeam(Beam):
         )
 
 
-class HalcyonBeam(Beam):
-    """A beam representing a Halcyon. Halcyons have dual MLC stacks, no X-jaws, no couch rotation, etc."""
-
-    def __init__(
-        self,
+    @classmethod
+    def for_halcyon(
+        cls,
         beam_name: str,
         metersets: Sequence[float],
         gantry_angles: float | Sequence[float],
@@ -461,7 +453,7 @@ class HalcyonBeam(Beam):
         couch_vrt: float,
         couch_lat: float,
         couch_lng: float,
-    ):
+    ) -> Self:
         """
         Parameters
         ----------
@@ -507,7 +499,7 @@ class HalcyonBeam(Beam):
             "MLCX2": proximal_mlc_positions,
         }
 
-        super().__init__(
+        return cls(
             beam_limiting_device_sequence=bld_sequence,
             beam_name=beam_name,
             energy=6,
@@ -891,7 +883,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
                 strip_width_mm=strip_width_mm,
                 meterset_at_target=1 / len(strip_positions_mm),
             )
-        beam = TrueBeamBeam(
+        beam = Beam.for_truebeam(
             beam_name=beam_name,
             energy=energy,
             dose_rate=dose_rate,
@@ -989,7 +981,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             strip_width_mm=1,
             meterset_at_target=1,
         )
-        beam = TrueBeamBeam(
+        beam = Beam.for_truebeam(
             beam_name=f"{beam_name} {bank}",
             energy=energy,
             dose_rate=dose_rate,
@@ -1144,7 +1136,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
                 meterset_transition=0.5 / len(dose_rates),
                 sacrificial_distance_mm=sacrifice_distance,
             )
-        ref_beam = TrueBeamBeam(
+        ref_beam = Beam.for_truebeam(
             beam_name="DR Ref",
             energy=energy,
             dose_rate=default_dose_rate,
@@ -1164,7 +1156,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(ref_beam)
-        beam = TrueBeamBeam(
+        beam = Beam.for_truebeam(
             beam_name=f"DR{min(dose_rates)}-{max(dose_rates)}",
             energy=energy,
             dose_rate=default_dose_rate,
@@ -1334,7 +1326,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
                 meterset_transition=0.5 / len(speeds),
                 sacrificial_distance_mm=sacrifice_distance,
             )
-        ref_beam = TrueBeamBeam(
+        ref_beam = Beam.for_truebeam(
             beam_name=f"{beam_name} Ref",
             energy=energy,
             dose_rate=default_dose_rate,
@@ -1354,7 +1346,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(ref_beam)
-        beam = TrueBeamBeam(
+        beam = Beam.for_truebeam(
             beam_name=beam_name,
             energy=energy,
             dose_rate=default_dose_rate,
@@ -1448,7 +1440,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
                 axes.get("name")
                 or f"G{axes['gantry']:g}C{axes['collimator']:g}P{axes['couch']:g}"
             )
-            beam = TrueBeamBeam(
+            beam = Beam.for_truebeam(
                 beam_name=beam_name,
                 energy=energy,
                 dose_rate=dose_rate,
@@ -1598,7 +1590,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
                 meterset_transition=1 / len(speeds),
             )
 
-        beam = TrueBeamBeam(
+        beam = Beam.for_truebeam(
             beam_name=beam_name,
             energy=energy,
             dose_rate=max_dose_rate,
@@ -1618,7 +1610,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(beam)
-        ref_beam = TrueBeamBeam(
+        ref_beam = Beam.for_truebeam(
             beam_name=f"{beam_name} Ref",
             energy=energy,
             dose_rate=max_dose_rate,
@@ -1718,7 +1710,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             x_outfield_position=x1 - mlc_padding - jaw_padding - 20,
             meterset_at_target=1.0,
         )
-        beam = TrueBeamBeam(
+        beam = Beam.for_truebeam(
             beam_name=beam_name,
             energy=energy,
             dose_rate=dose_rate,
@@ -1898,7 +1890,7 @@ class HalcyonPlanGenerator(PlanGenerator):
                 if stack == Stack.PROXIMAL:
                     dist_mlc.park(meterset=meterset)
 
-        beam = HalcyonBeam(
+        beam = Beam.for_halcyon(
             beam_name=beam_name,
             gantry_angles=gantry_angle,
             coll_angle=coll_angle,
@@ -2180,7 +2172,7 @@ class VMATDRGS:
         gantry_angles: Sequence[float],
         mlc_positions_a: Sequence[float],
         mlc_positions_b: Sequence[float]
-    ) -> TrueBeamBeam:
+    ) -> Beam:
         """Multiple similar beams are created for the VMAT test.
         Common parameters are stored as attributes, whereas the dynamic axes
         are passed as arguments to this method."""
@@ -2191,7 +2183,7 @@ class VMATDRGS:
         beam_mlc_positions = np.vstack((beam_mlc_position_b, beam_mlc_position_a))
         beam_mlc_positions = beam_mlc_positions.transpose().tolist()
 
-        return TrueBeamBeam(
+        return Beam.for_truebeam(
             mlc_is_hd=self._machine.mlc_is_hd,
             beam_name=beam_name,
             energy=self._energy,

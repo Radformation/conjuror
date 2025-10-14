@@ -12,10 +12,9 @@ from conjuror.plans.dicom import (
     HalcyonPlanGenerator,
     OvertravelError,
     Stack,
-    TrueBeamBeam,
     TrueBeamPlanGenerator, VMATDRGS,
     TrueBeamMachine, DEFAULT_TRUEBEAM_HD120,
-    DEFAULT_SPECS_TB,
+    DEFAULT_SPECS_TB, Beam,
 )
 from conjuror.plans.mlc import (
     MLCShaper,
@@ -171,8 +170,8 @@ class TestPlanGenerator(TestCase):
             )
 
 
-def create_beam(**kwargs) -> TrueBeamBeam:
-    return TrueBeamBeam(
+def create_beam(**kwargs) -> Beam:
+    return Beam.for_truebeam(
         beam_name=kwargs.get("beam_name", "name"),
         energy=kwargs.get("energy", 6),
         dose_rate=kwargs.get("dose_rate", 600),
