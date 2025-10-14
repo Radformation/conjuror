@@ -1,9 +1,9 @@
+import dataclasses
 import datetime
 import math
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from copy import deepcopy
-from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Literal, Self
@@ -37,7 +37,7 @@ MLC_BOUNDARIES_HAL_DIST = list(np.arange(-140, 140 + 1, 10))
 MLC_BOUNDARIES_HAL_PROX = list(np.arange(-145, 145 + 1, 10))
 
 
-@dataclass
+@dataclasses.dataclass
 class MachineSpecs:
     """
     This class is a dataclass holding machine specs
@@ -58,6 +58,9 @@ class MachineSpecs:
     max_mlc_position: float
     max_mlc_overtravel: float
     max_mlc_speed: float
+
+    def replace(self, **overrides) -> Self:
+        return dataclasses.replace(self, **overrides)
 
 
 DEFAULT_SPECS_TB = MachineSpecs(
@@ -1752,12 +1755,12 @@ class TrueBeamPlanGenerator(PlanGenerator):
         mlc_gap: float = 2,
         jaw_padding: float = 0,
         max_dose_rate: int = 600,
-        max_gantry_speed: float = 6,
         reference_beam_mu: float = 100,
         reference_beam_add_before: bool = False,
         dynamic_delivery_at_static_gantry: tuple[float, ...] = (),
         ):
         vmat = VmatTestT2(
+            machine=self.machine,
             dose_rates = dose_rates,
             gantry_speeds = gantry_speeds,
             mu_per_segment = mu_per_segment,
@@ -1771,11 +1774,9 @@ class TrueBeamPlanGenerator(PlanGenerator):
             mlc_gap = mlc_gap,
             jaw_padding = jaw_padding,
             max_dose_rate = max_dose_rate,
-            max_gantry_speed = max_gantry_speed,
             reference_beam_mu = reference_beam_mu,
             reference_beam_add_before = reference_beam_add_before,
             dynamic_delivery_at_static_gantry = dynamic_delivery_at_static_gantry,
-            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beams(vmat.beams)
 
@@ -1965,6 +1966,7 @@ class VmatTestT2:
 
     def __init__(
         self,
+        machine : TrueBeamMachine,
         dose_rates: tuple[float, ...] = (600, 600, 600, 600, 500, 400, 200),
         gantry_speeds: tuple[float, ...] = (3, 4, 5, 6, 6, 6, 6),
         mu_per_segment: float = 48.,
@@ -1980,8 +1982,6 @@ class VmatTestT2:
         energy: float = 6,
         fluence_mode: FluenceMode = FluenceMode.STANDARD,
         max_dose_rate: int = 600,
-        max_gantry_speed: float = 6.,
-        mlc_is_hd: bool = False,
         reference_beam_mu: float = 100.,
         reference_beam_add_before: bool = False,
         dynamic_delivery_at_static_gantry: tuple[float, ...] = (),
@@ -2024,10 +2024,6 @@ class VmatTestT2:
             The fluence mode of the beam.
         max_dose_rate : int
             The max dose rate. This is used to compute the control point sequence to achieve the test dose_rates
-        max_gantry_speed : float
-            The max gantry speed. This is used to compute the control point sequence to achieve the test gantry_speeds
-        mlc_is_hd : bool
-            Defines if linac has an HD MLC (required by the DICOM standard)
         reference_beam_mu : float
             The number of MU's to be delivered in the reference beam (static beam)
         reference_beam_add_before : bool
@@ -2041,12 +2037,11 @@ class VmatTestT2:
         """
 
         # store parameters common to all beams
-        self._mlc_is_hd = mlc_is_hd
+        self._machine = machine
         self._energy = energy
         self._fluence_mode = fluence_mode
         self._max_dose_rate = max_dose_rate
-        self._max_gantry_speed = max_gantry_speed
-        mlc_boundaries = MLC_BOUNDARIES_TB_HD120 if mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
+        mlc_boundaries = MLC_BOUNDARIES_TB_HD120 if machine.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
         self._y1 = mlc_boundaries[0]
         self._y2 = mlc_boundaries[-1]
         self._x1 = -(mlc_span / 2 + jaw_padding)
@@ -2061,7 +2056,7 @@ class VmatTestT2:
         if len(gantry_speeds) != len(dose_rates):
             raise ValueError("gantry_speeds and dose_rates must have the same length")
 
-        gantry_speeds_normalized = gantry_speeds / max_gantry_speed
+        gantry_speeds_normalized = gantry_speeds / machine.machine_specs.max_gantry_speed
         dose_rates_normalized = dose_rates / max_dose_rate
         # Verify that there are no requested speeds above limit
         if np.any(gantry_speeds_normalized > 1):
@@ -2185,7 +2180,7 @@ class VmatTestT2:
         beam_mlc_positions = beam_mlc_positions.transpose().tolist()
 
         return TrueBeamBeam(
-            mlc_is_hd=self._mlc_is_hd,
+            mlc_is_hd=self._machine.mlc_is_hd,
             beam_name=beam_name,
             energy=self._energy,
             fluence_mode=self._fluence_mode,
@@ -2206,12 +2201,11 @@ class VmatTestT2:
 
     def plot_control_points(
         self,
+        specs: MachineSpecs = None,
         max_dose_rate: float = None,
-        max_gantry_speed: float = None,
-        max_mlc_speed: float = 25,
     ):
         max_dose_rate = (max_dose_rate or self._max_dose_rate) / 60
-        max_gantry_speed = max_gantry_speed or self._max_gantry_speed
+        specs = specs or self._machine.machine_specs
 
         (cumulative_meterset, gantry_angles, mlc_positions) = get_control_points(
             self.beams[self.dynamic_beam_idx]
@@ -2225,8 +2219,8 @@ class VmatTestT2:
 
         # ttd = time to deliver
         ttd_dose = dose_motion / max_dose_rate
-        ttd_gantry = gantry_motion / max_gantry_speed
-        ttd_mlc = mlc_motion / max_mlc_speed
+        ttd_gantry = gantry_motion / specs.max_gantry_speed
+        ttd_mlc = mlc_motion / specs.max_mlc_speed
         times_to_deliver = np.vstack((ttd_dose, ttd_gantry, ttd_mlc))
         time_to_deliver = np.max(np.abs(times_to_deliver), axis=0)
 
