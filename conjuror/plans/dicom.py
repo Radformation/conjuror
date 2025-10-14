@@ -3,6 +3,7 @@ import math
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from copy import deepcopy
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Literal, Self
@@ -20,6 +21,79 @@ from ..images.simulators import Simulator
 from ..utils import wrap360, wrap180
 from .fluence import generate_fluences, plot_fluences
 from .mlc import MLCShaper
+
+
+MLC_BOUNDARIES_TB_MIL120 = (
+    list(np.arange(-200, -100 + 1, 10))
+    + list(np.arange(-95, 95 + 1, 5))
+    + list(np.arange(100, 200 + 1, 10))
+)
+MLC_BOUNDARIES_TB_HD120 = (
+    list(np.arange(-110, -40 + 1, 5))
+    + list(np.arange(-37.5, 37.5 + 1, 2.5))
+    + list(np.arange(40, 110 + 1, 5))
+)
+MLC_BOUNDARIES_HAL_DIST = list(np.arange(-140, 140 + 1, 10))
+MLC_BOUNDARIES_HAL_PROX = list(np.arange(-145, 145 + 1, 10))
+
+
+@dataclass
+class MachineSpecs:
+    """
+    This class is a dataclass holding machine specs
+
+    Parameters
+    ----------
+    max_gantry_speed : float
+        The maximum gantry speed in deg/sec
+    max_mlc_position : float
+        The max mlc position in mm
+    max_mlc_overtravel : float
+        The maximum distance the MLC leaves can overtravel from each other as well as the jaw size (for tail exposure protection).
+    max_mlc_speed : float
+        The maximum speed of the MLC leaves in mm/s.
+    """
+
+    max_gantry_speed: float
+    max_mlc_position: float
+    max_mlc_overtravel: float
+    max_mlc_speed: float
+
+
+DEFAULT_SPECS_TB = MachineSpecs(
+    max_gantry_speed=6.0, max_mlc_position=200, max_mlc_overtravel=140, max_mlc_speed=25
+)
+
+DEFAULT_SPECS_HAL = MachineSpecs(
+    max_gantry_speed=24.0, max_mlc_position=140, max_mlc_overtravel=140, max_mlc_speed=25
+)
+
+
+class TrueBeamMachine:
+    machine_specs: MachineSpecs
+    mlc_is_hd: bool
+
+    @property
+    def mlc_boundaries(self) -> list[float]:
+        return MLC_BOUNDARIES_TB_HD120 if self.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
+
+    def __init__(self, mlc_is_hd: bool, machine_specs: MachineSpecs = DEFAULT_SPECS_TB):
+        self.mlc_is_hd = mlc_is_hd
+        self.machine_specs = machine_specs
+
+
+class HalcyonMachine:
+    machine_specs: MachineSpecs
+    mlc_boundaries_dist = MLC_BOUNDARIES_HAL_DIST
+    mlc_boundaries_prox = MLC_BOUNDARIES_HAL_PROX
+
+    def __init__(self, machine_specs: MachineSpecs = DEFAULT_SPECS_HAL):
+        self.machine_specs = machine_specs
+
+DEFAULT_TRUEBEAM_MIL120 = TrueBeamMachine(mlc_is_hd=False)
+DEFAULT_TRUEBEAM_HD120 = TrueBeamMachine(mlc_is_hd=True)
+DEFAULT_HALCYON = HalcyonMachine()
+
 
 
 class GantryDirection(Enum):
@@ -43,20 +117,6 @@ class Stack(Enum):
     DISTAL = "distal"
     PROXIMAL = "proximal"
     BOTH = "both"
-
-
-MLC_MILLENNIUM_BOUNDARIES = (
-    list(np.arange(-200, -100 + 1, 10))
-    + list(np.arange(-95, 95 + 1, 5))
-    + list(np.arange(100, 200 + 1, 10))
-)
-MLC_120HDMIL_BOUNDARIES = (
-    list(np.arange(-110, -40 + 1, 5))
-    + list(np.arange(-37.5, 37.5 + 1, 2.5))
-    + list(np.arange(40, 110 + 1, 10))
-)
-MLC_DISTAL_BOUNDARIES = list(np.arange(-140, 140 + 1, 10))
-MLC_PROXIMAL_BOUNDARIES = list(np.arange(-145, 145 + 1, 10))
 
 
 class Beam(ABC):
@@ -288,7 +348,7 @@ class TrueBeamBeam(Beam):
 
     def __init__(
         self,
-        is_mlc_hd: bool,
+        mlc_is_hd: bool,
         beam_name: str,
         energy: float,
         fluence_mode: FluenceMode,
@@ -309,7 +369,7 @@ class TrueBeamBeam(Beam):
         """
         Parameters
         ----------
-        is_mlc_hd : bool
+        mlc_is_hd : bool
             Whether the MLC type is HD or Millennium
         beam_name : str
             The name of the beam. Must be less than 16 characters.
@@ -359,10 +419,8 @@ class TrueBeamBeam(Beam):
         mlc = Dataset()
         mlc.RTBeamLimitingDeviceType = "MLCX"
         mlc.NumberOfLeafJawPairs = 60
-        if is_mlc_hd:
-            mlc.LeafPositionBoundaries = MLC_120HDMIL_BOUNDARIES
-        else:
-            mlc.LeafPositionBoundaries = MLC_MILLENNIUM_BOUNDARIES
+        mlc.LeafPositionBoundaries = MLC_BOUNDARIES_TB_HD120 if mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
+
         bld_sequence = Sequence((jaw_x, jaw_y, jaw_asymx, jaw_asymy, mlc))
 
         beam_limiting_device_positions = {
@@ -434,11 +492,11 @@ class HalcyonBeam(Beam):
         mlc_x1 = Dataset()
         mlc_x1.RTBeamLimitingDeviceType = "MLCX1"
         mlc_x1.NumberOfLeafJawPairs = 28
-        mlc_x1.LeafPositionBoundaries = MLC_DISTAL_BOUNDARIES
+        mlc_x1.LeafPositionBoundaries = MLC_BOUNDARIES_HAL_DIST
         mlc_x2 = Dataset()
         mlc_x2.RTBeamLimitingDeviceType = "MLCX2"
         mlc_x2.NumberOfLeafJawPairs = 29
-        mlc_x2.LeafPositionBoundaries = MLC_PROXIMAL_BOUNDARIES
+        mlc_x2.LeafPositionBoundaries = MLC_BOUNDARIES_HAL_PROX
         bld_sequence = Sequence((jaw_x, jaw_y, mlc_x1, mlc_x2))
 
         beam_limiting_device_positions = {
@@ -475,6 +533,7 @@ class PlanGenerator(ABC):
     """
 
     machine_name: str
+    machine_specs : MachineSpecs
 
     def __init__(
         self,
@@ -483,10 +542,7 @@ class PlanGenerator(ABC):
         plan_name: str,
         patient_name: str | None,
         patient_id: str | None,
-        max_mlc_position: float,
-        max_mlc_speed: float,
-        max_gantry_speed: float,
-        max_overtravel_mm: float,
+        machine_specs : MachineSpecs,
     ):
         """A tool for generating new QA RTPlan files based on an initial, somewhat empty RTPlan file.
 
@@ -502,21 +558,12 @@ class PlanGenerator(ABC):
             The name of the patient. If not provided, it will be taken from the RTPLAN file.
         patient_id : str, optional
             The ID of the patient. If not provided, it will be taken from the RTPLAN file.
-        max_mlc_position : float
-            The max mlc position in mm
-        max_mlc_speed : float
-            The maximum speed of the MLC leaves in mm/s
-        max_gantry_speed : float
-            The maximum speed of the gantry in degrees/s.
-        max_overtravel_mm : float
-            The maximum distance the MLC leaves can overtravel from each other as well as the jaw size (for tail exposure protection).
+        machine_specs : MachineSpecs
+            The specs of the machine
         """
         if ds.Modality != "RTPLAN":
             raise ValueError("File is not an RTPLAN file")
-        self.max_overtravel_mm = max_overtravel_mm
-        self.max_mlc_position = max_mlc_position
-        self.max_mlc_speed = max_mlc_speed
-        self.max_gantry_speed = max_gantry_speed
+        self.machine_specs = machine_specs
         patient_name = patient_name or getattr(ds, "PatientName", None)
         if not patient_name:
             raise ValueError(
@@ -577,9 +624,6 @@ class PlanGenerator(ABC):
         self.ds.DoseReferenceSequence = Sequence((dose_ref1,))
 
         # Fraction Group Sequence
-        frxn_gp_sequence = Sequence()
-        self.ds.FractionGroupSequence = frxn_gp_sequence
-        # Fraction Group Sequence: Fraction Group 1
         frxn_gp1 = Dataset()
         frxn_gp1.FractionGroupNumber = 1
         frxn_gp1.NumberOfFractionsPlanned = 1
@@ -708,9 +752,8 @@ class PlanGenerator(ABC):
 
 
 class TrueBeamPlanGenerator(PlanGenerator):
-    # Private fields
-    _is_mlc_hd: bool  # Whether the MLC type id HD or Millennium.
-    _leaf_boundaries: list[float]  # The leaf boundaries of the MLC.
+
+    machine: TrueBeamMachine
 
     def __init__(
         self,
@@ -719,10 +762,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
         plan_name: str,
         patient_name: str | None = None,
         patient_id: str | None = None,
-        max_mlc_position: float = 200,
-        max_mlc_speed: float = 25,
-        max_gantry_speed: float = 4.8,
-        max_overtravel_mm: float = 140,
+        machine_specs: MachineSpecs = DEFAULT_SPECS_TB
     ):
         super().__init__(
             ds,
@@ -730,22 +770,16 @@ class TrueBeamPlanGenerator(PlanGenerator):
             plan_name,
             patient_name,
             patient_id,
-            max_mlc_position,
-            max_mlc_speed,
-            max_gantry_speed,
-            max_overtravel_mm,
+            machine_specs
         )
 
-        # Fill Fields
-        self._is_mlc_hd = any(
+        mlc_is_hd = any(
             bld.LeafPositionBoundaries[0] == -110
             for bs in ds.BeamSequence
             for bld in bs.BeamLimitingDeviceSequence
             if bld.RTBeamLimitingDeviceType == "MLCX"
         )
-        self._leaf_boundaries = (
-            MLC_120HDMIL_BOUNDARIES if self._is_mlc_hd else MLC_MILLENNIUM_BOUNDARIES
-        )
+        self.machine = TrueBeamMachine(mlc_is_hd, machine_specs=machine_specs)
 
     def _validate_machine_type(self, beam_sequence: Sequence):
         has_valid_mlc_data: bool = any(
@@ -763,11 +797,11 @@ class TrueBeamPlanGenerator(PlanGenerator):
     ) -> MLCShaper:
         """Utility to create MLC shaper instances."""
         return MLCShaper(
-            leaf_y_positions=self._leaf_boundaries,
-            max_mlc_position=self.max_mlc_position,
+            leaf_y_positions=self.machine.mlc_boundaries,
+            max_mlc_position=self.machine_specs.max_mlc_position,
+            max_overtravel_mm=self.machine_specs.max_mlc_overtravel,
             sacrifice_gap_mm=sacrifice_gap_mm,
             sacrifice_max_move_mm=sacrifice_max_move_mm,
-            max_overtravel_mm=self.max_overtravel_mm,
         )
 
     def add_picketfence_beam(
@@ -837,7 +871,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
         max_dist_to_jaw = max(
             max(abs(pos - x1), abs(pos + x2)) for pos in strip_positions_mm
         )
-        if max_dist_to_jaw > self.max_overtravel_mm:
+        if max_dist_to_jaw > self.machine_specs.max_mlc_overtravel:
             raise ValueError(
                 "Picket fence beam exceeds MLC overtravel limits. Lower padding, the number of pickets, or the picket spacing."
             )
@@ -873,7 +907,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             mlc_positions=mlc.as_control_points(),
             metersets=[mu * m for m in mlc.as_metersets()],
             fluence_mode=fluence_mode,
-            is_mlc_hd=self._is_mlc_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(beam)
 
@@ -945,7 +979,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
         else:
             raise ValueError("Bank must be 'A' or 'B'")
         # test for overtravel
-        if abs(x2 - x1) + overreach > self.max_overtravel_mm:
+        if abs(x2 - x1) + overreach > self.machine_specs.max_mlc_overtravel:
             raise OvertravelError(
                 "The MLC overtravel is too large for the given jaw positions and overreach. Reduce the x-jaw opening size and/or overreach value."
             )
@@ -971,7 +1005,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             mlc_positions=mlc.as_control_points(),
             metersets=[mu * m for m in mlc.as_metersets()],
             fluence_mode=fluence_mode,
-            is_mlc_hd=self._is_mlc_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(beam)
 
@@ -1037,12 +1071,12 @@ class TrueBeamPlanGenerator(PlanGenerator):
             Smaller values generate more control points and more back-and-forth movement.
             Too large of values may cause deliverability issues.
         """
-        if roi_size_mm * len(dose_rates) > self.max_overtravel_mm:
+        if roi_size_mm * len(dose_rates) > self.machine_specs.max_mlc_overtravel:
             raise ValueError(
                 "The ROI size * number of dose rates must be less than the overall MLC allowable width"
             )
         # calculate MU
-        mlc_transition_time = roi_size_mm / self.max_mlc_speed
+        mlc_transition_time = roi_size_mm / self.machine_specs.max_mlc_speed
         min_mu = mlc_transition_time * max(dose_rates) * len(dose_rates) / 60
         mu = max(desired_mu, math.ceil(min_mu))
 
@@ -1050,7 +1084,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
         times_to_transition = [
             mu * 60 / (dose_rate * len(dose_rates)) for dose_rate in dose_rates
         ]
-        sacrificial_movements = [tt * self.max_mlc_speed for tt in times_to_transition]
+        sacrificial_movements = [tt * self.machine_specs.max_mlc_speed for tt in times_to_transition]
 
         mlc = self._create_mlc(sacrifice_max_move_mm=max_sacrificial_move_mm)
         ref_mlc = self._create_mlc()
@@ -1077,8 +1111,8 @@ class TrueBeamPlanGenerator(PlanGenerator):
                 left_position=center - roi_size_mm / 2,
                 right_position=center + roi_size_mm / 2,
                 x_outfield_position=-200,
-                top_position=max(self._leaf_boundaries),
-                bottom_position=min(self._leaf_boundaries),
+                top_position=max(self.machine.mlc_boundaries),
+                bottom_position=min(self.machine.mlc_boundaries),
                 outer_strip_width=5,
                 meterset_at_target=0,
                 meterset_transition=0.5 / len(dose_rates),
@@ -1095,8 +1129,8 @@ class TrueBeamPlanGenerator(PlanGenerator):
                 left_position=center - roi_size_mm / 2,
                 right_position=center + roi_size_mm / 2,
                 x_outfield_position=-200,  # not used
-                top_position=max(self._leaf_boundaries),
-                bottom_position=min(self._leaf_boundaries),
+                top_position=max(self.machine.mlc_boundaries),
+                bottom_position=min(self.machine.mlc_boundaries),
                 outer_strip_width=5,  # not used
                 meterset_at_target=0,
                 meterset_transition=0.5 / len(dose_rates),
@@ -1126,7 +1160,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             fluence_mode=fluence_mode,
             mlc_positions=ref_mlc.as_control_points(),
             metersets=[mu * m for m in ref_mlc.as_metersets()],
-            is_mlc_hd=self._is_mlc_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(ref_beam)
         beam = TrueBeamBeam(
@@ -1146,7 +1180,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             fluence_mode=fluence_mode,
             mlc_positions=mlc.as_control_points(),
             metersets=[mu * m for m in mlc.as_metersets()],
-            is_mlc_hd=self._is_mlc_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(beam)
 
@@ -1228,19 +1262,19 @@ class TrueBeamPlanGenerator(PlanGenerator):
         MUs are calculated automatically based on the speed and the ROI size.
 
         """
-        if max(speeds) > self.max_mlc_speed:
+        if max(speeds) > self.machine_specs.max_mlc_speed:
             raise ValueError(
-                f"Maximum speed given {max(speeds)} is greater than the maximum MLC speed {self.max_mlc_speed}"
+                f"Maximum speed given {max(speeds)} is greater than the maximum MLC speed {self.machine_specs.max_mlc_speed}"
             )
         if min(speeds) <= 0:
             raise ValueError("Speeds must be greater than 0")
-        if roi_size_mm * len(speeds) > self.max_overtravel_mm:
+        if roi_size_mm * len(speeds) > self.machine_specs.max_mlc_overtravel:
             raise ValueError(
                 "The ROI size * number of speeds must be less than the overall MLC allowable width"
             )
         # create MLC positions
         times_to_transition = [roi_size_mm / speed for speed in speeds]
-        sacrificial_movements = [tt * self.max_mlc_speed for tt in times_to_transition]
+        sacrificial_movements = [tt * self.machine_specs.max_mlc_speed for tt in times_to_transition]
 
         mlc = self._create_mlc(sacrifice_max_move_mm=max_sacrificial_move_mm)
         ref_mlc = self._create_mlc()
@@ -1267,8 +1301,8 @@ class TrueBeamPlanGenerator(PlanGenerator):
                 left_position=center - roi_size_mm / 2,
                 right_position=center + roi_size_mm / 2,
                 x_outfield_position=-200,  # not relevant
-                top_position=max(self._leaf_boundaries),
-                bottom_position=min(self._leaf_boundaries),
+                top_position=max(self.machine.mlc_boundaries),
+                bottom_position=min(self.machine.mlc_boundaries),
                 outer_strip_width=5,  # not relevant
                 meterset_at_target=0,
                 meterset_transition=0.5 / len(speeds),
@@ -1285,8 +1319,8 @@ class TrueBeamPlanGenerator(PlanGenerator):
                 left_position=center - roi_size_mm / 2,
                 right_position=center + roi_size_mm / 2,
                 x_outfield_position=-200,  # not used
-                top_position=max(self._leaf_boundaries),
-                bottom_position=min(self._leaf_boundaries),
+                top_position=max(self.machine.mlc_boundaries),
+                bottom_position=min(self.machine.mlc_boundaries),
                 outer_strip_width=5,  # not used
                 meterset_at_target=0,
                 meterset_transition=0.5 / len(speeds),
@@ -1316,7 +1350,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             fluence_mode=fluence_mode,
             mlc_positions=ref_mlc.as_control_points(),
             metersets=[mu * m for m in ref_mlc.as_metersets()],
-            is_mlc_hd=self._is_mlc_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(ref_beam)
         beam = TrueBeamBeam(
@@ -1336,7 +1370,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             fluence_mode=fluence_mode,
             mlc_positions=mlc.as_control_points(),
             metersets=[mu * m for m in mlc.as_metersets()],
-            is_mlc_hd=self._is_mlc_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(beam)
 
@@ -1430,7 +1464,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
                 mlc_positions=mlc.as_control_points(),
                 metersets=[mu * m for m in mlc.as_metersets()],
                 fluence_mode=fluence_mode,
-                is_mlc_hd=self._is_mlc_hd,
+                mlc_is_hd=self.machine.mlc_is_hd,
             )
             self.add_beam(beam)
 
@@ -1509,11 +1543,11 @@ class TrueBeamPlanGenerator(PlanGenerator):
             gantry_range = gantry_speed * MU * 60 / max_dose_rate
 
         """
-        if max(speeds) > self.max_gantry_speed:
+        if max(speeds) > self.machine_specs.max_gantry_speed:
             raise ValueError(
-                f"Maximum speed given {max(speeds)} is greater than the maximum gantry speed {self.max_gantry_speed}"
+                f"Maximum speed given {max(speeds)} is greater than the maximum gantry speed {self.machine_specs.max_gantry_speed}"
             )
-        if roi_size_mm * len(speeds) > self.max_overtravel_mm:
+        if roi_size_mm * len(speeds) > self.machine_specs.max_mlc_overtravel:
             raise ValueError(
                 "The ROI size * number of speeds must be less than the overall MLC allowable width"
             )
@@ -1580,7 +1614,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             fluence_mode=fluence_mode,
             mlc_positions=mlc.as_control_points(),
             metersets=[mu * m for m in mlc.as_metersets()],
-            is_mlc_hd=self._is_mlc_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(beam)
         ref_beam = TrueBeamBeam(
@@ -1600,7 +1634,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             fluence_mode=fluence_mode,
             mlc_positions=ref_mlc.as_control_points(),
             metersets=[mu * m for m in ref_mlc.as_metersets()],
-            is_mlc_hd=self._is_mlc_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(ref_beam)
 
@@ -1700,7 +1734,7 @@ class TrueBeamPlanGenerator(PlanGenerator):
             mlc_positions=mlc.as_control_points(),
             metersets=[mu * m for m in mlc.as_metersets()],
             fluence_mode=fluence_mode,
-            is_mlc_hd=self._is_mlc_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beam(beam)
 
@@ -1717,8 +1751,6 @@ class TrueBeamPlanGenerator(PlanGenerator):
         mlc_motion_reverse: bool = True,
         mlc_gap: float = 2,
         jaw_padding: float = 0,
-        energy: float = 6,
-        fluence_mode: FluenceMode = FluenceMode.STANDARD,
         max_dose_rate: int = 600,
         max_gantry_speed: float = 6,
         reference_beam_mu: float = 100,
@@ -1738,14 +1770,12 @@ class TrueBeamPlanGenerator(PlanGenerator):
             mlc_motion_reverse = mlc_motion_reverse,
             mlc_gap = mlc_gap,
             jaw_padding = jaw_padding,
-            energy = energy,
-            fluence_mode = fluence_mode,
             max_dose_rate = max_dose_rate,
             max_gantry_speed = max_gantry_speed,
             reference_beam_mu = reference_beam_mu,
             reference_beam_add_before = reference_beam_add_before,
             dynamic_delivery_at_static_gantry = dynamic_delivery_at_static_gantry,
-            is_mlc_hd=self._is_mlc_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.add_beams(vmat.beams)
 
@@ -1754,8 +1784,7 @@ class HalcyonPlanGenerator(PlanGenerator):
     """A class to generate a plan with two beams stacked on top of each other such as the Halcyon. This
     also assumes no jaws."""
 
-    _distal_leaf_boundaries: list[float] = MLC_DISTAL_BOUNDARIES
-    _proximal_leaf_bondaries: list[float] = MLC_PROXIMAL_BOUNDARIES
+    machine: HalcyonMachine
 
     def __init__(
         self,
@@ -1764,10 +1793,7 @@ class HalcyonPlanGenerator(PlanGenerator):
         plan_name: str,
         patient_name: str | None = None,
         patient_id: str | None = None,
-        max_mlc_position: float = 140,
-        max_mlc_speed: float = 25,
-        max_gantry_speed: float = 4.8,
-        max_overtravel_mm: float = 140,
+        machine_specs: MachineSpecs = DEFAULT_SPECS_HAL
     ):
         super().__init__(
             ds,
@@ -1775,11 +1801,9 @@ class HalcyonPlanGenerator(PlanGenerator):
             plan_name,
             patient_name,
             patient_id,
-            max_mlc_position,
-            max_mlc_speed,
-            max_gantry_speed,
-            max_overtravel_mm,
+            machine_specs
         )
+        self.machine = HalcyonMachine(machine_specs=machine_specs)
 
     def _validate_machine_type(self, beam_sequence: Sequence):
         has_valid_mlc_data: bool = any(
@@ -1795,16 +1819,16 @@ class HalcyonPlanGenerator(PlanGenerator):
     def _create_mlc(self) -> tuple[MLCShaper, MLCShaper]:
         """Create 2 MLC shaper objects, one for each stack."""
         proximal_mlc = MLCShaper(
-            leaf_y_positions=self._proximal_leaf_bondaries,
-            max_mlc_position=self.max_mlc_position,
-            max_overtravel_mm=self.max_overtravel_mm,
+            leaf_y_positions=self.machine.mlc_boundaries_prox,
+            max_mlc_position=self.machine_specs.max_mlc_position,
+            max_overtravel_mm=self.machine_specs.max_mlc_overtravel,
             sacrifice_gap_mm=None,
             sacrifice_max_move_mm=None,
         )
         distal_mlc = MLCShaper(
-            leaf_y_positions=self._distal_leaf_boundaries,
-            max_mlc_position=self.max_mlc_position,
-            max_overtravel_mm=self.max_overtravel_mm,
+            leaf_y_positions=self.machine.mlc_boundaries_dist,
+            max_mlc_position=self.machine_specs.max_mlc_position,
+            max_overtravel_mm=self.machine_specs.max_mlc_overtravel,
             sacrifice_gap_mm=None,
             sacrifice_max_move_mm=None,
         )
@@ -1943,22 +1967,22 @@ class VmatTestT2:
         self,
         dose_rates: tuple[float, ...] = (600, 600, 600, 600, 500, 400, 200),
         gantry_speeds: tuple[float, ...] = (3, 4, 5, 6, 6, 6, 6),
-        mu_per_segment: float = 48,
-        mu_per_transition: float = 8,
+        mu_per_segment: float = 48.,
+        mu_per_transition: float = 8.,
         correct_fluence: bool = True,
-        gantry_motion_per_transition: float = 10,
+        gantry_motion_per_transition: float = 10.,
         gantry_rotation_clockwise: bool = True,
-        start_gantry_offset: float = 1,
-        mlc_span: float = 138,
+        start_gantry_offset: float = 1.,
+        mlc_span: float = 138.,
         mlc_motion_reverse: bool = True,
-        mlc_gap: float = 2,
-        jaw_padding: float = 0,
+        mlc_gap: float = 2.,
+        jaw_padding: float = 0.,
         energy: float = 6,
         fluence_mode: FluenceMode = FluenceMode.STANDARD,
         max_dose_rate: int = 600,
-        max_gantry_speed: float = 6,
-        is_mlc_hd: bool = False,
-        reference_beam_mu: float = 100,
+        max_gantry_speed: float = 6.,
+        mlc_is_hd: bool = False,
+        reference_beam_mu: float = 100.,
         reference_beam_add_before: bool = False,
         dynamic_delivery_at_static_gantry: tuple[float, ...] = (),
     ):
@@ -2002,7 +2026,7 @@ class VmatTestT2:
             The max dose rate. This is used to compute the control point sequence to achieve the test dose_rates
         max_gantry_speed : float
             The max gantry speed. This is used to compute the control point sequence to achieve the test gantry_speeds
-        is_mlc_hd : bool
+        mlc_is_hd : bool
             Defines if linac has an HD MLC (required by the DICOM standard)
         reference_beam_mu : float
             The number of MU's to be delivered in the reference beam (static beam)
@@ -2017,14 +2041,12 @@ class VmatTestT2:
         """
 
         # store parameters common to all beams
-        self._is_mlc_hd = is_mlc_hd
+        self._mlc_is_hd = mlc_is_hd
         self._energy = energy
         self._fluence_mode = fluence_mode
         self._max_dose_rate = max_dose_rate
         self._max_gantry_speed = max_gantry_speed
-        mlc_boundaries = (
-            MLC_120HDMIL_BOUNDARIES if is_mlc_hd else MLC_120HDMIL_BOUNDARIES
-        )
+        mlc_boundaries = MLC_BOUNDARIES_TB_HD120 if mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
         self._y1 = mlc_boundaries[0]
         self._y2 = mlc_boundaries[-1]
         self._x1 = -(mlc_span / 2 + jaw_padding)
@@ -2163,7 +2185,7 @@ class VmatTestT2:
         beam_mlc_positions = beam_mlc_positions.transpose().tolist()
 
         return TrueBeamBeam(
-            is_mlc_hd=self._is_mlc_hd,
+            mlc_is_hd=self._mlc_is_hd,
             beam_name=beam_name,
             energy=self._energy,
             fluence_mode=self._fluence_mode,

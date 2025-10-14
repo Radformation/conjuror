@@ -127,9 +127,9 @@ class TestPlanGenerator(TestCase):
         pg = TrueBeamPlanGenerator.from_rt_plan_file(
             RT_PLAN_FILE, plan_label="label", plan_name="my name"
         )
-        self.assertEqual(len(pg._leaf_boundaries), 61)
-        self.assertEqual(max(pg._leaf_boundaries), 200)
-        self.assertEqual(min(pg._leaf_boundaries), -200)
+        self.assertEqual(len(pg.machine.mlc_boundaries), 61)
+        self.assertEqual(max(pg.machine.mlc_boundaries), 200)
+        self.assertEqual(min(pg.machine.mlc_boundaries), -200)
 
     def test_instance_uid_changes(self):
         dcm = pydicom.dcmread(RT_PLAN_FILE)
@@ -184,7 +184,7 @@ def create_beam(**kwargs) -> TrueBeamBeam:
         couch_lng=kwargs.get("couch_lng", 0),
         couch_lat=kwargs.get("couch_lat", 0),
         couch_rot=kwargs.get("couch_rot", 0),
-        is_mlc_hd=kwargs.get("is_mlc_hd", False),
+        mlc_is_hd=kwargs.get("mlc_is_hd", False),
         mlc_positions=kwargs.get("mlc_positions", [[0], [0]]),
         metersets=kwargs.get("metersets", [0, 100]),
         fluence_mode=kwargs.get("fluence_mode", FluenceMode.STANDARD),
