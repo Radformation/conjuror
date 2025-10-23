@@ -5,7 +5,7 @@ from unittest import TestCase
 from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
-from conjuror.plans import procedures_halcyon
+from conjuror.plans import procedures_halcyon, procedures_truebeam
 from conjuror.plans.mlc import (
     interpolate_control_points,
     next_sacrifice_shift,
@@ -43,7 +43,7 @@ class TestPlanGenerator(TestCase):
         pg = TrueBeamPlanGenerator.from_rt_plan_file(
             RT_PLAN_FILE, plan_label="label", plan_name="my name"
         )
-        pg.add_procedure(MLCSpeed(pg.machine))
+        pg.add_procedure(MLCSpeed())
         with tempfile.NamedTemporaryFile(delete=False) as t:
             pg.to_file(t.name)
         # shouldn't raise; should be valid DICOM
@@ -138,7 +138,7 @@ class TestPlanGenerator(TestCase):
         pg = TrueBeamPlanGenerator.from_rt_plan_file(
             RT_PLAN_FILE, plan_label="label", plan_name="my name"
         )
-        procedure = OpenField(pg.machine, x1=100, x2=200, y1=100, y2=200, mu=100)
+        procedure = OpenField(x1=100, x2=200, y1=100, y2=200, mu=100)
         pg.add_procedure(procedure)
         # test that non-inverted array is 0
         pg_dcm = pg.to_dicom_images(imager=IMAGER_AS1200, invert=False)
@@ -166,7 +166,7 @@ class TestPlanGenerator(TestCase):
 
 
 def create_beam(**kwargs) -> Beam:
-    return Beam.for_truebeam(
+    return Beam.to_truebeam(
         beam_name=kwargs.get("beam_name", "name"),
         energy=kwargs.get("energy", 6),
         dose_rate=kwargs.get("dose_rate", 600),
@@ -303,7 +303,7 @@ class TestPlanGeneratorBeams(TestCase):
 
     def test_plot_fluence(self):
         # just tests it works
-        procedure = OpenField(self.pg.machine, x1=-5, x2=5, y1=-5, y2=5, mu=100)
+        procedure = OpenField(x1=-5, x2=5, y1=-5, y2=5, mu=100)
         self.pg.add_procedure(procedure)
         figs = self.pg.plot_fluences()
         self.assertIsInstance(figs, list)
@@ -320,7 +320,6 @@ class TestPlanPrefabs(TestCase):
 
     def test_create_open_field(self):
         procedure = OpenField(
-            self.pg.machine,
             x1=-100,
             x2=100,
             y1=-110,
@@ -357,7 +356,6 @@ class TestPlanPrefabs(TestCase):
 
     def test_open_field_jaws(self):
         procedure = OpenField(
-            self.pg.machine,
             x1=-100,
             x2=100,
             y1=-110,
@@ -397,8 +395,7 @@ class TestPlanPrefabs(TestCase):
     def test_transmission_beam(self, _, bank, leaf_pos, x1_pos, expected_error):
         if expected_error:
             with self.assertRaises(expected_error):
-                MLCTransmission(
-                    self.pg.machine,
+                procedure = MLCTransmission(
                     bank=bank,
                     x1=x1_pos,
                     x2=30,
@@ -407,9 +404,9 @@ class TestPlanPrefabs(TestCase):
                     mu=44,
                     beam_name="MLC Txx",
                 )
+                self.pg.add_procedure(procedure)
         else:
             procedure = MLCTransmission(
-                self.pg.machine,
                 bank=bank,
                 x1=-30,
                 x2=30,
@@ -454,8 +451,7 @@ class TestPlanPrefabs(TestCase):
             self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
 
     def test_create_picket_fence(self):
-        procedure = PicketFence(
-            machine=self.pg.machine,
+        procedure = procedures_truebeam.PicketFence(
             y1=-10,
             y2=10,
             mu=123,
@@ -498,18 +494,17 @@ class TestPlanPrefabs(TestCase):
 
     def test_picket_fence_too_wide(self):
         with self.assertRaises(ValueError):
-            PicketFence(
-                machine=self.pg.machine,
+            procedure = procedures_truebeam.PicketFence(
                 y1=-10,
                 y2=10,
                 mu=123,
                 beam_name="Picket Fence",
                 strip_positions_mm=(-100, 100),
             )
+            self.pg.add_procedure(procedure)
 
     def test_winston_lutz_beams(self):
         procedure = WinstonLutz(
-            machine=self.pg.machine,
             axes_positions=(
                 {"gantry": 0, "collimator": 0, "couch": 0},
                 {"gantry": 90, "collimator": 0, "couch": 0},
@@ -539,7 +534,6 @@ class TestPlanPrefabs(TestCase):
 
     def test_winston_lutz_jaw_defined(self):
         procedure = WinstonLutz(
-            machine=self.pg.machine,
             axes_positions=(
                 {"gantry": 0, "collimator": 0, "couch": 0},
                 {"gantry": 90, "collimator": 0, "couch": 0},
@@ -572,7 +566,6 @@ class TestPlanPrefabs(TestCase):
 
     def test_dose_rate_beams(self):
         procedure = DoseRate(
-            machine=self.pg.machine,
             dose_rates=(100, 400, 600),
             y1=-10,
             y2=10,
@@ -592,8 +585,7 @@ class TestPlanPrefabs(TestCase):
 
     def test_dose_rate_too_wide(self):
         with self.assertRaises(ValueError):
-            DoseRate(
-                machine=self.pg.machine,
+            procedure = DoseRate(
                 dose_rates=(100, 150, 200, 250, 300, 350, 400, 600),
                 roi_size_mm=30,
                 y1=-10,
@@ -601,10 +593,10 @@ class TestPlanPrefabs(TestCase):
                 desired_mu=123,
                 default_dose_rate=600,
             )
+            self.pg.add_procedure(procedure)
 
     def test_mlc_speed_beams(self):
         procedure = MLCSpeed(
-            self.pg.machine,
             speeds=(0.5, 1, 1.5, 2),
             y1=-100,
             y2=100,
@@ -625,36 +617,35 @@ class TestPlanPrefabs(TestCase):
 
     def test_mlc_speed_too_fast(self):
         with self.assertRaises(ValueError):
-            MLCSpeed(
-                self.pg.machine,
+            procedure = MLCSpeed(
                 speeds=(10, 20, 30, 40, 50),
                 y1=-100,
                 y2=100,
             )
+            self.pg.add_procedure(procedure)
 
     def test_mlc_speed_too_wide(self):
         with self.assertRaises(ValueError):
-            MLCSpeed(
-                self.pg.machine,
+            procedure = MLCSpeed(
                 speeds=(0.5, 1, 1.5, 2),
                 roi_size_mm=50,
                 y1=-100,
                 y2=100,
             )
+            self.pg.add_procedure(procedure)
 
     def test_0_mlc_speed(self):
         with self.assertRaises(ValueError):
-            MLCSpeed(
-                self.pg.machine,
+            procedure = MLCSpeed(
                 speeds=(0, 1, 2),
                 y1=-100,
                 y2=100,
             )
+            self.pg.add_procedure(procedure)
 
     def test_gantry_speed_beams(self):
         # max speed is 2.5 by default
         procedure = GantrySpeed(
-            self.pg.machine,
             speeds=(1, 2, 3, 4),
             y1=-100,
             y2=100,
@@ -674,35 +665,35 @@ class TestPlanPrefabs(TestCase):
     def test_gantry_speed_too_fast(self):
         # max speed is 4.8 by default
         with self.assertRaises(ValueError):
-            GantrySpeed(
-                self.pg.machine,
+            procedure = GantrySpeed(
                 speeds=(1, 2, 3, 4, 5),
                 y1=-100,
                 y2=100,
             )
+            self.pg.add_procedure(procedure)
 
     def test_gantry_speed_too_wide(self):
         with self.assertRaises(ValueError):
-            GantrySpeed(
-                self.pg.machine,
+            procedure = GantrySpeed(
                 speeds=(1, 2, 3, 4),
                 roi_size_mm=50,
                 y1=-100,
                 y2=100,
             )
+            self.pg.add_procedure(procedure)
 
     def test_gantry_range_over_360(self):
         with self.assertRaises(ValueError):
-            GantrySpeed(
-                self.pg.machine,
+            procedure = GantrySpeed(
                 speeds=(4, 4, 4, 4),
                 y1=-100,
                 y2=100,
                 mu=250,
             )
+            self.pg.add_procedure(procedure)
 
     def test_vmat_drgs(self):
-        procedure = VMATDRGS(self.pg.machine)
+        procedure = VMATDRGS()
         self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 2)
@@ -725,7 +716,6 @@ class TestHalcyonPrefabs(TestCase):
 
     def test_create_picket_fence_proximal(self):
         procedure = procedures_halcyon.PicketFence(
-            machine=self.pg.machine,
             stack=Stack.PROXIMAL,
             mu=123,
             beam_name="Picket Fence",
@@ -760,7 +750,6 @@ class TestHalcyonPrefabs(TestCase):
 
     def test_create_picket_fence_distal(self):
         procedure = procedures_halcyon.PicketFence(
-            machine=self.pg.machine,
             stack=Stack.DISTAL,
             mu=123,
             beam_name="Picket Fence",
@@ -795,7 +784,6 @@ class TestHalcyonPrefabs(TestCase):
 
     def test_create_picket_fence_both(self):
         procedure = procedures_halcyon.PicketFence(
-            machine=self.pg.machine,
             stack=Stack.BOTH,
             mu=123,
             beam_name="Picket Fence",
@@ -1169,15 +1157,19 @@ class TestInterpolateControlPoints(TestCase):
 
 class TestVmatT2(TestCase):
     def test_defaults(self):
-        VMATDRGS(DEFAULT_TRUEBEAM_HD120)
+        VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120)
 
     def test_plot_control_points(self):
-        test = VMATDRGS(DEFAULT_TRUEBEAM_HD120)
+        test = VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120)
         test.plot_control_points()
 
     def test_plot_fluence(self):
-        test = VMATDRGS(DEFAULT_TRUEBEAM_HD120)
+        test = VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120)
         test.plot_fluence(IMAGER_AS1200)
+
+    def test_plot_profile(self):
+        test = VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120)
+        test.plot_fluence_profile(IMAGER_AS1200)
 
     def test_replicate_original_test(self):
         original_file = get_file_from_cloud_test_repo(
@@ -1221,7 +1213,7 @@ class TestVmatT2(TestCase):
         dose_rate = dose_motion / time_to_deliver * 60
         gantry_speeds = gantry_speed[2:-1:2]
         dose_rates = dose_rate[2:-1:2]
-        start_gantry_offset = float(180 - plan_gantry_angle[0])
+        initial_gantry_offset = float(180 - plan_gantry_angle[0])
         gantry_motion_per_transition = float(gantry_motion[1])
         gantry_rotation_clockwise = bool(
             plan_gantry_angle[1] - plan_gantry_angle[0] > 0
@@ -1236,20 +1228,20 @@ class TestVmatT2(TestCase):
 
         # Run
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
-        test = VMATDRGS(
+        test = VMATDRGS.from_machine(
             TrueBeamMachine(False, specs),
-            tuple(dose_rates),
-            tuple(gantry_speeds),
-            mu_per_segment,
-            mu_per_transition,
-            correct_fluence,
-            gantry_motion_per_transition,
-            gantry_rotation_clockwise,
-            start_gantry_offset,
-            mlc_span,
-            mlc_motion_reverse,
-            mlc_gap,
-            jaw_padding,
+            dose_rates=tuple(dose_rates),
+            gantry_speeds=tuple(gantry_speeds),
+            mu_per_segment=mu_per_segment,
+            mu_per_transition=mu_per_transition,
+            correct_fluence=correct_fluence,
+            gantry_motion_per_transition=gantry_motion_per_transition,
+            gantry_rotation_clockwise=gantry_rotation_clockwise,
+            initial_gantry_offset=initial_gantry_offset,
+            mlc_span=mlc_span,
+            mlc_motion_reverse=mlc_motion_reverse,
+            mlc_gap=mlc_gap,
+            jaw_padding=jaw_padding,
             max_dose_rate=max_dose_rate,
         )
 
@@ -1287,7 +1279,7 @@ class TestVmatT2(TestCase):
 
     def test_adding_static_beams(self):
         static_angles = (0, 90, 270, 180)
-        test = VMATDRGS(DEFAULT_TRUEBEAM_HD120, dynamic_delivery_at_static_gantry=static_angles)
+        test = VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120, dynamic_delivery_at_static_gantry=static_angles)
         expected_number_of_beams = 6  # dynamic, reference, 4x static
         actual_number_of_beams = len(test.beams)
         self.assertEqual(actual_number_of_beams, expected_number_of_beams)
@@ -1300,12 +1292,12 @@ class TestVmatT2(TestCase):
         gantry_speeds = (1, 2, 3)
         dose_rates = (1, 2)
         with self.assertRaises(ValueError):
-            VMATDRGS(DEFAULT_TRUEBEAM_HD120, gantry_speeds, dose_rates)
+            VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120, gantry_speeds=gantry_speeds, dose_rates=dose_rates)
 
     def test_error_if_initial_gantry_offset_less_than_min(self):
         initial_gantry_offset = 0
         with self.assertRaises(ValueError):
-            VMATDRGS(DEFAULT_TRUEBEAM_HD120, initial_gantry_offset=initial_gantry_offset)
+            VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120, initial_gantry_offset=initial_gantry_offset)
 
     def test_error_if_gantry_speeds_above_max(self):
         gantry_speeds = (1, 2, 5)
@@ -1314,14 +1306,14 @@ class TestVmatT2(TestCase):
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
         machine = TrueBeamMachine(False, specs)
         with self.assertRaises(ValueError):
-            VMATDRGS(machine, gantry_speeds, dose_rates)
+            VMATDRGS.from_machine(machine, gantry_speeds=gantry_speeds, dose_rates=dose_rates)
 
     def test_error_if_dose_rates_above_max(self):
         gantry_speeds = (1, 2, 5)
         dose_rates = (1, 2, 300)
         max_dose_rate = 100
         with self.assertRaises(ValueError):
-            VMATDRGS(DEFAULT_TRUEBEAM_HD120, gantry_speeds, dose_rates, max_dose_rate=max_dose_rate)
+            VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120, gantry_speeds=gantry_speeds, dose_rates=dose_rates, max_dose_rate=max_dose_rate)
 
     def test_error_if_axis_not_maxed_out(self):
         gantry_speeds = (5, 1, 1)
@@ -1331,14 +1323,14 @@ class TestVmatT2(TestCase):
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
         machine = TrueBeamMachine(False, specs)
         with self.assertRaises(ValueError):
-            VMATDRGS(
+            VMATDRGS.from_machine(
                 machine,
-                gantry_speeds,
-                dose_rates,
+                gantry_speeds=gantry_speeds,
+                dose_rates=dose_rates,
                 max_dose_rate=max_dose_rate,
             )
 
     def test_error_if_rotation_larger_than_360(self):
         mu_per_segment = 100
         with self.assertRaises(ValueError):
-            VMATDRGS(DEFAULT_TRUEBEAM_HD120, mu_per_segment=mu_per_segment)
+            VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120, mu_per_segment=mu_per_segment)

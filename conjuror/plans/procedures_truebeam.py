@@ -1,5 +1,7 @@
 import math
+from abc import ABC
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
@@ -13,7 +15,8 @@ from conjuror.plans.plan_generator import QAProcedureBase, TrueBeamMachine, Flue
 from conjuror.utils import wrap360
 
 
-class QAProcedure(QAProcedureBase):
+@dataclass
+class QAProcedure(QAProcedureBase, ABC):
 
     @staticmethod
     def _create_mlc(
@@ -29,187 +32,182 @@ class QAProcedure(QAProcedureBase):
             sacrifice_max_move_mm=sacrifice_max_move_mm,
         )
 
+
+@dataclass
 class OpenField(QAProcedure):
-    """Create an open field beam."""
+    """Create an open field beam.
 
-    def __init__(
-        self,
-        machine: TrueBeamMachine,
-        x1: float,
-        x2: float,
-        y1: float,
-        y2: float,
-        defined_by_mlcs: bool = True,
-        energy: float = 6,
-        fluence_mode: FluenceMode = FluenceMode.STANDARD,
-        dose_rate: int = 600,
-        gantry_angle: float = 0,
-        coll_angle: float = 0,
-        couch_vrt: float = 0,
-        couch_lng: float = 1000,
-        couch_lat: float = 0,
-        couch_rot: float = 0,
-        mu: int = 200,
-        padding_mm: float = 5,
-        beam_name: str = "Open",
-        outside_strip_width_mm: float = 5,
-    ):
-        """Create an open field beam.
+    Parameters
+    ----------
+    x1 : float
+        The left jaw position.
+    x2 : float
+        The right jaw position.
+    y1 : float
+        The bottom jaw position.
+    y2 : float
+        The top jaw position.
+    defined_by_mlcs : bool
+        Whether the field edges are defined by the MLCs or the jaws.
+    energy : float
+        The energy of the beam.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
+    dose_rate : int
+        The dose rate of the beam.
+    gantry_angle : float
+        The gantry angle of the beam.
+    coll_angle : float
+        The collimator angle of the beam.
+    couch_vrt : float
+        The couch vertical position.
+    couch_lng : float
+        The couch longitudinal position.
+    couch_lat : float
+        The couch lateral position.
+    couch_rot : float
+        The couch rotation.
+    mu : int
+        The monitor units of the beam.
+    padding_mm : float
+        The padding to add to the jaws or MLCs.
+    beam_name : str
+        The name of the beam.
+    outside_strip_width_mm : float
+        The width of the strip of MLCs outside the field. The MLCs will be placed to the
+        left, under the X1 jaw by ~2cm.
+    """
 
-        Parameters
-        ----------
-        machine : TrueBeamMachine
-            The target machine.
-        x1 : float
-            The left jaw position.
-        x2 : float
-            The right jaw position.
-        y1 : float
-            The bottom jaw position.
-        y2 : float
-            The top jaw position.
-        defined_by_mlcs : bool
-            Whether the field edges are defined by the MLCs or the jaws.
-        energy : float
-            The energy of the beam.
-        fluence_mode : FluenceMode
-            The fluence mode of the beam.
-        dose_rate : int
-            The dose rate of the beam.
-        gantry_angle : float
-            The gantry angle of the beam.
-        coll_angle : float
-            The collimator angle of the beam.
-        couch_vrt : float
-            The couch vertical position.
-        couch_lng : float
-            The couch longitudinal position.
-        couch_lat : float
-            The couch lateral position.
-        couch_rot : float
-            The couch rotation.
-        mu : int
-            The monitor units of the beam.
-        padding_mm : float
-            The padding to add to the jaws or MLCs.
-        beam_name : str
-            The name of the beam.
-        outside_strip_width_mm : float
-            The width of the strip of MLCs outside the field. The MLCs will be placed to the
-            left, under the X1 jaw by ~2cm.
-        """
-        super().__init__()
-        if defined_by_mlcs:
+    x1: float
+    x2: float
+    y1: float
+    y2: float
+    defined_by_mlcs: bool = True
+    energy: float = 6
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
+    dose_rate: int = 600
+    gantry_angle: float = 0
+    coll_angle: float = 0
+    couch_vrt: float = 0
+    couch_lng: float = 1000
+    couch_lat: float = 0
+    couch_rot: float = 0
+    mu: int = 200
+    padding_mm: float = 5
+    beam_name: str = "Open"
+    outside_strip_width_mm: float = 5
+
+    def compute(self):
+        if self.defined_by_mlcs:
             mlc_padding = 0
-            jaw_padding = padding_mm
+            jaw_padding = self.padding_mm
         else:
-            mlc_padding = padding_mm
+            mlc_padding = self.padding_mm
             jaw_padding = 0
-        mlc = self._create_mlc(machine)
+        mlc = self._create_mlc(self.machine)
         mlc.add_rectangle(
-            left_position=x1 - mlc_padding,
-            right_position=x2 + mlc_padding,
-            top_position=y2 + mlc_padding,
-            bottom_position=y1 - mlc_padding,
-            outer_strip_width=outside_strip_width_mm,
-            x_outfield_position=x1 - mlc_padding - jaw_padding - 20,
+            left_position=self.x1 - mlc_padding,
+            right_position=self.x2 + mlc_padding,
+            top_position=self.y2 + mlc_padding,
+            bottom_position=self.y1 - mlc_padding,
+            outer_strip_width=self.outside_strip_width_mm,
+            x_outfield_position=self.x1 - mlc_padding - jaw_padding - 20,
             meterset_at_target=1.0,
         )
-        beam = Beam.for_truebeam(
-            beam_name=beam_name,
-            energy=energy,
-            dose_rate=dose_rate,
-            x1=x1 - jaw_padding,
-            x2=x2 + jaw_padding,
-            y1=y1 - jaw_padding,
-            y2=y2 + jaw_padding,
-            gantry_angles=gantry_angle,
-            coll_angle=coll_angle,
-            couch_vrt=couch_vrt,
-            couch_lat=couch_lat,
-            couch_lng=couch_lng,
-            couch_rot=couch_rot,
+        beam = Beam.to_truebeam(
+            beam_name=self.beam_name,
+            energy=self.energy,
+            dose_rate=self.dose_rate,
+            x1=self.x1 - jaw_padding,
+            x2=self.x2 + jaw_padding,
+            y1=self.y1 - jaw_padding,
+            y2=self.y2 + jaw_padding,
+            gantry_angles=self.gantry_angle,
+            coll_angle=self.coll_angle,
+            couch_vrt=self.couch_vrt,
+            couch_lat=self.couch_lat,
+            couch_lng=self.couch_lng,
+            couch_rot=self.couch_rot,
             mlc_positions=mlc.as_control_points(),
-            metersets=[mu * m for m in mlc.as_metersets()],
-            fluence_mode=fluence_mode,
-            mlc_is_hd=machine.mlc_is_hd,
+            metersets=[self.mu * m for m in mlc.as_metersets()],
+            fluence_mode=self.fluence_mode,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(beam)
 
 
+@dataclass
 class MLCTransmission(QAProcedure):
-    def __init__(self,
-        machine: TrueBeamMachine,
-        bank: Literal["A", "B"],
-        mu: int = 50,
-        overreach: float = 10,
-        beam_name: str = "MLC Tx",
-        energy: int = 6,
-        dose_rate: int = 600,
-        x1: float = -50,
-        x2: float = 50,
-        y1: float = -100,
-        y2: float = 100,
-        gantry_angle: float = 0,
-        coll_angle: float = 0,
-        couch_vrt: float = 0,
-        couch_lat: float = 0,
-        couch_lng: float = 1000,
-        couch_rot: float = 0,
-        fluence_mode: FluenceMode = FluenceMode.STANDARD,
-    ):
-        """Add a single-image MLC transmission beam to the plan.
-        The beam is delivered with the MLCs closed and moved to one side underneath the jaws.
+    """Add a single-image MLC transmission beam to the plan.
+    The beam is delivered with the MLCs closed and moved to one side underneath the jaws.
 
-        Parameters
-        ----------
-        machine : TrueBeamMachine
-            The target machine.
-        bank : str
-            The MLC bank to move. Either "A" or "B".
-        mu : int
-            The monitor units to deliver.
-        overreach : float
-            The amount to tuck the MLCs under the jaws in mm.
-        beam_name : str
-            The name of the beam.
-        energy : int
-            The energy of the beam.
-        dose_rate : int
-            The dose rate of the beam.
-        x1 : float
-            The left jaw position. Usually negative. More negative is left.
-        x2 : float
-            The right jaw position. Usually positive. More positive is right.
-        y1 : float
-            The bottom jaw position. Usually negative. More negative is lower.
-        y2 : float
-            The top jaw position. Usually positive. More positive is higher.
-        gantry_angle : float
-            The gantry angle of the beam in degrees.
-        coll_angle : float
-            The collimator angle of the beam in degrees.
-        couch_vrt : float
-            The couch vertical position.
-        couch_lat : float
-            The couch lateral position.
-        couch_lng : float
-            The couch longitudinal position.
-        couch_rot : float
-            The couch rotation in degrees.
-        fluence_mode : FluenceMode
-            The fluence mode of the beam.
-        """
-        super().__init__()
-        mlc = self._create_mlc(machine)
-        if bank == "A":
-            mlc_tips = x2 + overreach
-        elif bank == "B":
-            mlc_tips = x1 - overreach
+    Parameters
+    ----------
+    bank : str
+        The MLC bank to move. Either "A" or "B".
+    mu : int
+        The monitor units to deliver.
+    overreach : float
+        The amount to tuck the MLCs under the jaws in mm.
+    beam_name : str
+        The name of the beam.
+    energy : int
+        The energy of the beam.
+    dose_rate : int
+        The dose rate of the beam.
+    x1 : float
+        The left jaw position. Usually negative. More negative is left.
+    x2 : float
+        The right jaw position. Usually positive. More positive is right.
+    y1 : float
+        The bottom jaw position. Usually negative. More negative is lower.
+    y2 : float
+        The top jaw position. Usually positive. More positive is higher.
+    gantry_angle : float
+        The gantry angle of the beam in degrees.
+    coll_angle : float
+        The collimator angle of the beam in degrees.
+    couch_vrt : float
+        The couch vertical position.
+    couch_lat : float
+        The couch lateral position.
+    couch_lng : float
+        The couch longitudinal position.
+    couch_rot : float
+        The couch rotation in degrees.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
+    """
+
+    bank: Literal["A", "B"]
+    mu: int = 50
+    overreach: float = 10
+    beam_name: str = "MLC Tx"
+    energy: int = 6
+    dose_rate: int = 600
+    x1: float = -50
+    x2: float = 50
+    y1: float = -100
+    y2: float = 100
+    gantry_angle: float = 0
+    coll_angle: float = 0
+    couch_vrt: float = 0
+    couch_lat: float = 0
+    couch_lng: float = 1000
+    couch_rot: float = 0
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
+
+
+    def compute(self):
+        mlc = self._create_mlc(self.machine)
+        if self.bank == "A":
+            mlc_tips = self.x2 + self.overreach
+        elif self.bank == "B":
+            mlc_tips = self.x1 - self.overreach
         else:
             raise ValueError("Bank must be 'A' or 'B'")
         # test for overtravel
-        if abs(x2 - x1) + overreach > machine.machine_specs.max_mlc_overtravel:
+        if abs(self.x2 - self.x1) + self.overreach > self.machine.machine_specs.max_mlc_overtravel:
             raise OvertravelError(
                 "The MLC overtravel is too large for the given jaw positions and overreach. Reduce the x-jaw opening size and/or overreach value."
             )
@@ -218,707 +216,698 @@ class MLCTransmission(QAProcedure):
             strip_width_mm=1,
             meterset_at_target=1,
         )
-        beam = Beam.for_truebeam(
-            beam_name=f"{beam_name} {bank}",
-            energy=energy,
-            dose_rate=dose_rate,
-            x1=x1,
-            x2=x2,
-            y1=y1,
-            y2=y2,
-            gantry_angles=gantry_angle,
-            coll_angle=coll_angle,
-            couch_vrt=couch_vrt,
-            couch_lat=couch_lat,
-            couch_lng=couch_lng,
-            couch_rot=couch_rot,
+        beam = Beam.to_truebeam(
+            beam_name=f"{self.beam_name} {self.bank}",
+            energy=self.energy,
+            dose_rate=self.dose_rate,
+            x1=self.x1,
+            x2=self.x2,
+            y1=self.y1,
+            y2=self.y2,
+            gantry_angles=self.gantry_angle,
+            coll_angle=self.coll_angle,
+            couch_vrt=self.couch_vrt,
+            couch_lat=self.couch_lat,
+            couch_lng=self.couch_lng,
+            couch_rot=self.couch_rot,
             mlc_positions=mlc.as_control_points(),
-            metersets=[mu * m for m in mlc.as_metersets()],
-            fluence_mode=fluence_mode,
-            mlc_is_hd=machine.mlc_is_hd,
+            metersets=[self.mu * m for m in mlc.as_metersets()],
+            fluence_mode=self.fluence_mode,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(beam)
 
 
+@dataclass
 class PicketFence(QAProcedure):
-    def __init__(self,
-        machine: TrueBeamMachine,
-        strip_width_mm: float = 3,
-        strip_positions_mm: tuple[float | int, ...] = (-45, -30, -15, 0, 15, 30, 45),
-        y1: float = -100,
-        y2: float = 100,
-        fluence_mode: FluenceMode = FluenceMode.STANDARD,
-        dose_rate: int = 600,
-        energy: float = 6,
-        gantry_angle: float = 0,
-        coll_angle: float = 0,
-        couch_vrt: float = 0,
-        couch_lng: float = 1000,
-        couch_lat: float = 0,
-        couch_rot: float = 0,
-        mu: int = 200,
-        jaw_padding_mm: float = 10,
-        beam_name: str = "PF",
-        max_sacrificial_move_mm: float = 50,
-    ):
-        """Add a picket fence beam to the plan.
+    """Add a picket fence beam to the plan.
 
-        Parameters
-        ----------
-        machine : TrueBeamMachine
-            The target machine.
-        strip_width_mm : float
-            The width of the strips in mm.
-        strip_positions_mm : tuple
-            The positions of the strips in mm relative to the center of the image.
-        y1 : float
-            The bottom jaw position. Usually negative. More negative is lower.
-        y2 : float
-            The top jaw position. Usually positive. More positive is higher.
-        fluence_mode : FluenceMode
-            The fluence mode of the beam.
-        dose_rate : int
-            The dose rate of the beam.
-        energy : float
-            The energy of the beam.
-        gantry_angle : float
-            The gantry angle of the beam.
-        coll_angle : float
-            The collimator angle of the beam.
-        couch_vrt : float
-            The couch vertical position.
-        couch_lng : float
-            The couch longitudinal position.
-        couch_lat : float
-            The couch lateral position.
-        couch_rot : float
-            The couch rotation.
-        mu : int
-            The monitor units of the beam.
-        jaw_padding_mm : float
-            The padding to add to the X jaws.
-        beam_name : str
-            The name of the beam.
-        max_sacrificial_move_mm : float
-            The maximum distance the sacrificial leaves can move in a given control point.
-            Smaller values generate more control points and more back-and-forth movement.
-            Too large of values may cause deliverability issues.
-        """
-        super().__init__()
+    Parameters
+    ----------
+    strip_width_mm : float
+        The width of the strips in mm.
+    strip_positions_mm : tuple
+        The positions of the strips in mm relative to the center of the image.
+    y1 : float
+        The bottom jaw position. Usually negative. More negative is lower.
+    y2 : float
+        The top jaw position. Usually positive. More positive is higher.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
+    dose_rate : int
+        The dose rate of the beam.
+    energy : float
+        The energy of the beam.
+    gantry_angle : float
+        The gantry angle of the beam.
+    coll_angle : float
+        The collimator angle of the beam.
+    couch_vrt : float
+        The couch vertical position.
+    couch_lng : float
+        The couch longitudinal position.
+    couch_lat : float
+        The couch lateral position.
+    couch_rot : float
+        The couch rotation.
+    mu : int
+        The monitor units of the beam.
+    jaw_padding_mm : float
+        The padding to add to the X jaws.
+    beam_name : str
+        The name of the beam.
+    max_sacrificial_move_mm : float
+        The maximum distance the sacrificial leaves can move in a given control point.
+        Smaller values generate more control points and more back-and-forth movement.
+        Too large of values may cause deliverability issues.
+    """
+    strip_width_mm: float = 3
+    strip_positions_mm: tuple[float | int, ...] = (-45, -30, -15, 0, 15, 30, 45)
+    y1: float = -100
+    y2: float = 100
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
+    dose_rate: int = 600
+    energy: float = 6
+    gantry_angle: float = 0
+    coll_angle: float = 0
+    couch_vrt: float = 0
+    couch_lng: float = 1000
+    couch_lat: float = 0
+    couch_rot: float = 0
+    mu: int = 200
+    jaw_padding_mm: float = 10
+    beam_name: str = "PF"
+    max_sacrificial_move_mm: float = 50
+
+    def compute(self):
         # check MLC overtravel; machine may prevent delivery if exposing leaf tail
-        x1 = min(strip_positions_mm) - jaw_padding_mm
-        x2 = max(strip_positions_mm) + jaw_padding_mm
+        x1 = min(self.strip_positions_mm) - self.jaw_padding_mm
+        x2 = max(self.strip_positions_mm) + self.jaw_padding_mm
         max_dist_to_jaw = max(
-            max(abs(pos - x1), abs(pos + x2)) for pos in strip_positions_mm
+            max(abs(pos - x1), abs(pos + x2)) for pos in self.strip_positions_mm
         )
-        if max_dist_to_jaw > machine.machine_specs.max_mlc_overtravel:
+        if max_dist_to_jaw > self.machine.machine_specs.max_mlc_overtravel:
             raise ValueError(
                 "Picket fence beam exceeds MLC overtravel limits. Lower padding, the number of pickets, or the picket spacing."
             )
-        mlc = self._create_mlc(machine, sacrifice_max_move_mm=max_sacrificial_move_mm)
+        mlc = self._create_mlc(self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm)
         # create initial starting point; start under the jaws
         mlc.add_strip(
-            position_mm=strip_positions_mm[0] - 2,
-            strip_width_mm=strip_width_mm,
+            position_mm=self.strip_positions_mm[0] - 2,
+            strip_width_mm=self.strip_width_mm,
             meterset_at_target=0,
         )
 
-        for strip in strip_positions_mm:
+        for strip in self.strip_positions_mm:
             # starting control point
             mlc.add_strip(
                 position_mm=strip,
-                strip_width_mm=strip_width_mm,
-                meterset_at_target=1 / len(strip_positions_mm),
+                strip_width_mm=self.strip_width_mm,
+                meterset_at_target=1 / len(self.strip_positions_mm),
             )
-        beam = Beam.for_truebeam(
-            beam_name=beam_name,
-            energy=energy,
-            dose_rate=dose_rate,
+        beam = Beam.to_truebeam(
+            beam_name=self.beam_name,
+            energy=self.energy,
+            dose_rate=self.dose_rate,
             x1=x1,
             x2=x2,
-            y1=y1,
-            y2=y2,
-            gantry_angles=gantry_angle,
-            coll_angle=coll_angle,
-            couch_vrt=couch_vrt,
-            couch_lat=couch_lat,
-            couch_lng=couch_lng,
-            couch_rot=couch_rot,
+            y1=self.y1,
+            y2=self.y2,
+            gantry_angles=self.gantry_angle,
+            coll_angle=self.coll_angle,
+            couch_vrt=self.couch_vrt,
+            couch_lat=self.couch_lat,
+            couch_lng=self.couch_lng,
+            couch_rot=self.couch_rot,
             mlc_positions=mlc.as_control_points(),
-            metersets=[mu * m for m in mlc.as_metersets()],
-            fluence_mode=fluence_mode,
-            mlc_is_hd=machine.mlc_is_hd,
+            metersets=[self.mu * m for m in mlc.as_metersets()],
+            fluence_mode=self.fluence_mode,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(beam)
 
 
+@dataclass
 class WinstonLutz(QAProcedure):
-    def __init__(self,
-        machine: TrueBeamMachine,
-        x1: float = -10,
-        x2: float = 10,
-        y1: float = -10,
-        y2: float = 10,
-        defined_by_mlcs: bool = True,
-        energy: float = 6,
-        fluence_mode: FluenceMode = FluenceMode.STANDARD,
-        dose_rate: int = 600,
-        axes_positions: Iterable[dict] = ({"gantry": 0, "collimator": 0, "couch": 0},),
-        couch_vrt: float = 0,
-        couch_lng: float = 1000,
-        couch_lat: float = 0,
-        mu: int = 10,
-        padding_mm: float = 5,
-    ):
-        """Add Winston-Lutz beams to the plan. Will create a beam for each set of axes positions.
-        Field names are generated automatically based on the axes positions.
+    """Add Winston-Lutz beams to the plan. Will create a beam for each set of axes positions.
+    Field names are generated automatically based on the axes positions.
 
-        Parameters
-        ----------
-        machine : TrueBeamMachine
-            The target machine.
-        x1 : float
-            The left jaw position.
-        x2 : float
-            The right jaw position.
-        y1 : float
-            The bottom jaw position.
-        y2 : float
-            The top jaw position.
-        defined_by_mlcs : bool
-            Whether the field edges are defined by the MLCs or the jaws.
-        energy : float
-            The energy of the beam.
-        fluence_mode : FluenceMode
-            The fluence mode of the beam.
-        dose_rate : int
-            The dose rate of the beam.
-        axes_positions : Iterable[dict]
-            The positions of the axes. Each dict should have keys 'gantry', 'collimator', 'couch', and optionally 'name'.
-        couch_vrt : float
-            The couch vertical position.
-        couch_lng : float
-            The couch longitudinal position.
-        couch_lat : float
-            The couch lateral position.
-        mu : int
-            The monitor units of the beam.
-        padding_mm : float
-            The padding to add. If defined by the MLCs, this is the padding of the jaws. If defined by the jaws,
-            this is the padding of the MLCs.
-        """
-        super().__init__()
-        for axes in axes_positions:
-            if defined_by_mlcs:
+    Parameters
+    ----------
+    x1 : float
+        The left jaw position.
+    x2 : float
+        The right jaw position.
+    y1 : float
+        The bottom jaw position.
+    y2 : float
+        The top jaw position.
+    defined_by_mlcs : bool
+        Whether the field edges are defined by the MLCs or the jaws.
+    energy : float
+        The energy of the beam.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
+    dose_rate : int
+        The dose rate of the beam.
+    axes_positions : Iterable[dict]
+        The positions of the axes. Each dict should have keys 'gantry', 'collimator', 'couch', and optionally 'name'.
+    couch_vrt : float
+        The couch vertical position.
+    couch_lng : float
+        The couch longitudinal position.
+    couch_lat : float
+        The couch lateral position.
+    mu : int
+        The monitor units of the beam.
+    padding_mm : float
+        The padding to add. If defined by the MLCs, this is the padding of the jaws. If defined by the jaws,
+        this is the padding of the MLCs.
+    """
+
+    x1: float = -10
+    x2: float = 10
+    y1: float = -10
+    y2: float = 10
+    defined_by_mlcs: bool = True
+    energy: float = 6
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
+    dose_rate: int = 600
+    axes_positions: Iterable[dict] = ({"gantry": 0, "collimator": 0, "couch": 0},)
+    couch_vrt: float = 0
+    couch_lng: float = 1000
+    couch_lat: float = 0
+    mu: int = 10
+    padding_mm: float = 5
+
+    def compute(self):
+
+        for axes in self.axes_positions:
+            if self.defined_by_mlcs:
                 mlc_padding = 0
-                jaw_padding = padding_mm
+                jaw_padding = self.padding_mm
             else:
-                mlc_padding = padding_mm
+                mlc_padding = self.padding_mm
                 jaw_padding = 0
-            mlc = self._create_mlc(machine)
+            mlc = self._create_mlc(self.machine)
             mlc.add_rectangle(
-                left_position=x1 - mlc_padding,
-                right_position=x2 + mlc_padding,
-                top_position=y2 + mlc_padding,
-                bottom_position=y1 - mlc_padding,
+                left_position=self.x1 - mlc_padding,
+                right_position=self.x2 + mlc_padding,
+                top_position=self.y2 + mlc_padding,
+                bottom_position=self.y1 - mlc_padding,
                 outer_strip_width=5,
                 meterset_at_target=1.0,
-                x_outfield_position=x1 - mlc_padding - jaw_padding - 20,
+                x_outfield_position=self.x1 - mlc_padding - jaw_padding - 20,
             )
             beam_name = (
                 axes.get("name")
                 or f"G{axes['gantry']:g}C{axes['collimator']:g}P{axes['couch']:g}"
             )
-            beam = Beam.for_truebeam(
+            beam = Beam.to_truebeam(
                 beam_name=beam_name,
-                energy=energy,
-                dose_rate=dose_rate,
-                x1=x1 - jaw_padding,
-                x2=x2 + jaw_padding,
-                y1=y1 - jaw_padding,
-                y2=y2 + jaw_padding,
+                energy=self.energy,
+                dose_rate=self.dose_rate,
+                x1=self.x1 - jaw_padding,
+                x2=self.x2 + jaw_padding,
+                y1=self.y1 - jaw_padding,
+                y2=self.y2 + jaw_padding,
                 gantry_angles=axes["gantry"],
                 coll_angle=axes["collimator"],
-                couch_vrt=couch_vrt,
-                couch_lat=couch_lat,
-                couch_lng=couch_lng,
+                couch_vrt=self.couch_vrt,
+                couch_lat=self.couch_lat,
+                couch_lng=self.couch_lng,
                 couch_rot=0,
                 mlc_positions=mlc.as_control_points(),
-                metersets=[mu * m for m in mlc.as_metersets()],
-                fluence_mode=fluence_mode,
-                mlc_is_hd=machine.mlc_is_hd,
+                metersets=[self.mu * m for m in mlc.as_metersets()],
+                fluence_mode=self.fluence_mode,
+                mlc_is_hd=self.machine.mlc_is_hd,
             )
             self.beams.append(beam)
 
 
+@dataclass
 class DoseRate(QAProcedure):
-    def __init__(self,
-        machine: TrueBeamMachine,
-        dose_rates: tuple[int, ...] = (100, 300, 500, 600),
-        default_dose_rate: int = 600,
-        gantry_angle: float = 0,
-        desired_mu: int = 50,
-        energy: float = 6,
-        fluence_mode: FluenceMode = FluenceMode.STANDARD,
-        coll_angle: float = 0,
-        couch_vrt: float = 0,
-        couch_lat: float = 0,
-        couch_lng: float = 1000,
-        couch_rot: float = 0,
-        jaw_padding_mm: float = 5,
-        roi_size_mm: float = 25,
-        y1: float = -100,
-        y2: float = 100,
-        max_sacrificial_move_mm: float = 50,
-    ):
-        """Create a single-image dose rate test. Multiple ROIs are generated. A reference beam is also
-        created where all ROIs are delivered at the default dose rate for comparison.
-        The field names are generated automatically based on the min and max dose rates tested.
+    """Create a single-image dose rate test. Multiple ROIs are generated. A reference beam is also
+    created where all ROIs are delivered at the default dose rate for comparison.
+    The field names are generated automatically based on the min and max dose rates tested.
 
-        Parameters
-        ----------
-        machine : TrueBeamMachine
-            The target machine.
-        dose_rates : tuple
-            The dose rates to test in MU/min. Each dose rate will have its own ROI.
-        default_dose_rate : int
-            The default dose rate. Typically, this is the clinical default. The reference beam
-            will be delivered at this dose rate for all ROIs.
-        gantry_angle : float
-            The gantry angle of the beam.
-        desired_mu : int
-            The desired monitor units to deliver. It can be that based on the dose rates asked for,
-            the MU required might be higher than this value.
-        energy : float
-            The energy of the beam.
-        fluence_mode : FluenceMode
-            The fluence mode of the beam.
-        coll_angle : float
-            The collimator angle of the beam.
-        couch_vrt : float
-            The couch vertical position.
-        couch_lat : float
-            The couch lateral position.
-        couch_lng : float
-            The couch longitudinal position.
-        couch_rot : float
-            The couch rotation.
-        jaw_padding_mm : float
-            The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.
-        roi_size_mm : float
-            The width of the ROIs in mm.
-        y1 : float
-            The bottom jaw position. Usually negative. More negative is lower.
-        y2 : float
-            The top jaw position. Usually positive. More positive is higher.
-        max_sacrificial_move_mm : float
-            The maximum distance the sacrificial leaves can move in a given control point.
-            Smaller values generate more control points and more back-and-forth movement.
-            Too large of values may cause deliverability issues.
-        """
-        super().__init__()
-        if roi_size_mm * len(dose_rates) > machine.machine_specs.max_mlc_overtravel:
+    Parameters
+    ----------
+    dose_rates : tuple
+        The dose rates to test in MU/min. Each dose rate will have its own ROI.
+    default_dose_rate : int
+        The default dose rate. Typically, this is the clinical default. The reference beam
+        will be delivered at this dose rate for all ROIs.
+    gantry_angle : float
+        The gantry angle of the beam.
+    desired_mu : int
+        The desired monitor units to deliver. It can be that based on the dose rates asked for,
+        the MU required might be higher than this value.
+    energy : float
+        The energy of the beam.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
+    coll_angle : float
+        The collimator angle of the beam.
+    couch_vrt : float
+        The couch vertical position.
+    couch_lat : float
+        The couch lateral position.
+    couch_lng : float
+        The couch longitudinal position.
+    couch_rot : float
+        The couch rotation.
+    jaw_padding_mm : float
+        The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.
+    roi_size_mm : float
+        The width of the ROIs in mm.
+    y1 : float
+        The bottom jaw position. Usually negative. More negative is lower.
+    y2 : float
+        The top jaw position. Usually positive. More positive is higher.
+    max_sacrificial_move_mm : float
+        The maximum distance the sacrificial leaves can move in a given control point.
+        Smaller values generate more control points and more back-and-forth movement.
+        Too large of values may cause deliverability issues.
+    """
+
+    dose_rates: tuple[int, ...] = (100, 300, 500, 600)
+    default_dose_rate: int = 600
+    gantry_angle: float = 0
+    desired_mu: int = 50
+    energy: float = 6
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
+    coll_angle: float = 0
+    couch_vrt: float = 0
+    couch_lat: float = 0
+    couch_lng: float = 1000
+    couch_rot: float = 0
+    jaw_padding_mm: float = 5
+    roi_size_mm: float = 25
+    y1: float = -100
+    y2: float = 100
+    max_sacrificial_move_mm: float = 50
+
+    def compute(self):
+
+        if self.roi_size_mm * len(self.dose_rates) > self.machine.machine_specs.max_mlc_overtravel:
             raise ValueError(
                 "The ROI size * number of dose rates must be less than the overall MLC allowable width"
             )
         # calculate MU
-        mlc_transition_time = roi_size_mm / machine.machine_specs.max_mlc_speed
-        min_mu = mlc_transition_time * max(dose_rates) * len(dose_rates) / 60
-        mu = max(desired_mu, math.ceil(min_mu))
+        mlc_transition_time = self.roi_size_mm / self.machine.machine_specs.max_mlc_speed
+        min_mu = mlc_transition_time * max(self.dose_rates) * len(self.dose_rates) / 60
+        mu = max(self.desired_mu, math.ceil(min_mu))
 
         # create MLC sacrifices
         times_to_transition = [
-            mu * 60 / (dose_rate * len(dose_rates)) for dose_rate in dose_rates
+            mu * 60 / (dose_rate * len(self.dose_rates)) for dose_rate in self.dose_rates
         ]
-        sacrificial_movements = [tt * machine.machine_specs.max_mlc_speed for tt in times_to_transition]
+        sacrificial_movements = [tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition]
 
-        mlc = self._create_mlc(machine, sacrifice_max_move_mm=max_sacrificial_move_mm)
-        ref_mlc = self._create_mlc(machine)
+        mlc = self._create_mlc(self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm)
+        ref_mlc = self._create_mlc(self.machine)
 
         roi_centers = np.linspace(
-            -roi_size_mm * len(dose_rates) / 2 + roi_size_mm / 2,
-            roi_size_mm * len(dose_rates) / 2 - roi_size_mm / 2,
-            len(dose_rates),
+            -self.roi_size_mm * len(self.dose_rates) / 2 + self.roi_size_mm / 2,
+            self.roi_size_mm * len(self.dose_rates) / 2 - self.roi_size_mm / 2,
+            len(self.dose_rates),
         )
         # we have a starting and ending strip
         ref_mlc.add_strip(
-            position_mm=float(roi_centers[0] - roi_size_mm / 2),
+            position_mm=float(roi_centers[0] - self.roi_size_mm / 2),
             strip_width_mm=0,
             meterset_at_target=0,
         )
         mlc.add_strip(
-            position_mm=float(roi_centers[0] - roi_size_mm / 2),
+            position_mm=float(roi_centers[0] - self.roi_size_mm / 2),
             strip_width_mm=0,
             meterset_at_target=0,
             initial_sacrificial_gap_mm=5,
         )
         for sacrifice_distance, center in zip(sacrificial_movements, roi_centers):
             ref_mlc.add_rectangle(
-                left_position=center - roi_size_mm / 2,
-                right_position=center + roi_size_mm / 2,
+                left_position=center - self.roi_size_mm / 2,
+                right_position=center + self.roi_size_mm / 2,
                 x_outfield_position=-200,
-                top_position=max(machine.mlc_boundaries),
-                bottom_position=min(machine.mlc_boundaries),
+                top_position=max(self.machine.mlc_boundaries),
+                bottom_position=min(self.machine.mlc_boundaries),
                 outer_strip_width=5,
                 meterset_at_target=0,
-                meterset_transition=0.5 / len(dose_rates),
+                meterset_transition=0.5 / len(self.dose_rates),
                 sacrificial_distance=0,
             )
             ref_mlc.add_strip(
-                position_mm=center + roi_size_mm / 2,
+                position_mm=center + self.roi_size_mm / 2,
                 strip_width_mm=0,
                 meterset_at_target=0,
-                meterset_transition=0.5 / len(dose_rates),
+                meterset_transition=0.5 / len(self.dose_rates),
                 sacrificial_distance_mm=0,
             )
             mlc.add_rectangle(
-                left_position=center - roi_size_mm / 2,
-                right_position=center + roi_size_mm / 2,
+                left_position=center - self.roi_size_mm / 2,
+                right_position=center + self.roi_size_mm / 2,
                 x_outfield_position=-200,  # not used
-                top_position=max(machine.mlc_boundaries),
-                bottom_position=min(machine.mlc_boundaries),
+                top_position=max(self.machine.mlc_boundaries),
+                bottom_position=min(self.machine.mlc_boundaries),
                 outer_strip_width=5,  # not used
                 meterset_at_target=0,
-                meterset_transition=0.5 / len(dose_rates),
+                meterset_transition=0.5 / len(self.dose_rates),
                 sacrificial_distance=sacrifice_distance,
             )
             mlc.add_strip(
-                position_mm=center + roi_size_mm / 2,
+                position_mm=center + self.roi_size_mm / 2,
                 strip_width_mm=0,
                 meterset_at_target=0,
-                meterset_transition=0.5 / len(dose_rates),
+                meterset_transition=0.5 / len(self.dose_rates),
                 sacrificial_distance_mm=sacrifice_distance,
             )
-        ref_beam = Beam.for_truebeam(
+        ref_beam = Beam.to_truebeam(
             beam_name="DR Ref",
-            energy=energy,
-            dose_rate=default_dose_rate,
-            x1=float(roi_centers[0] - roi_size_mm / 2 - jaw_padding_mm),
-            x2=float(roi_centers[-1] + roi_size_mm / 2 + jaw_padding_mm),
-            y1=y1,
-            y2=y2,
-            gantry_angles=gantry_angle,
-            coll_angle=coll_angle,
-            couch_vrt=couch_vrt,
-            couch_lat=couch_lat,
-            couch_lng=couch_lng,
-            couch_rot=couch_rot,
-            fluence_mode=fluence_mode,
+            energy=self.energy,
+            dose_rate=self.default_dose_rate,
+            x1=float(roi_centers[0] - self.roi_size_mm / 2 - self.jaw_padding_mm),
+            x2=float(roi_centers[-1] + self.roi_size_mm / 2 + self.jaw_padding_mm),
+            y1=self.y1,
+            y2=self.y2,
+            gantry_angles=self.gantry_angle,
+            coll_angle=self.coll_angle,
+            couch_vrt=self.couch_vrt,
+            couch_lat=self.couch_lat,
+            couch_lng=self.couch_lng,
+            couch_rot=self.couch_rot,
+            fluence_mode=self.fluence_mode,
             mlc_positions=ref_mlc.as_control_points(),
             metersets=[mu * m for m in ref_mlc.as_metersets()],
-            mlc_is_hd=machine.mlc_is_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(ref_beam)
-        beam = Beam.for_truebeam(
-            beam_name=f"DR{min(dose_rates)}-{max(dose_rates)}",
-            energy=energy,
-            dose_rate=default_dose_rate,
-            x1=float(roi_centers[0] - roi_size_mm / 2 - jaw_padding_mm),
-            x2=float(roi_centers[-1] + roi_size_mm / 2 + jaw_padding_mm),
-            y1=y1,
-            y2=y2,
-            gantry_angles=gantry_angle,
-            coll_angle=coll_angle,
-            couch_vrt=couch_vrt,
-            couch_lat=couch_lat,
-            couch_lng=couch_lng,
-            couch_rot=couch_rot,
-            fluence_mode=fluence_mode,
+        beam = Beam.to_truebeam(
+            beam_name=f"DR{min(self.dose_rates)}-{max(self.dose_rates)}",
+            energy=self.energy,
+            dose_rate=self.default_dose_rate,
+            x1=float(roi_centers[0] - self.roi_size_mm / 2 - self.jaw_padding_mm),
+            x2=float(roi_centers[-1] + self.roi_size_mm / 2 + self.jaw_padding_mm),
+            y1=self.y1,
+            y2=self.y2,
+            gantry_angles=self.gantry_angle,
+            coll_angle=self.coll_angle,
+            couch_vrt=self.couch_vrt,
+            couch_lat=self.couch_lat,
+            couch_lng=self.couch_lng,
+            couch_rot=self.couch_rot,
+            fluence_mode=self.fluence_mode,
             mlc_positions=mlc.as_control_points(),
             metersets=[mu * m for m in mlc.as_metersets()],
-            mlc_is_hd=machine.mlc_is_hd,
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(beam)
 
 
+@dataclass
 class MLCSpeed(QAProcedure):
-    def __init__(self,
-        machine: TrueBeamMachine,
-        speeds: tuple[float | int, ...] = (5, 10, 15, 20),
-        roi_size_mm: float = 20,
-        mu: int = 50,
-        default_dose_rate: int = 600,
-        gantry_angle: float = 0,
-        energy: float = 6,
-        coll_angle: float = 0,
-        couch_vrt: float = 0,
-        couch_lat: float = 0,
-        couch_lng: float = 1000,
-        couch_rot: float = 0,
-        fluence_mode: FluenceMode = FluenceMode.STANDARD,
-        jaw_padding_mm: float = 5,
-        y1: float = -100,
-        y2: float = 100,
-        beam_name: str = "MLC Speed",
-        max_sacrificial_move_mm: float = 50,
-    ):
-        """Create a single-image MLC speed test. Multiple speeds are generated. A reference beam is also
-        generated. The reference beam is delivered at the maximum MLC speed.
+    """Create a single-image MLC speed test. Multiple speeds are generated. A reference beam is also
+    generated. The reference beam is delivered at the maximum MLC speed.
 
-        Parameters
-        ----------
-        machine : TrueBeamMachine
-            The target machine.
-        speeds : tuple[float]
-            The speeds to test in mm/s. Each speed will have its own ROI.
-        roi_size_mm : float
-            The width of the ROIs in mm.
-        mu : int
-            The monitor units to deliver.
-        default_dose_rate : int
-            The dose rate used for the reference beam.
-        gantry_angle : float
-            The gantry angle of the beam.
-        energy : int
-            The energy of the beam.
-        coll_angle : float
-            The collimator angle of the beam.
-        couch_vrt : float
-            The couch vertical position.
-        couch_lat : float
-            The couch lateral position.
-        couch_lng : float
-            The couch longitudinal position.
-        couch_rot : float
-            The couch rotation.
-        fluence_mode : FluenceMode
-            The fluence mode of the beam.
-        jaw_padding_mm : float
-            The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.
-        y1 : float
-            The bottom jaw position. Usually negative. More negative is lower.
-        y2 : float
-            The top jaw position. Usually positive. More positive is higher.
-        beam_name : str
-            The name of the beam. The reference beam will be called "MLC Sp Ref".
-        max_sacrificial_move_mm : float
-            The maximum distance the sacrificial leaves can move in a given control point.
-            Smaller values generate more control points and more back-and-forth movement.
-            Too large of values may cause deliverability issues.
+    Parameters
+    ----------
+    speeds : tuple[float]
+        The speeds to test in mm/s. Each speed will have its own ROI.
+    roi_size_mm : float
+        The width of the ROIs in mm.
+    mu : int
+        The monitor units to deliver.
+    default_dose_rate : int
+        The dose rate used for the reference beam.
+    gantry_angle : float
+        The gantry angle of the beam.
+    energy : int
+        The energy of the beam.
+    coll_angle : float
+        The collimator angle of the beam.
+    couch_vrt : float
+        The couch vertical position.
+    couch_lat : float
+        The couch lateral position.
+    couch_lng : float
+        The couch longitudinal position.
+    couch_rot : float
+        The couch rotation.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
+    jaw_padding_mm : float
+        The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.
+    y1 : float
+        The bottom jaw position. Usually negative. More negative is lower.
+    y2 : float
+        The top jaw position. Usually positive. More positive is higher.
+    beam_name : str
+        The name of the beam. The reference beam will be called "MLC Sp Ref".
+    max_sacrificial_move_mm : float
+        The maximum distance the sacrificial leaves can move in a given control point.
+        Smaller values generate more control points and more back-and-forth movement.
+        Too large of values may cause deliverability issues.
 
 
-        Notes
-        -----
+    Notes
+    -----
 
-        The desired speed can be achieved through the following formula:
+    The desired speed can be achieved through the following formula:
 
-           speed = roi_size_mm * max dose rate / MU * 60
+       speed = roi_size_mm * max dose rate / MU * 60
 
-        We solve for MU with the desired speed. The 60 is for converting the dose rate as MU/min to MU/sec.
-        Thus,
+    We solve for MU with the desired speed. The 60 is for converting the dose rate as MU/min to MU/sec.
+    Thus,
 
-            MU = roi_size_mm * max dose rate / speed * 60
+        MU = roi_size_mm * max dose rate / speed * 60
 
-        MUs are calculated automatically based on the speed and the ROI size.
+    MUs are calculated automatically based on the speed and the ROI size.
 
-        """
-        super().__init__()
-        if max(speeds) > machine.machine_specs.max_mlc_speed:
+    """
+
+    speeds: tuple[float | int, ...] = (5, 10, 15, 20)
+    roi_size_mm: float = 20
+    mu: int = 50
+    default_dose_rate: int = 600
+    gantry_angle: float = 0
+    energy: float = 6
+    coll_angle: float = 0
+    couch_vrt: float = 0
+    couch_lat: float = 0
+    couch_lng: float = 1000
+    couch_rot: float = 0
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
+    jaw_padding_mm: float = 5
+    y1: float = -100
+    y2: float = 100
+    beam_name: str = "MLC Speed"
+    max_sacrificial_move_mm: float = 50
+
+    def compute(self) -> None:
+        if max(self.speeds) > self.machine.machine_specs.max_mlc_speed:
             raise ValueError(
-                f"Maximum speed given {max(speeds)} is greater than the maximum MLC speed {machine.machine_specs.max_mlc_speed}"
+                f"Maximum speed given {max(self.speeds)} is greater than the maximum MLC speed {self.machine.machine_specs.max_mlc_speed}"
             )
-        if min(speeds) <= 0:
+        if min(self.speeds) <= 0:
             raise ValueError("Speeds must be greater than 0")
-        if roi_size_mm * len(speeds) > machine.machine_specs.max_mlc_overtravel:
+        if self.roi_size_mm * len(self.speeds) > self.machine.machine_specs.max_mlc_overtravel:
             raise ValueError(
                 "The ROI size * number of speeds must be less than the overall MLC allowable width"
             )
         # create MLC positions
-        times_to_transition = [roi_size_mm / speed for speed in speeds]
-        sacrificial_movements = [tt * machine.machine_specs.max_mlc_speed for tt in times_to_transition]
+        times_to_transition = [self.roi_size_mm / speed for speed in self.speeds]
+        sacrificial_movements = [tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition]
 
-        mlc = self._create_mlc(machine, sacrifice_max_move_mm=max_sacrificial_move_mm)
-        ref_mlc = self._create_mlc(machine)
+        mlc = self._create_mlc(self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm)
+        ref_mlc = self._create_mlc(self.machine)
 
         roi_centers = np.linspace(
-            -roi_size_mm * len(speeds) / 2 + roi_size_mm / 2,
-            roi_size_mm * len(speeds) / 2 - roi_size_mm / 2,
-            len(speeds),
+            -self.roi_size_mm * len(self.speeds) / 2 + self.roi_size_mm / 2,
+            self.roi_size_mm * len(self.speeds) / 2 - self.roi_size_mm / 2,
+            len(self.speeds),
         )
         # we have a starting and ending strip
         ref_mlc.add_strip(
-            position_mm=float(roi_centers[0] - roi_size_mm / 2),
+            position_mm=float(roi_centers[0] - self.roi_size_mm / 2),
             strip_width_mm=0,
             meterset_at_target=0,
         )
         mlc.add_strip(
-            position_mm=float(roi_centers[0] - roi_size_mm / 2),
+            position_mm=float(roi_centers[0] - self.roi_size_mm / 2),
             strip_width_mm=0,
             meterset_at_target=0,
             initial_sacrificial_gap_mm=5,
         )
         for sacrifice_distance, center in zip(sacrificial_movements, roi_centers):
             ref_mlc.add_rectangle(
-                left_position=center - roi_size_mm / 2,
-                right_position=center + roi_size_mm / 2,
+                left_position=center - self.roi_size_mm / 2,
+                right_position=center + self.roi_size_mm / 2,
                 x_outfield_position=-200,  # not relevant
-                top_position=max(machine.mlc_boundaries),
-                bottom_position=min(machine.mlc_boundaries),
+                top_position=max(self.machine.mlc_boundaries),
+                bottom_position=min(self.machine.mlc_boundaries),
                 outer_strip_width=5,  # not relevant
                 meterset_at_target=0,
-                meterset_transition=0.5 / len(speeds),
+                meterset_transition=0.5 / len(self.speeds),
                 sacrificial_distance=0,
             )
             ref_mlc.add_strip(
-                position_mm=center + roi_size_mm / 2,
+                position_mm=center + self.roi_size_mm / 2,
                 strip_width_mm=0,
                 meterset_at_target=0,
-                meterset_transition=0.5 / len(speeds),
+                meterset_transition=0.5 / len(self.speeds),
                 sacrificial_distance_mm=0,
             )
             mlc.add_rectangle(
-                left_position=center - roi_size_mm / 2,
-                right_position=center + roi_size_mm / 2,
+                left_position=center - self.roi_size_mm / 2,
+                right_position=center + self.roi_size_mm / 2,
                 x_outfield_position=-200,  # not used
-                top_position=max(machine.mlc_boundaries),
-                bottom_position=min(machine.mlc_boundaries),
+                top_position=max(self.machine.mlc_boundaries),
+                bottom_position=min(self.machine.mlc_boundaries),
                 outer_strip_width=5,  # not used
                 meterset_at_target=0,
-                meterset_transition=0.5 / len(speeds),
+                meterset_transition=0.5 / len(self.speeds),
                 sacrificial_distance=sacrifice_distance,
             )
             mlc.add_strip(
-                position_mm=center + roi_size_mm / 2,
+                position_mm=center + self.roi_size_mm / 2,
                 strip_width_mm=0,
                 meterset_at_target=0,
-                meterset_transition=0.5 / len(speeds),
+                meterset_transition=0.5 / len(self.speeds),
                 sacrificial_distance_mm=sacrifice_distance,
             )
-        ref_beam = Beam.for_truebeam(
-            beam_name=f"{beam_name} Ref",
-            energy=energy,
-            dose_rate=default_dose_rate,
-            x1=float(roi_centers[0] - roi_size_mm / 2 - jaw_padding_mm),
-            x2=float(roi_centers[-1] + roi_size_mm / 2 + jaw_padding_mm),
-            y1=y1,
-            y2=y2,
-            gantry_angles=gantry_angle,
-            coll_angle=coll_angle,
-            couch_vrt=couch_vrt,
-            couch_lat=couch_lat,
-            couch_lng=couch_lng,
-            couch_rot=couch_rot,
-            fluence_mode=fluence_mode,
+        ref_beam = Beam.to_truebeam(
+            beam_name=f"{self.beam_name} Ref",
+            energy=self.energy,
+            dose_rate=self.default_dose_rate,
+            x1=float(roi_centers[0] - self.roi_size_mm / 2 - self.jaw_padding_mm),
+            x2=float(roi_centers[-1] + self.roi_size_mm / 2 + self.jaw_padding_mm),
+            y1=self.y1,
+            y2=self.y2,
+            gantry_angles=self.gantry_angle,
+            coll_angle=self.coll_angle,
+            couch_vrt=self.couch_vrt,
+            couch_lat=self.couch_lat,
+            couch_lng=self.couch_lng,
+            couch_rot=self.couch_rot,
+            fluence_mode=self.fluence_mode,
             mlc_positions=ref_mlc.as_control_points(),
-            metersets=[mu * m for m in ref_mlc.as_metersets()],
-            mlc_is_hd=machine.mlc_is_hd,
+            metersets=[self.mu * m for m in ref_mlc.as_metersets()],
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(ref_beam)
-        beam = Beam.for_truebeam(
-            beam_name=beam_name,
-            energy=energy,
-            dose_rate=default_dose_rate,
-            x1=float(roi_centers[0] - roi_size_mm / 2 - jaw_padding_mm),
-            x2=float(roi_centers[-1] + roi_size_mm / 2 + jaw_padding_mm),
-            y1=y1,
-            y2=y2,
-            gantry_angles=gantry_angle,
-            coll_angle=coll_angle,
-            couch_vrt=couch_vrt,
-            couch_lat=couch_lat,
-            couch_lng=couch_lng,
-            couch_rot=couch_rot,
-            fluence_mode=fluence_mode,
+        beam = Beam.to_truebeam(
+            beam_name=self.beam_name,
+            energy=self.energy,
+            dose_rate=self.default_dose_rate,
+            x1=float(roi_centers[0] - self.roi_size_mm / 2 - self.jaw_padding_mm),
+            x2=float(roi_centers[-1] + self.roi_size_mm / 2 + self.jaw_padding_mm),
+            y1=self.y1,
+            y2=self.y2,
+            gantry_angles=self.gantry_angle,
+            coll_angle=self.coll_angle,
+            couch_vrt=self.couch_vrt,
+            couch_lat=self.couch_lat,
+            couch_lng=self.couch_lng,
+            couch_rot=self.couch_rot,
+            fluence_mode=self.fluence_mode,
             mlc_positions=mlc.as_control_points(),
-            metersets=[mu * m for m in mlc.as_metersets()],
-            mlc_is_hd=machine.mlc_is_hd,
+            metersets=[self.mu * m for m in mlc.as_metersets()],
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(beam)
 
 
 
+@dataclass
 class GantrySpeed(QAProcedure):
-    def __init__(self,
-        machine: TrueBeamMachine,
-        speeds: tuple[float | int, ...] = (2, 3, 4, 4.8),
-        max_dose_rate: int = 600,
-        start_gantry_angle: float = 179,
-        energy: float = 6,
-        fluence_mode: FluenceMode = FluenceMode.STANDARD,
-        coll_angle: float = 0,
-        couch_vrt: float = 0,
-        couch_lat: float = 0,
-        couch_lng: float = 1000,
-        couch_rot: float = 0,
-        beam_name: str = "GS",
-        gantry_rot_dir: GantryDirection = GantryDirection.CLOCKWISE,
-        jaw_padding_mm: float = 5,
-        roi_size_mm: float = 30,
-        y1: float = -100,
-        y2: float = 100,
-        mu: int = 120,
-    ):
-        """Create a single-image gantry speed test. Multiple speeds are generated. A reference beam is also
-        generated. The reference beam is delivered without gantry movement.
+    """Create a single-image gantry speed test. Multiple speeds are generated. A reference beam is also
+    generated. The reference beam is delivered without gantry movement.
 
-        Parameters
-        ----------
-        machine : TrueBeamMachine
-            The target machine.
-        speeds : tuple
-            The gantry speeds to test. Each speed will have its own ROI.
-        max_dose_rate : int
-            The max dose rate clinically allowed for the energy.
-        start_gantry_angle : float
-            The starting gantry angle. The gantry will rotate around this point. It is up to the user
-            to know what the machine's limitations are. (i.e. don't go through 180 for Varian machines).
-            The ending gantry angle will be the starting angle + the sum of the gantry deltas generated
-            by the speed ROIs. Slower speeds require more gantry angle to reach the same MU.
-        energy : float
-            The energy of the beam.
-        fluence_mode : FluenceMode
-            The fluence mode of the beam.
-        coll_angle : float
-            The collimator angle of the beam.
-        couch_vrt : float
-            The couch vertical position.
-        couch_lat : float
-            The couch lateral position.
-        couch_lng : float
-            The couch longitudinal position.
-        couch_rot : float
-            The couch rotation.
-        beam_name : str
-            The name of the beam.
-        gantry_rot_dir : GantryDirection
-            The direction of gantry rotation.
-        jaw_padding_mm : float
-            The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.
-        roi_size_mm : float
-            The width of the ROIs in mm.
-        y1 : float
-            The bottom jaw position. Usually negative. More negative is lower.
-        y2 : float
-            The top jaw position. Usually positive. More positive is higher.
-        mu : int
-            The monitor units of the beam.
+    Parameters
+    ----------
+    speeds : tuple
+        The gantry speeds to test. Each speed will have its own ROI.
+    max_dose_rate : int
+        The max dose rate clinically allowed for the energy.
+    start_gantry_angle : float
+        The starting gantry angle. The gantry will rotate around this point. It is up to the user
+        to know what the machine's limitations are. (i.e. don't go through 180 for Varian machines).
+        The ending gantry angle will be the starting angle + the sum of the gantry deltas generated
+        by the speed ROIs. Slower speeds require more gantry angle to reach the same MU.
+    energy : float
+        The energy of the beam.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
+    coll_angle : float
+        The collimator angle of the beam.
+    couch_vrt : float
+        The couch vertical position.
+    couch_lat : float
+        The couch lateral position.
+    couch_lng : float
+        The couch longitudinal position.
+    couch_rot : float
+        The couch rotation.
+    beam_name : str
+        The name of the beam.
+    gantry_rot_dir : GantryDirection
+        The direction of gantry rotation.
+    jaw_padding_mm : float
+        The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.
+    roi_size_mm : float
+        The width of the ROIs in mm.
+    y1 : float
+        The bottom jaw position. Usually negative. More negative is lower.
+    y2 : float
+        The top jaw position. Usually positive. More positive is higher.
+    mu : int
+        The monitor units of the beam.
 
-        Notes
-        -----
+    Notes
+    -----
 
-        The gantry angle to cover can be determined via the following:
+    The gantry angle to cover can be determined via the following:
 
-         gantry speed = gantry_range * max_dose_rate / (MU * 60)
+     gantry speed = gantry_range * max_dose_rate / (MU * 60)
 
-         We can thus solve for the gantry range:
+     We can thus solve for the gantry range:
 
-            gantry_range = gantry_speed * MU * 60 / max_dose_rate
+        gantry_range = gantry_speed * MU * 60 / max_dose_rate
 
-        """
-        super().__init__()
-        if max(speeds) > machine.machine_specs.max_gantry_speed:
+    """
+
+    speeds: tuple[float | int, ...] = (2, 3, 4, 4.8)
+    max_dose_rate: int = 600
+    start_gantry_angle: float = 179
+    energy: float = 6
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
+    coll_angle: float = 0
+    couch_vrt: float = 0
+    couch_lat: float = 0
+    couch_lng: float = 1000
+    couch_rot: float = 0
+    beam_name: str = "GS"
+    gantry_rot_dir: GantryDirection = GantryDirection.CLOCKWISE
+    jaw_padding_mm: float = 5
+    roi_size_mm: float = 30
+    y1: float = -100
+    y2: float = 100
+    mu: int = 120
+
+    def compute(self):
+        if max(self.speeds) > self.machine.machine_specs.max_gantry_speed:
             raise ValueError(
-                f"Maximum speed given {max(speeds)} is greater than the maximum gantry speed {machine.machine_specs.max_gantry_speed}"
+                f"Maximum speed given {max(self.speeds)} is greater than the maximum gantry speed {self.machine.machine_specs.max_gantry_speed}"
             )
-        if roi_size_mm * len(speeds) > machine.machine_specs.max_mlc_overtravel:
+        if self.roi_size_mm * len(self.speeds) > self.machine.machine_specs.max_mlc_overtravel:
             raise ValueError(
                 "The ROI size * number of speeds must be less than the overall MLC allowable width"
             )
         # determine sacrifices and gantry angles
-        gantry_deltas = [speed * mu * 60 / max_dose_rate for speed in speeds]
-        gantry_sign = -1 if gantry_rot_dir == GantryDirection.CLOCKWISE else 1
-        g_angles_uncorrected = [start_gantry_angle] + (
-            start_gantry_angle + gantry_sign * np.cumsum(gantry_deltas)
+        gantry_deltas = [speed * self.mu * 60 / self.max_dose_rate for speed in self.speeds]
+        gantry_sign = -1 if self.gantry_rot_dir == GantryDirection.CLOCKWISE else 1
+        g_angles_uncorrected = [self.start_gantry_angle] + (
+            self.start_gantry_angle + gantry_sign * np.cumsum(gantry_deltas)
         ).tolist()
         gantry_angles = [round(wrap360(angle), 2) for angle in g_angles_uncorrected]
 
@@ -927,192 +916,196 @@ class GantrySpeed(QAProcedure):
                 "Gantry travel is >360 degrees. Lower the beam MU, use fewer speeds, or decrease the desired gantry speeds"
             )
 
-        mlc = self._create_mlc(machine)
-        ref_mlc = self._create_mlc(machine)
+        mlc = self._create_mlc(self.machine)
+        ref_mlc = self._create_mlc(self.machine)
 
         roi_centers = np.linspace(
-            -roi_size_mm * len(speeds) / 2 + roi_size_mm / 2,
-            roi_size_mm * len(speeds) / 2 - roi_size_mm / 2,
-            len(speeds),
+            -self.roi_size_mm * len(self.speeds) / 2 + self.roi_size_mm / 2,
+            self.roi_size_mm * len(self.speeds) / 2 - self.roi_size_mm / 2,
+            len(self.speeds),
         )
         # we have a starting and ending strip
         ref_mlc.add_strip(
             position_mm=float(roi_centers[0]),
-            strip_width_mm=roi_size_mm,
+            strip_width_mm=self.roi_size_mm,
             meterset_at_target=0,
         )
         mlc.add_strip(
             position_mm=float(roi_centers[0]),
-            strip_width_mm=roi_size_mm,
+            strip_width_mm=self.roi_size_mm,
             meterset_at_target=0,
         )
         for center, gantry_angle in zip(roi_centers, gantry_angles):
             ref_mlc.add_strip(
                 position_mm=center,
-                strip_width_mm=roi_size_mm,
+                strip_width_mm=self.roi_size_mm,
                 meterset_at_target=0,
-                meterset_transition=1 / len(speeds),
+                meterset_transition=1 / len(self.speeds),
             )
             mlc.add_strip(
                 position_mm=center,
-                strip_width_mm=roi_size_mm,
+                strip_width_mm=self.roi_size_mm,
                 meterset_at_target=0,
-                meterset_transition=1 / len(speeds),
+                meterset_transition=1 / len(self.speeds),
             )
 
-        beam = Beam.for_truebeam(
-            beam_name=beam_name,
-            energy=energy,
-            dose_rate=max_dose_rate,
-            x1=min(roi_centers) - roi_size_mm - jaw_padding_mm,
-            x2=max(roi_centers) + roi_size_mm + jaw_padding_mm,
-            y1=y1,
-            y2=y2,
+        beam = Beam.to_truebeam(
+            beam_name=self.beam_name,
+            energy=self.energy,
+            dose_rate=self.max_dose_rate,
+            x1=min(roi_centers) - self.roi_size_mm - self.jaw_padding_mm,
+            x2=max(roi_centers) + self.roi_size_mm + self.jaw_padding_mm,
+            y1=self.y1,
+            y2=self.y2,
             gantry_angles=gantry_angles,
-            coll_angle=coll_angle,
-            couch_vrt=couch_vrt,
-            couch_lat=couch_lat,
-            couch_lng=couch_lng,
-            couch_rot=couch_rot,
-            fluence_mode=fluence_mode,
+            coll_angle=self.coll_angle,
+            couch_vrt=self.couch_vrt,
+            couch_lat=self.couch_lat,
+            couch_lng=self.couch_lng,
+            couch_rot=self.couch_rot,
+            fluence_mode=self.fluence_mode,
             mlc_positions=mlc.as_control_points(),
-            metersets=[mu * m for m in mlc.as_metersets()],
-            mlc_is_hd=machine.mlc_is_hd,
+            metersets=[self.mu * m for m in mlc.as_metersets()],
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(beam)
-        ref_beam = Beam.for_truebeam(
-            beam_name=f"{beam_name} Ref",
-            energy=energy,
-            dose_rate=max_dose_rate,
-            x1=min(roi_centers) - roi_size_mm - jaw_padding_mm,
-            x2=max(roi_centers) + roi_size_mm + jaw_padding_mm,
-            y1=y1,
-            y2=y2,
+        ref_beam = Beam.to_truebeam(
+            beam_name=f"{self.beam_name} Ref",
+            energy=self.energy,
+            dose_rate=self.max_dose_rate,
+            x1=min(roi_centers) - self.roi_size_mm - self.jaw_padding_mm,
+            x2=max(roi_centers) + self.roi_size_mm + self.jaw_padding_mm,
+            y1=self.y1,
+            y2=self.y2,
             gantry_angles=gantry_angles[-1],
-            coll_angle=coll_angle,
-            couch_vrt=couch_vrt,
-            couch_lat=couch_lat,
-            couch_lng=couch_lng,
-            couch_rot=couch_rot,
-            fluence_mode=fluence_mode,
+            coll_angle=self.coll_angle,
+            couch_vrt=self.couch_vrt,
+            couch_lat=self.couch_lat,
+            couch_lng=self.couch_lng,
+            couch_rot=self.couch_rot,
+            fluence_mode=self.fluence_mode,
             mlc_positions=ref_mlc.as_control_points(),
-            metersets=[mu * m for m in ref_mlc.as_metersets()],
-            mlc_is_hd=machine.mlc_is_hd,
+            metersets=[self.mu * m for m in ref_mlc.as_metersets()],
+            mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(ref_beam)
 
 
 
+@dataclass
 class VMATDRGS(QAProcedure):
-    """Create beams like Clif Ling VMAT DRGS test."""
+    """Create beams like Clif Ling VMAT DRGS tests. The defaults use an optimized selection for a TrueBeam.
+
+    Parameters
+    ----------
+    dose_rates : tuple
+        The dose rates to test in MU/min. Each dose rate will have its own ROI.
+    gantry_speeds : tuple
+        The gantry speeds to tests in deg/sec. Each gantry speed will have its own ROI.
+    mu_per_segment : float
+        The number of MUs to deliver to each ROI
+    mu_per_transition : float
+        The number of MUs to deliver during while the MLCs move from one ROI to the next.
+    correct_fluence : bool
+        The original DRGS plans have an incorrect fluence on the initial and final transitions.
+        Use False to replicate the original plans, otherwise use True to have a more uniform fluence.
+    gantry_motion_per_transition : float
+        The number of degrees that the gantry should rotate while the MLCs move from one ROI to the next.
+    gantry_rotation_clockwise : bool
+        The direction of the gantry rotation. If True, the gantry will rotate clockwise
+    initial_gantry_offset : float
+        The initial gantry offset in degrees. E.g. If initial_gantry_offset=1 and gantry_rotation_clockwise=True,
+        then start angle = 181 IEC. If gantry_rotation_clockwise=False, then start angle = 179 IEC
+    mlc_span : float
+        The total size of the field in mm. Initial/final MLC position = +/- mlc_span/2
+    mlc_motion_reverse : bool
+        The direction of MLC motion. If False, the leaves move in positive direction (IEC)
+        from -mlc_span/2 to +mlc_span/2. If True, the leaves move in negative direction (IEC)
+        from +mlc_span/2 to -mlc_span/2.
+    mlc_gap : float
+        The MLC gap between ROIs in mm. This creates a darker region to help visualize the ROIs boundaries.
+    jaw_padding : float
+        The added jaw position in mm with respect to the initial/final MLC positions
+    energy : float
+        The energy of the beam.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
+    max_dose_rate : int
+        The max dose rate in MU/min. This is used to compute the control point sequence to achieve the test dose_rates
+    reference_beam_mu : float
+        The number of MU's to be delivered in the reference beam (static beam)
+    reference_beam_add_before : bool
+        Whether to add the reference_beam before or after the dynamic beam. If True, the gantry angle is set to
+        the initial gantry angle of the dynamic beam. If False, the gantry angle is set to the final gantry angle
+        of the dynamic beam.
+    dynamic_delivery_at_static_gantry : tuple
+        There is one beam created for each static gantry angle. These beams contain the same control point sequence
+        as the dynamic beam, but the gantry angle is replaced by a single value. There will be no modulation of
+        dose rate and gantry speeds, and can be used as an alternative reference beam.
+    """
+
+    dose_rates: tuple[float, ...] = (600, 600, 600, 600, 500, 400, 200)
+    gantry_speeds: tuple[float, ...] = (3, 4, 5, 6, 6, 6, 6)
+    mu_per_segment: float = 48.
+    mu_per_transition: float = 8.
+    correct_fluence: bool = True
+    gantry_motion_per_transition: float = 10.
+    gantry_rotation_clockwise: bool = True
+    initial_gantry_offset: float = 1.
+    mlc_span: float = 138.
+    mlc_motion_reverse: bool = True
+    mlc_gap: float = 2.
+    jaw_padding: float = 0.
+    energy: float = 6
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
+    max_dose_rate: int = 600
+    reference_beam_mu: float = 100.
+    reference_beam_add_before: bool = False
+    dynamic_delivery_at_static_gantry: tuple[float, ...] = ()
 
     # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.
-    MIN_GANTRY_OFFSET = 0.1
-
+    MIN_GANTRY_OFFSET: float = field(init=False, default=0.1)
     # The reference beam may be acquired prior to or following the dynamic beam
     # (as specified by the reference_beam_add_before argument).
     # These attributes record the indices of the respective beams.
-    dynamic_beam_idx: int
-    reference_beam_idx: int
+    dynamic_beam_idx: int = field(init=False)
+    reference_beam_idx: int = field(init=False)
 
-    def __init__(
-        self,
-        machine : TrueBeamMachine,
-        dose_rates: tuple[float, ...] = (600, 600, 600, 600, 500, 400, 200),
-        gantry_speeds: tuple[float, ...] = (3, 4, 5, 6, 6, 6, 6),
-        mu_per_segment: float = 48.,
-        mu_per_transition: float = 8.,
-        correct_fluence: bool = True,
-        gantry_motion_per_transition: float = 10.,
-        gantry_rotation_clockwise: bool = True,
-        initial_gantry_offset: float = 1.,
-        mlc_span: float = 138.,
-        mlc_motion_reverse: bool = True,
-        mlc_gap: float = 2.,
-        jaw_padding: float = 0.,
-        energy: float = 6,
-        fluence_mode: FluenceMode = FluenceMode.STANDARD,
-        max_dose_rate: int = 600,
-        reference_beam_mu: float = 100.,
-        reference_beam_add_before: bool = False,
-        dynamic_delivery_at_static_gantry: tuple[float, ...] = (),
-    ):
-        """Create beams like Clif Ling VMAT DRGS tests. The defaults use an optimized selection for a TrueBeam.
+    # private attributes: common to all beams to facilitate creation
+    _x1: float = field(init=False)
+    _x2: float = field(init=False)
+    _y1: float = field(init=False)
+    _y2: float = field(init=False)
 
-        Parameters
-        ----------
-        machine : TrueBeamMachine
-            The target machine.
-        dose_rates : tuple
-            The dose rates to test in MU/min. Each dose rate will have its own ROI.
-        gantry_speeds : tuple
-            The gantry speeds to tests in deg/sec. Each gantry speed will have its own ROI.
-        mu_per_segment : float
-            The number of MUs to deliver to each ROI
-        mu_per_transition : float
-            The number of MUs to deliver during while the MLCs move from one ROI to the next.
-        correct_fluence : bool
-            The original DRGS plans have an incorrect fluence on the initial and final transitions.
-            Use False to replicate the original plans, otherwise use True to have a more uniform fluence.
-        gantry_motion_per_transition : float
-            The number of degrees that the gantry should rotate while the MLCs move from one ROI to the next.
-        gantry_rotation_clockwise : bool
-            The direction of the gantry rotation. If True, the gantry will rotate clockwise
-        initial_gantry_offset : float
-            The initial gantry offset in degrees. E.g. If initial_gantry_offset=1 and gantry_rotation_clockwise=True,
-            then start angle = 181 IEC. If gantry_rotation_clockwise=False, then start angle = 179 IEC
-        mlc_span : float
-            The total size of the field in mm. Initial/final MLC position = +/- mlc_span/2
-        mlc_motion_reverse : bool
-            The direction of MLC motion. If False, the leaves move in positive direction (IEC)
-            from -mlc_span/2 to +mlc_span/2. If True, the leaves move in negative direction (IEC)
-            from +mlc_span/2 to -mlc_span/2.
-        mlc_gap : float
-            The MLC gap between ROIs in mm. This creates a darker region to help visualize the ROIs boundaries.
-        jaw_padding : float
-            The added jaw position in mm with respect to the initial/final MLC positions
-        energy : float
-            The energy of the beam.
-        fluence_mode : FluenceMode
-            The fluence mode of the beam.
-        max_dose_rate : int
-            The max dose rate in MU/min. This is used to compute the control point sequence to achieve the test dose_rates
-        reference_beam_mu : float
-            The number of MU's to be delivered in the reference beam (static beam)
-        reference_beam_add_before : bool
-            Whether to add the reference_beam before or after the dynamic beam. If True, the gantry angle is set to
-            the initial gantry angle of the dynamic beam. If False, the gantry angle is set to the final gantry angle
-            of the dynamic beam.
-        dynamic_delivery_at_static_gantry : tuple
-            There is one beam created for each static gantry angle. These beams contain the same control point sequence
-            as the dynamic beam, but the gantry angle is replaced by a single value. There will be no modulation of
-            dose rate and gantry speeds, and can be used as an alternative reference beam.
-        """
-        super().__init__()
+    @property
+    def reference_beam(self) -> Beam:
+        return self.beams[self.reference_beam_idx]
+
+    @property
+    def dynamic_beam(self) -> Beam:
+        return self.beams[self.dynamic_beam_idx]
+
+    def compute(self):
         # store parameters common to all beams
-        self._machine = machine
-        self._energy = energy
-        self._fluence_mode = fluence_mode
-        self._max_dose_rate = max_dose_rate
-        mlc_boundaries = MLC_BOUNDARIES_TB_HD120 if machine.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
+        mlc_boundaries = MLC_BOUNDARIES_TB_HD120 if self.machine.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
         self._y1 = mlc_boundaries[0]
         self._y2 = mlc_boundaries[-1]
-        self._x1 = -(mlc_span / 2 + jaw_padding)
-        self._x2 = mlc_span / 2 + jaw_padding
+        self._x1 = -(self.mlc_span / 2 + self.jaw_padding)
+        self._x2 = self.mlc_span / 2 + self.jaw_padding
 
         # convert/cast variables
-        gantry_speeds = np.array(gantry_speeds)
-        dose_rates = np.array(dose_rates)
+        gantry_speeds = np.array(self.gantry_speeds)
+        dose_rates = np.array(self.dose_rates)
         mu_per_sec = dose_rates / 60
 
         # Verify inputs:
         if len(gantry_speeds) != len(dose_rates):
             raise ValueError("gantry_speeds and dose_rates must have the same length")
-        if initial_gantry_offset < self.MIN_GANTRY_OFFSET:
+        if self.initial_gantry_offset < self.MIN_GANTRY_OFFSET:
             raise ValueError(f"The initial gantry offset cannot be smaller than {self.MIN_GANTRY_OFFSET} deg. Using 180 deg can cause ambiguity in the rotation direction.")
 
-        gantry_speeds_normalized = gantry_speeds / machine.machine_specs.max_gantry_speed
-        dose_rates_normalized = dose_rates / max_dose_rate
+        gantry_speeds_normalized = gantry_speeds / self.machine.machine_specs.max_gantry_speed
+        dose_rates_normalized = dose_rates / self.max_dose_rate
         # Verify that there are no requested speeds above limit
         if np.any(gantry_speeds_normalized > 1):
             raise ValueError("Requested gantry_speeds cannot exceed max_gantry_speed")
@@ -1126,9 +1119,9 @@ class VMATDRGS(QAProcedure):
 
         # calculate unmodulated variables
         num_segments = len(gantry_speeds)
-        time_to_deliver_segments = mu_per_segment / mu_per_sec
+        time_to_deliver_segments = self.mu_per_segment / mu_per_sec
         gantry_motion_per_segment = gantry_speeds * time_to_deliver_segments
-        segment_width = (mlc_span + mlc_gap) / num_segments
+        segment_width = (self.mlc_span + self.mlc_gap) / num_segments
 
         # This is the modulation computation
         # delivery motion scheme (T is transition, D is Dose, numbers are index of calculated values (1-based))
@@ -1140,16 +1133,16 @@ class VMATDRGS(QAProcedure):
         gantry_motion = np.insert(
             gantry_motion_per_segment,
             range(num_segments + 1),
-            gantry_motion_per_transition,
+            self.gantry_motion_per_transition,
         )
         gantry_motion = np.append(0, gantry_motion)
 
-        dose_motion = 1.0 * np.tile([mu_per_segment, mu_per_transition], num_segments)
-        dose_motion = np.append([0, mu_per_transition], dose_motion)
-        if correct_fluence:
-            dose_motion[[1, -1]] = mu_per_transition * (1 - mlc_gap / segment_width)
+        dose_motion = 1.0 * np.tile([self.mu_per_segment, self.mu_per_transition], num_segments)
+        dose_motion = np.append([0, self.mu_per_transition], dose_motion)
+        if self.correct_fluence:
+            dose_motion[[1, -1]] = self.mu_per_transition * (1 - self.mlc_gap / segment_width)
 
-        mlc_motion_ini = [0, segment_width - mlc_gap]
+        mlc_motion_ini = [0, segment_width - self.mlc_gap]
         mlc_motion_mid = np.tile([0, segment_width], num_segments - 1)
         mlc_motion_end = [0, 0]
         mlc_motion = np.concatenate((mlc_motion_ini, mlc_motion_mid, mlc_motion_end))
@@ -1159,27 +1152,21 @@ class VMATDRGS(QAProcedure):
         if gantry_angles_without_offset[-1] > 360 - 2 * self.MIN_GANTRY_OFFSET:
             msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
             raise ValueError(msg)
-        gantry_angles_var = gantry_angles_without_offset + initial_gantry_offset
+        gantry_angles_var = gantry_angles_without_offset + self.initial_gantry_offset
         if gantry_angles_var[-1] > 360 - self.MIN_GANTRY_OFFSET:
             msg = "The gantry rotation exceeds 360 degrees. Reduce the initial_gantry_offset"
             raise ValueError(msg)
 
         # Finalize values
         cumulative_mu = np.cumsum(dose_motion)
-        mlc_positions = np.cumsum(mlc_motion) - mlc_span / 2
-        if mlc_motion_reverse:
+        mlc_positions = np.cumsum(mlc_motion) - self.mlc_span / 2
+        if self.mlc_motion_reverse:
             mlc_positions = -mlc_positions
         mlc_positions_b = mlc_positions
         mlc_positions_a = -np.flip(mlc_positions)
         gantry_angles = (180 - gantry_angles_var) % 360
-        if gantry_rotation_clockwise:
+        if self.gantry_rotation_clockwise:
             gantry_angles = 360 - gantry_angles
-
-        # Store final values
-        self._gantry_angles = gantry_angles
-        self._cumulative_mu = cumulative_mu
-        self._mlc_positions_a = mlc_positions_a
-        self._mlc_positions_b = mlc_positions_b
 
         # Create dynamic beam
         dynamic_beam = self._truebeam_beam(
@@ -1191,9 +1178,9 @@ class VMATDRGS(QAProcedure):
         )
 
         # Create reference beam
-        reference_meterset = [0, reference_beam_mu]
+        reference_meterset = [0, self.reference_beam_mu]
         reference_gantry_angle = [float(
-            gantry_angles[0 if reference_beam_add_before else -1]
+            gantry_angles[0 if self.reference_beam_add_before else -1]
         )]
         reference_mlc_positions_a = 2 * [float(mlc_positions_a[0])]
         reference_mlc_positions_b = 2 * [float(mlc_positions_b[-1])]
@@ -1207,13 +1194,13 @@ class VMATDRGS(QAProcedure):
 
         # Append the dynamic and reference beams according to the order defined in init
         beams: list[Beam | None] = 2 * [None]
-        self.dynamic_beam_idx = 1 if reference_beam_add_before else 0
-        self.reference_beam_idx = 0 if reference_beam_add_before else 1
+        self.dynamic_beam_idx = 1 if self.reference_beam_add_before else 0
+        self.reference_beam_idx = 0 if self.reference_beam_add_before else 1
         beams[self.dynamic_beam_idx] = dynamic_beam
         beams[self.reference_beam_idx] = reference_beam
 
         # Add static beams
-        for gantry_angle in dynamic_delivery_at_static_gantry:
+        for gantry_angle in self.dynamic_delivery_at_static_gantry:
             beam = self._truebeam_beam(
                 f"VMAT-T2-Sta-{gantry_angle:03d}",
                 cumulative_mu,
@@ -1242,12 +1229,12 @@ class VMATDRGS(QAProcedure):
         beam_mlc_positions = np.vstack((beam_mlc_position_b, beam_mlc_position_a))
         beam_mlc_positions = beam_mlc_positions.transpose().tolist()
 
-        return Beam.for_truebeam(
-            mlc_is_hd=self._machine.mlc_is_hd,
+        return Beam.to_truebeam(
+            mlc_is_hd=self.machine.mlc_is_hd,
             beam_name=beam_name,
-            energy=self._energy,
-            fluence_mode=self._fluence_mode,
-            dose_rate=self._max_dose_rate,
+            energy=self.energy,
+            fluence_mode=self.fluence_mode,
+            dose_rate=self.max_dose_rate,
             metersets=metersets,
             gantry_angles=gantry_angles,
             x1=self._x1,
@@ -1274,10 +1261,10 @@ class VMATDRGS(QAProcedure):
         # This is used mostly for visual inspection during development
         # Axis labeling could be improved
 
-        max_dose_rate = (max_dose_rate or self._max_dose_rate) / 60
-        specs = specs or self._machine.machine_specs
+        max_dose_rate = (max_dose_rate or self.max_dose_rate) / 60
+        specs = specs or self.machine.machine_specs
 
-        beam = self.beams[self.dynamic_beam_idx]
+        beam = self.dynamic_beam
         cumulative_meterset = beam.metersets
         gantry_angles = beam.gantry_angles
         mlc_positions = beam.beam_limiting_device_positions["MLCX"]
@@ -1350,13 +1337,37 @@ class VMATDRGS(QAProcedure):
         plt.show()
         pass
 
-    def plot_fluence(self, imager: Imager):
-        beams = {"Reference": self.reference_beam_idx, "Dynamic": self.dynamic_beam_idx}
-        for idx, (key, value) in enumerate(beams.items()):
-            beam = self.beams[value]
+    def plot_fluence(self, imager: Imager) -> None:
+        """Plot the fluence for the reference and dynamic beams
+
+        Parameters
+        ----------
+        imager : Imager
+            The target imager.
+        """
+        beams = {"Reference": self.reference_beam, "Dynamic": self.dynamic_beam}
+        for idx, (title, beam) in enumerate(beams.items()):
             fluence = beam.generate_fluence(imager)
             plt.subplot(1,2,idx+1)
             plt.imshow(fluence)
-            plt.title(key)
+            plt.title(title)
+        plt.show()
+
+    def plot_fluence_profile(self, imager: Imager, zoom: float = 10):
+        """Plot the fluence profile for the dynamic beam
+
+        Parameters
+        ----------
+        imager : Imager
+            The target imager.
+        zoom: float
+            The zoom factor in % around the max value, i.e. ylim = 1 + [-1, 1] * zoom/100
+        """
+        beam = self.dynamic_beam
+        fluence = beam.generate_fluence(imager)
+        profile = fluence[imager.shape[0]//2,:]
+        profile_max = profile.max()
+        plt.plot(profile)
+        plt.ylim((1-zoom/100)*profile_max, (1+zoom/100)*profile_max)
         plt.show()
 

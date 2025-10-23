@@ -2,7 +2,7 @@ import datetime
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 from enum import Enum
 from pathlib import Path
 from typing import Self
@@ -346,7 +346,7 @@ class Beam(ABC):
 
 
     @classmethod
-    def for_truebeam(
+    def to_truebeam(
         cls,
         mlc_is_hd: bool,
         beam_name: str,
@@ -447,7 +447,7 @@ class Beam(ABC):
 
 
     @classmethod
-    def for_halcyon(
+    def to_halcyon(
         cls,
         beam_name: str,
         metersets: Sequence[float],
@@ -520,7 +520,20 @@ class Beam(ABC):
             couch_rot=0,
         )
 
-    def generate_fluence(self, imager: Imager):
+    def generate_fluence(self, imager: Imager) -> np.ndarray:
+        """Generate the fluence map from the RT Plan.
+
+        Parameters
+        ----------
+        imager : Imager
+            The imager to use to generate the images. This provides the
+            size of the image and the pixel size.
+
+        Returns
+        -------
+        np.ndarray
+            The fluence map. Will be the same shape as the imager.
+        """
         meterset_per_cp = np.diff(self.metersets, prepend=0)
         x = imager.pixel_size * (np.arange(imager.shape[1]) - (imager.shape[1] - 1) / 2)
         y = imager.pixel_size * (np.arange(imager.shape[0]) - (imager.shape[0] - 1) / 2)
@@ -553,16 +566,23 @@ class Beam(ABC):
         fluence = np.min(stack_fluences, axis=0)
         return fluence
 
+@dataclass
 class QAProcedureBase(ABC):
     """An abstract base class for generic QA procedures."""
 
-    beams: list[Beam]
+    beams: list[Beam] = field(default_factory = list, kw_only=True)
+    machine : TrueBeamMachine | HalcyonMachine = field(init=False)
 
-    # beams is a class attribute so is shared among the derived classes.
-    # It means that each derived class adds the beams to this instead of starting fresh.
-    # Therefore, we need to clear it at the beginning.
-    def __init__(self):
-        self.beams = list()
+    @classmethod
+    def from_machine(cls, machine: TrueBeamMachine | HalcyonMachine, **kwargs) -> Self:
+        cls.machine = machine
+        c = cls(**kwargs)
+        c.compute()
+        return c
+
+    @abstractmethod
+    def compute(self):
+        pass
 
 
 class PlanGenerator(ABC):
@@ -576,6 +596,7 @@ class PlanGenerator(ABC):
 
     machine_name: str
     machine_specs : MachineSpecs
+    machine: TrueBeamMachine | HalcyonMachine
 
     def __init__(
         self,
@@ -732,6 +753,8 @@ class PlanGenerator(ABC):
         self.ds.FractionGroupSequence[0].ReferencedBeamSequence.append(referenced_beam)
 
     def add_procedure(self, procedure: QAProcedureBase) -> None:
+        procedure.machine = self.machine
+        procedure.compute()
         for beam in procedure.beams:
             self.add_beam(beam)
 
