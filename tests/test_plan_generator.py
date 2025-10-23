@@ -1,28 +1,19 @@
 import tempfile
 from unittest import TestCase
 
-import numpy as np
-import pydicom
-from matplotlib.figure import Figure
+
 from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
-from conjuror.plans.dicom import (
-    FluenceMode,
-    HalcyonPlanGenerator,
-    OvertravelError,
-    Stack,
-    TrueBeamPlanGenerator, VMATDRGS,
-    TrueBeamMachine, DEFAULT_TRUEBEAM_HD120,
-    DEFAULT_SPECS_TB, Beam, OpenField, MLCTransmission, PicketFence, DoseRate, MLCSpeed,
-    GantrySpeed, WinstonLutz, PicketFenceHalcyon,
-)
+from conjuror.plans import procedures_halcyon
 from conjuror.plans.mlc import (
-    MLCShaper,
     interpolate_control_points,
     next_sacrifice_shift,
     split_sacrifice_travel,
 )
+from conjuror.plans.plan_generator import *
+from conjuror.plans.procedures_halcyon import *
+from conjuror.plans.procedures_truebeam import *
 from tests.utils import get_file_from_cloud_test_repo
 
 RT_PLAN_FILE = get_file_from_cloud_test_repo(["plan_generator", "Murray-plan.dcm"])
@@ -30,6 +21,8 @@ RT_PLAN_DS = pydicom.dcmread(RT_PLAN_FILE)
 HALCYON_PLAN_FILE = get_file_from_cloud_test_repo(
     ["plan_generator", "Halcyon Prox.dcm"]
 )
+
+DEFAULT_TRUEBEAM_HD120 = TrueBeamMachine(mlc_is_hd=True)
 
 
 class TestPlanGenerator(TestCase):
@@ -731,7 +724,7 @@ class TestHalcyonPrefabs(TestCase):
         )
 
     def test_create_picket_fence_proximal(self):
-        procedure = PicketFenceHalcyon(
+        procedure = procedures_halcyon.PicketFence(
             machine=self.pg.machine,
             stack=Stack.PROXIMAL,
             mu=123,
@@ -766,7 +759,7 @@ class TestHalcyonPrefabs(TestCase):
         self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
 
     def test_create_picket_fence_distal(self):
-        procedure = PicketFenceHalcyon(
+        procedure = procedures_halcyon.PicketFence(
             machine=self.pg.machine,
             stack=Stack.DISTAL,
             mu=123,
@@ -801,7 +794,7 @@ class TestHalcyonPrefabs(TestCase):
         self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
 
     def test_create_picket_fence_both(self):
-        procedure = PicketFenceHalcyon(
+        procedure = procedures_halcyon.PicketFence(
             machine=self.pg.machine,
             stack=Stack.BOTH,
             mu=123,
