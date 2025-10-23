@@ -166,7 +166,7 @@ class TestPlanGenerator(TestCase):
 
 
 def create_beam(**kwargs) -> Beam:
-    return Beam.to_truebeam(
+    return Beam.for_truebeam(
         beam_name=kwargs.get("beam_name", "name"),
         energy=kwargs.get("energy", 6),
         dose_rate=kwargs.get("dose_rate", 600),
