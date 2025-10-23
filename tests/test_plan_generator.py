@@ -1171,9 +1171,13 @@ class TestVmatT2(TestCase):
     def test_defaults(self):
         VMATDRGS(DEFAULT_TRUEBEAM_HD120)
 
-    def test_plot(self):
+    def test_plot_control_points(self):
         test = VMATDRGS(DEFAULT_TRUEBEAM_HD120)
         test.plot_control_points()
+
+    def test_plot_fluence(self):
+        test = VMATDRGS(DEFAULT_TRUEBEAM_HD120)
+        test.plot_fluence(IMAGER_AS1200)
 
     def test_replicate_original_test(self):
         original_file = get_file_from_cloud_test_repo(

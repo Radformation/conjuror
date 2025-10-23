@@ -5,6 +5,7 @@ from typing import Literal
 import numpy as np
 from matplotlib import pyplot as plt
 
+from conjuror.images.simulators import Imager
 from conjuror.plans.mlc import MLCShaper
 from conjuror.plans.plan_generator import QAProcedureBase, TrueBeamMachine, FluenceMode, \
     Beam, OvertravelError, GantryDirection, MLC_BOUNDARIES_TB_HD120, \
@@ -1347,6 +1348,16 @@ class VMATDRGS(QAProcedure):
 
         plt.show()
         pass
+
+    def plot_fluence(self, imager: Imager):
+        beams = {"Reference": self.reference_beam_idx, "Dynamic": self.dynamic_beam_idx}
+        for idx, (key, value) in enumerate(beams.items()):
+            beam = self.beams[value]
+            fluence = beam.generate_fluence(imager)
+            plt.subplot(1,2,idx+1)
+            plt.imshow(fluence)
+            plt.title(key)
+        plt.show()
 
 def _get_control_points(beam: Beam) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
     """This is a helper function to get the control points from a beam."""

@@ -168,7 +168,6 @@ class Beam(ABC):
         # Private attributes used for dicom creation only
         self._beam_name = beam_name
         self._fluence_mode = fluence_mode
-        self._beam_limiting_device_sequence = beam_limiting_device_sequence
         self._energy = energy
         self._dose_rate = dose_rate
         self._coll_angle = coll_angle
@@ -182,6 +181,7 @@ class Beam(ABC):
         # if the axis are static they are replicated to fit the array.
         self.beam_meterset = np.round(metersets[-1], self.ROUNDING_DECIMALS)
         self.number_of_control_points = len(metersets)
+        self.beam_limiting_device_sequence = beam_limiting_device_sequence
         if not isinstance(gantry_angles, Iterable):
             gantry_angles = [gantry_angles] * self.number_of_control_points
         self.metersets = np.array(metersets)
@@ -246,7 +246,7 @@ class Beam(ABC):
             self._beam_name,
             beam_type,
             self._fluence_mode,
-            beam_limiting_device_sequence=self._beam_limiting_device_sequence,
+            beam_limiting_device_sequence=self.beam_limiting_device_sequence,
             number_of_control_points=self.number_of_control_points,
         )
 
@@ -522,6 +522,38 @@ class Beam(ABC):
             couch_rot=0,
         )
 
+    def generate_fluence(self, imager: Imager):
+        meterset_per_cp = np.diff(self.metersets, prepend=0)
+        x = imager.pixel_size * (np.arange(imager.shape[1]) - (imager.shape[1] - 1) / 2)
+        y = imager.pixel_size * (np.arange(imager.shape[0]) - (imager.shape[0] - 1) / 2)
+
+        stack_fluences = list()
+        for key, positions in self.beam_limiting_device_positions.items():
+            if "MLC" not in key:
+                continue
+            stack_fluence = np.zeros(imager.shape)
+            number_of_leaf_pairs = int(positions.shape[1] / 2)
+            leaves_b = positions[:, 0:number_of_leaf_pairs]
+            leaves_a = positions[:, number_of_leaf_pairs:]
+
+            stack_fluence_compact = np.zeros((number_of_leaf_pairs, imager.shape[1]))
+            for cp_idx in range(1, self.number_of_control_points):
+                mu = meterset_per_cp[cp_idx]
+                mask = (x > leaves_b[cp_idx:cp_idx+1].T) & (x <= leaves_a[cp_idx:cp_idx+1].T)
+                stack_fluence_compact[mask] += mu
+
+            boundaries = next(bld for bld in self.beam_limiting_device_sequence if
+                              bld.RTBeamLimitingDeviceType == key).LeafPositionBoundaries
+            row_to_leaf_map = np.argmax(np.array([boundaries]).T - y > 0, axis=0) - 1
+            for row in range(len(y)):
+                leaf = row_to_leaf_map[row]
+                if leaf < 0:
+                    continue
+                stack_fluence[row,:] = stack_fluence_compact[leaf, :]
+            stack_fluences.append(stack_fluence)
+
+        fluence = np.min(stack_fluences, axis=0)
+        return fluence
 
 class QAProcedureBase(ABC):
     """An abstract base class for generic QA procedures."""
