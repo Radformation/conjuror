@@ -1267,7 +1267,7 @@ class VMATDRGS(QAProcedure):
         specs: MachineSpecs | None = None,
         max_dose_rate: float | None = None,
     ) -> None:
-        """Plot the control points
+        """Plot the control points from dynamic beam
         Rows: Absolute position, relative motion, time to deliver, speed
         Cols: MU, Gantry, MLC
         """
@@ -1277,9 +1277,10 @@ class VMATDRGS(QAProcedure):
         max_dose_rate = (max_dose_rate or self._max_dose_rate) / 60
         specs = specs or self._machine.machine_specs
 
-        cumulative_meterset, gantry_angles, mlc_positions = _get_control_points(
-            self.beams[self.dynamic_beam_idx]
-        )
+        beam = self.beams[self.dynamic_beam_idx]
+        cumulative_meterset = beam.metersets
+        gantry_angles = beam.gantry_angles
+        mlc_positions = beam.beam_limiting_device_positions["MLCX"]
 
         dose_motion = np.append(0, np.abs(np.diff(cumulative_meterset)))
         gantry_angle_var = (180 - gantry_angles) % 360
@@ -1358,29 +1359,4 @@ class VMATDRGS(QAProcedure):
             plt.imshow(fluence)
             plt.title(key)
         plt.show()
-
-def _get_control_points(beam: Beam) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
-    """This is a helper function to get the control points from a beam."""
-    # This is a quick implementation, it should be polished once there are more
-    # procedures using this (e.g. method within beam).
-    cps = beam.to_dicom().ControlPointSequence
-    num_cp = len(cps)
-    cumulative_meterset_weight = np.full(num_cp, np.nan)
-    gantry_angles = np.full(num_cp, np.nan)
-    mlc_positions = np.full((120, num_cp), np.nan)
-    for idx_cp in range(num_cp):
-        cp = cps[idx_cp]
-        cumulative_meterset_weight[idx_cp] = cp.CumulativeMetersetWeight
-
-        if "GantryAngle" in cp:
-            gantry_angles[idx_cp] = cp.GantryAngle
-
-        for bld in cp.BeamLimitingDevicePositionSequence:
-            if bld.RTBeamLimitingDeviceType == "MLCX":
-                mlc_positions[:, idx_cp] = bld.LeafJawPositions
-
-    # if the axis is static all elements except the first will be nan, so replace with first value
-    gantry_angles[np.isnan(gantry_angles)] = gantry_angles[0]
-    cumulative_meterset = cumulative_meterset_weight * beam.beam_meterset
-    return cumulative_meterset, gantry_angles, mlc_positions
 

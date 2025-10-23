@@ -188,10 +188,8 @@ class Beam(ABC):
         self.gantry_angles = np.array(gantry_angles)
         self.beam_limiting_device_positions = dict()
         for key, positions in beam_limiting_device_positions.items():
-            if len(positions) == 1:
-                bld = np.array(self.number_of_control_points * positions)
-            else:
-                bld = np.array(positions)
+            rep = self.number_of_control_points if len(positions) == 1 else 1
+            bld = np.array(rep * positions).T
             self.beam_limiting_device_positions[key] = bld
 
 
@@ -235,7 +233,7 @@ class Beam(ABC):
         # Infer if a beam is static or dynamic from the control points
         gantry_is_static = len(set(gantry_direction)) == 1
         dict_bld_is_static = {
-            k: np.all(pos == pos[0]) for k, pos in bld_positions.items()
+            k: np.all(pos == pos[:,0:1]) for k, pos in bld_positions.items()
         }
         blds_are_static = np.all(list(dict_bld_is_static.values()))
         beam_is_static = gantry_is_static and blds_are_static
@@ -259,7 +257,7 @@ class Beam(ABC):
         for key, values in bld_positions.items():
             beam_limiting_device_position = Dataset()
             beam_limiting_device_position.RTBeamLimitingDeviceType = key
-            beam_limiting_device_position.LeafJawPositions = list(values[0])
+            beam_limiting_device_position.LeafJawPositions = list(values[:,0])
             beam_limiting_device_position_sequence.append(beam_limiting_device_position)
         cp0.BeamLimitingDevicePositionSequence = beam_limiting_device_position_sequence
         cp0.GantryAngle = gantry_angles[0]
@@ -292,7 +290,7 @@ class Beam(ABC):
                 if not dict_bld_is_static[bld]:
                     bld_position = Dataset()
                     bld_position.RTBeamLimitingDeviceType = bld
-                    bld_position.LeafJawPositions = list(positions[cp_idx])
+                    bld_position.LeafJawPositions = list(positions[:, cp_idx])
                     bld_position_sequence.append(bld_position)
             if len(bld_position_sequence) > 0:
                 cp.BeamLimitingDevicePositionSequence = bld_position_sequence
@@ -532,14 +530,14 @@ class Beam(ABC):
             if "MLC" not in key:
                 continue
             stack_fluence = np.zeros(imager.shape)
-            number_of_leaf_pairs = int(positions.shape[1] / 2)
-            leaves_b = positions[:, 0:number_of_leaf_pairs]
-            leaves_a = positions[:, number_of_leaf_pairs:]
+            number_of_leaf_pairs = int(positions.shape[0] / 2)
+            leaves_b = positions[0:number_of_leaf_pairs, :]
+            leaves_a = positions[number_of_leaf_pairs:, :]
 
             stack_fluence_compact = np.zeros((number_of_leaf_pairs, imager.shape[1]))
             for cp_idx in range(1, self.number_of_control_points):
                 mu = meterset_per_cp[cp_idx]
-                mask = (x > leaves_b[cp_idx:cp_idx+1].T) & (x <= leaves_a[cp_idx:cp_idx+1].T)
+                mask = (x > leaves_b[:,cp_idx:cp_idx+1]) & (x <= leaves_a[:,cp_idx:cp_idx+1])
                 stack_fluence_compact[mask] += mu
 
             boundaries = next(bld for bld in self.beam_limiting_device_sequence if
