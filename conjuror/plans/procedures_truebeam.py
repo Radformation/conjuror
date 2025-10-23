@@ -1352,7 +1352,7 @@ def _get_control_points(beam: Beam) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
     """This is a helper function to get the control points from a beam."""
     # This is a quick implementation, it should be polished once there are more
     # procedures using this (e.g. method within beam).
-    cps = beam.ds.ControlPointSequence
+    cps = beam.to_dicom().ControlPointSequence
     num_cp = len(cps)
     cumulative_meterset_weight = np.full(num_cp, np.nan)
     gantry_angles = np.full(num_cp, np.nan)
@@ -1370,6 +1370,6 @@ def _get_control_points(beam: Beam) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
 
     # if the axis is static all elements except the first will be nan, so replace with first value
     gantry_angles[np.isnan(gantry_angles)] = gantry_angles[0]
-    cumulative_meterset = cumulative_meterset_weight * beam.meterset
+    cumulative_meterset = cumulative_meterset_weight * beam.beam_meterset
     return cumulative_meterset, gantry_angles, mlc_positions
 

@@ -114,8 +114,6 @@ class Beam(ABC):
 
     ROUNDING_DECIMALS = 6
 
-    meterset: float
-
     def __init__(
         self,
         beam_limiting_device_sequence: DicomSequence,
@@ -164,22 +162,48 @@ class Beam(ABC):
             The couch rotation.
         """
 
-        number_of_control_points = len(metersets)
+        if len(beam_name) > 16:
+            raise ValueError("Beam name must be less than or equal to 16 characters")
+
+        # Private attributes used for dicom creation only
+        self._beam_name = beam_name
+        self._fluence_mode = fluence_mode
+        self._beam_limiting_device_sequence = beam_limiting_device_sequence
+        self._energy = energy
+        self._dose_rate = dose_rate
+        self._coll_angle = coll_angle
+        self._couch_vrt = couch_vrt
+        self._couch_lat = couch_lat
+        self._couch_lng = couch_lng
+        self._couch_rot = couch_rot
+
+        # Public attributes (used outside dicom scope, e.g. for plotting)
+        # For easier manipulation all variable are stored as np.ndarray of size num_cp,
+        # if the axis are static they are replicated to fit the array.
+        self.beam_meterset = np.round(metersets[-1], self.ROUNDING_DECIMALS)
+        self.number_of_control_points = len(metersets)
+        if not isinstance(gantry_angles, Iterable):
+            gantry_angles = [gantry_angles] * self.number_of_control_points
+        self.metersets = np.array(metersets)
+        self.gantry_angles = np.array(gantry_angles)
+        self.beam_limiting_device_positions = dict()
+        for key, positions in beam_limiting_device_positions.items():
+            if len(positions) == 1:
+                bld = np.array(self.number_of_control_points * positions)
+            else:
+                bld = np.array(positions)
+            self.beam_limiting_device_positions[key] = bld
+
+
+    def to_dicom(self) -> Dataset:
+        """Return the beam as a DICOM dataset that represents a BeamSequence item."""
 
         # The Meterset at a given Control Point is equal to Beam Meterset (300A,0086)
         # specified in the Referenced Beam Sequence (300C,0004) of the RT Fraction Scheme Module,
         # multiplied by the Cumulative Meterset Weight (300A,0134) for the Control Point,
         # divided by the Final Cumulative Meterset Weight (300A,010E)
         # https://dicom.innolitics.com/ciods/rt-plan/rt-beams/300a00b0/300a0111/300a0134
-        metersets_weights = np.array(metersets) / metersets[-1]
-        self.meterset = np.round(metersets[-1], self.ROUNDING_DECIMALS)
-
-        if len(beam_name) > 16:
-            raise ValueError("Beam name must be less than or equal to 16 characters")
-
-        if not isinstance(gantry_angles, Iterable):
-            # if it's just a single number (like for a static beam) set it to an array of that value
-            gantry_angles = [gantry_angles] * number_of_control_points
+        metersets_weights = np.array(self.metersets) / self.metersets[-1]
 
         # Round all possible dynamic elements  to avoid floating point comparisons.
         # E.g. to evaluate is an axis is static, all elements should be equal to the first
@@ -187,10 +211,10 @@ class Beam(ABC):
         # as Eclipse/Machine, and we don't know which tolerance they use.
         # Here we assume that their tolerance is tighter than ROUNDING_DECIMALS
         metersets_weights = np.round(metersets_weights, self.ROUNDING_DECIMALS)
-        gantry_angles = np.round(gantry_angles, self.ROUNDING_DECIMALS)
+        gantry_angles = np.round(self.gantry_angles, self.ROUNDING_DECIMALS)
         bld_positions = {
             k: np.round(v, self.ROUNDING_DECIMALS)
-            for k, v in beam_limiting_device_positions.items()
+            for k, v in self.beam_limiting_device_positions.items()
         }
 
         # Infer gantry rotation from the gantry angles
@@ -218,19 +242,19 @@ class Beam(ABC):
         beam_type = "STATIC" if beam_is_static else "DYNAMIC"
 
         # Create dataset with basic beam info
-        self.ds = self._create_basic_beam_info(
-            beam_name,
+        dataset = self._create_basic_beam_info(
+            self._beam_name,
             beam_type,
-            fluence_mode,
-            beam_limiting_device_sequence=beam_limiting_device_sequence,
-            number_of_control_points=number_of_control_points,
+            self._fluence_mode,
+            beam_limiting_device_sequence=self._beam_limiting_device_sequence,
+            number_of_control_points=self.number_of_control_points,
         )
 
         # Add initial control point
         cp0 = Dataset()
         cp0.ControlPointIndex = 0
-        cp0.NominalBeamEnergy = energy
-        cp0.DoseRateSet = dose_rate
+        cp0.NominalBeamEnergy = self._energy
+        cp0.DoseRateSet = self._dose_rate
         beam_limiting_device_position_sequence = DicomSequence()
         for key, values in bld_positions.items():
             beam_limiting_device_position = Dataset()
@@ -240,21 +264,21 @@ class Beam(ABC):
         cp0.BeamLimitingDevicePositionSequence = beam_limiting_device_position_sequence
         cp0.GantryAngle = gantry_angles[0]
         cp0.GantryRotationDirection = gantry_direction[0].value
-        cp0.BeamLimitingDeviceAngle = coll_angle
+        cp0.BeamLimitingDeviceAngle = self._coll_angle
         cp0.BeamLimitingDeviceRotationDirection = "NONE"
-        cp0.PatientSupportAngle = couch_rot
+        cp0.PatientSupportAngle = self._couch_rot
         cp0.PatientSupportRotationDirection = "NONE"
         cp0.TableTopEccentricAngle = 0.0
         cp0.TableTopEccentricRotationDirection = "NONE"
-        cp0.TableTopVerticalPosition = couch_vrt
-        cp0.TableTopLongitudinalPosition = couch_lng
-        cp0.TableTopLateralPosition = couch_lat
+        cp0.TableTopVerticalPosition = self._couch_vrt
+        cp0.TableTopLongitudinalPosition = self._couch_lng
+        cp0.TableTopLateralPosition = self._couch_lat
         cp0.IsocenterPosition = None
         cp0.CumulativeMetersetWeight = 0.0
-        self.ds.ControlPointSequence.append(cp0)
+        dataset.ControlPointSequence.append(cp0)
 
         # Add rest of the control points
-        for cp_idx in range(1, number_of_control_points):
+        for cp_idx in range(1, self.number_of_control_points):
             cp = Dataset()
             cp.ControlPointIndex = cp_idx
             cp.CumulativeMetersetWeight = metersets_weights[cp_idx]
@@ -273,11 +297,9 @@ class Beam(ABC):
             if len(bld_position_sequence) > 0:
                 cp.BeamLimitingDevicePositionSequence = bld_position_sequence
 
-            self.ds.ControlPointSequence.append(cp)
+            dataset.ControlPointSequence.append(cp)
 
-    def as_dicom(self) -> Dataset:
-        """Return the beam as a DICOM dataset that represents a BeamSequence item."""
-        return self.ds
+        return dataset
 
     @staticmethod
     def _create_basic_beam_info(
@@ -655,7 +677,7 @@ class PlanGenerator(ABC):
         this is a low-level method that is used by the higher-level methods like add_open_field_beam.
         This handles the associated metadata like the referenced beam sequence and fraction group sequence.
         """
-        beam_dataset = beam.as_dicom()
+        beam_dataset = beam.to_dicom()
 
         # Update the beam
         beam_dataset.BeamNumber = len(self.ds.BeamSequence) + 1
@@ -673,7 +695,7 @@ class PlanGenerator(ABC):
         # Update plan references
         referenced_beam = Dataset()
         referenced_beam.BeamDose = 1.0
-        referenced_beam.BeamMeterset = beam.meterset
+        referenced_beam.BeamMeterset = beam.beam_meterset
         referenced_beam.ReferencedBeamNumber = beam_dataset.BeamNumber
         dose_reference_uid = self.ds.DoseReferenceSequence[0].DoseReferenceUID
         referenced_beam.ReferencedDoseReferenceUID = dose_reference_uid

@@ -193,7 +193,7 @@ class TestBeam(TestCase):
         beam = create_beam(
             gantry_angles=0,
         )
-        beam_dcm = beam.as_dicom()
+        beam_dcm = beam.to_dicom()
         self.assertEqual(beam_dcm.BeamName, "name")
         self.assertEqual(beam_dcm.BeamType, "STATIC")
         self.assertEqual(beam_dcm.ControlPointSequence[0].GantryAngle, 0)
@@ -204,7 +204,7 @@ class TestBeam(TestCase):
 
     def test_1_mlc_position_for_static(self):
         beam = create_beam(mlc_positions=[[0]], metersets=[0])
-        self.assertEqual(beam.as_dicom().BeamType, "STATIC")
+        self.assertEqual(beam.to_dicom().BeamType, "STATIC")
 
     @parameterized.expand(
         [
@@ -223,7 +223,7 @@ class TestBeam(TestCase):
         beam = create_beam(
             gantry_angles=gantry_angles,
         )
-        beam_dcm = beam.as_dicom()
+        beam_dcm = beam.to_dicom()
         self.assertEqual(beam_dcm.BeamType, beam_type)
         cp_sequence = beam_dcm.ControlPointSequence
         self.assertEqual(cp_sequence[0].GantryRotationDirection, rotation_direction)
@@ -234,7 +234,7 @@ class TestBeam(TestCase):
 
     def test_jaw_positions(self):
         b = create_beam(x1=-5, x2=7, y1=-11, y2=13)
-        dcm = b.as_dicom()
+        dcm = b.to_dicom()
         self.assertEqual(
             len(dcm.ControlPointSequence[0].BeamLimitingDevicePositionSequence), 3
         )
@@ -1250,7 +1250,7 @@ class TestVmatT2(TestCase):
         )
 
         # Assert dynamic beam
-        cps = test.beams[0].ds.ControlPointSequence
+        cps = test.beams[0].to_dicom().ControlPointSequence
         gantry_angle = [cp.GantryAngle for cp in cps]
         cumulative_meterset_weight = [cp.CumulativeMetersetWeight for cp in cps]
         mlc_position = np.array(
@@ -1271,7 +1271,7 @@ class TestVmatT2(TestCase):
         plan_mlc_position = (
             cps[0].BeamLimitingDevicePositionSequence[-1].LeafJawPositions
         )
-        cps = test.beams[1].ds.ControlPointSequence
+        cps = test.beams[1].to_dicom().ControlPointSequence
         gantry_angle = cps[0].GantryAngle
         cumulative_meterset_weight = [cp.CumulativeMetersetWeight for cp in cps]
         mlc_position = cps[0].BeamLimitingDevicePositionSequence[-1].LeafJawPositions
@@ -1289,7 +1289,7 @@ class TestVmatT2(TestCase):
         self.assertEqual(actual_number_of_beams, expected_number_of_beams)
 
         for idx, expected_angle in enumerate(static_angles):
-            actual_angle = test.beams[idx + 2].ds.ControlPointSequence[0].GantryAngle
+            actual_angle = test.beams[idx + 2].to_dicom().ControlPointSequence[0].GantryAngle
             self.assertEqual(actual_angle, expected_angle)
 
     def test_error_if_gantry_speeds_and_dose_rates_have_different_sizes(self):
