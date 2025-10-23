@@ -14,7 +14,8 @@ from conjuror.plans.dicom import (
     Stack,
     TrueBeamPlanGenerator, VMATDRGS,
     TrueBeamMachine, DEFAULT_TRUEBEAM_HD120,
-    DEFAULT_SPECS_TB, Beam,
+    DEFAULT_SPECS_TB, Beam, OpenField, MLCTransmission, PicketFence, DoseRate, MLCSpeed,
+    GantrySpeed, WinstonLutz, PicketFenceHalcyon,
 )
 from conjuror.plans.mlc import (
     MLCShaper,
@@ -49,7 +50,7 @@ class TestPlanGenerator(TestCase):
         pg = TrueBeamPlanGenerator.from_rt_plan_file(
             RT_PLAN_FILE, plan_label="label", plan_name="my name"
         )
-        pg.add_mlc_speed_beams()
+        pg.add_procedure(MLCSpeed(pg.machine))
         with tempfile.NamedTemporaryFile(delete=False) as t:
             pg.to_file(t.name)
         # shouldn't raise; should be valid DICOM
@@ -144,7 +145,8 @@ class TestPlanGenerator(TestCase):
         pg = TrueBeamPlanGenerator.from_rt_plan_file(
             RT_PLAN_FILE, plan_label="label", plan_name="my name"
         )
-        pg.add_open_field_beam(x1=100, x2=200, y1=100, y2=200, mu=100)
+        procedure = OpenField(pg.machine, x1=100, x2=200, y1=100, y2=200, mu=100)
+        pg.add_procedure(procedure)
         # test that non-inverted array is 0
         pg_dcm = pg.to_dicom_images(imager=IMAGER_AS1200, invert=False)
         non_inverted_array = pg_dcm[0].pixel_array
@@ -308,7 +310,8 @@ class TestPlanGeneratorBeams(TestCase):
 
     def test_plot_fluence(self):
         # just tests it works
-        self.pg.add_open_field_beam(x1=-5, x2=5, y1=-5, y2=5, mu=100)
+        procedure = OpenField(self.pg.machine, x1=-5, x2=5, y1=-5, y2=5, mu=100)
+        self.pg.add_procedure(procedure)
         figs = self.pg.plot_fluences()
         self.assertIsInstance(figs, list)
         self.assertIsInstance(figs[0], Figure)
@@ -323,7 +326,8 @@ class TestPlanPrefabs(TestCase):
         )
 
     def test_create_open_field(self):
-        self.pg.add_open_field_beam(
+        procedure = OpenField(
+            self.pg.machine,
             x1=-100,
             x2=100,
             y1=-110,
@@ -333,6 +337,7 @@ class TestPlanPrefabs(TestCase):
             defined_by_mlcs=True,
             padding_mm=0,
         )
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 1)
         self.assertEqual(dcm.BeamSequence[0].BeamName, "Open Field")
@@ -358,7 +363,8 @@ class TestPlanPrefabs(TestCase):
         self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
 
     def test_open_field_jaws(self):
-        self.pg.add_open_field_beam(
+        procedure = OpenField(
+            self.pg.machine,
             x1=-100,
             x2=100,
             y1=-110,
@@ -368,6 +374,7 @@ class TestPlanPrefabs(TestCase):
             defined_by_mlcs=False,
             padding_mm=0,
         )
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 1)
         self.assertEqual(
@@ -397,7 +404,8 @@ class TestPlanPrefabs(TestCase):
     def test_transmission_beam(self, _, bank, leaf_pos, x1_pos, expected_error):
         if expected_error:
             with self.assertRaises(expected_error):
-                self.pg.add_mlc_transmission(
+                MLCTransmission(
+                    self.pg.machine,
                     bank=bank,
                     x1=x1_pos,
                     x2=30,
@@ -407,7 +415,8 @@ class TestPlanPrefabs(TestCase):
                     beam_name="MLC Txx",
                 )
         else:
-            self.pg.add_mlc_transmission(
+            procedure = MLCTransmission(
+                self.pg.machine,
                 bank=bank,
                 x1=-30,
                 x2=30,
@@ -416,6 +425,7 @@ class TestPlanPrefabs(TestCase):
                 mu=44,
                 beam_name="MLC Txx",
             )
+            self.pg.add_procedure(procedure)
             dcm = self.pg.as_dicom()
             self.assertEqual(len(dcm.BeamSequence), 1)
             self.assertEqual(dcm.BeamSequence[0].BeamName, f"MLC Txx {bank}")
@@ -451,13 +461,15 @@ class TestPlanPrefabs(TestCase):
             self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
 
     def test_create_picket_fence(self):
-        self.pg.add_picketfence_beam(
+        procedure = PicketFence(
+            machine=self.pg.machine,
             y1=-10,
             y2=10,
             mu=123,
             beam_name="Picket Fence",
             strip_positions_mm=(-50, -30, -10, 10, 30, 50),
         )
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 1)
         self.assertEqual(dcm.BeamSequence[0].BeamName, "Picket Fence")
@@ -493,7 +505,8 @@ class TestPlanPrefabs(TestCase):
 
     def test_picket_fence_too_wide(self):
         with self.assertRaises(ValueError):
-            self.pg.add_picketfence_beam(
+            PicketFence(
+                machine=self.pg.machine,
                 y1=-10,
                 y2=10,
                 mu=123,
@@ -502,7 +515,8 @@ class TestPlanPrefabs(TestCase):
             )
 
     def test_winston_lutz_beams(self):
-        self.pg.add_winston_lutz_beams(
+        procedure = WinstonLutz(
+            machine=self.pg.machine,
             axes_positions=(
                 {"gantry": 0, "collimator": 0, "couch": 0},
                 {"gantry": 90, "collimator": 0, "couch": 0},
@@ -514,6 +528,7 @@ class TestPlanPrefabs(TestCase):
             y2=10,
             mu=123,
         )
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 3)
         self.assertEqual(dcm.BeamSequence[0].BeamName, "G0C0P0")
@@ -530,7 +545,8 @@ class TestPlanPrefabs(TestCase):
         self.assertEqual(dcm.BeamSequence[2].ControlPointSequence[0].GantryAngle, 180)
 
     def test_winston_lutz_jaw_defined(self):
-        self.pg.add_winston_lutz_beams(
+        procedure = WinstonLutz(
+            machine=self.pg.machine,
             axes_positions=(
                 {"gantry": 0, "collimator": 0, "couch": 0},
                 {"gantry": 90, "collimator": 0, "couch": 0},
@@ -543,6 +559,7 @@ class TestPlanPrefabs(TestCase):
             mu=123,
             defined_by_mlcs=False,
         )
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 3)
         self.assertEqual(
@@ -561,13 +578,15 @@ class TestPlanPrefabs(TestCase):
         )
 
     def test_dose_rate_beams(self):
-        self.pg.add_dose_rate_beams(
+        procedure = DoseRate(
+            machine=self.pg.machine,
             dose_rates=(100, 400, 600),
             y1=-10,
             y2=10,
             desired_mu=123,
             default_dose_rate=600,
         )
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 2)
         self.assertEqual(dcm.BeamSequence[0].BeamName, "DR Ref")
@@ -580,7 +599,8 @@ class TestPlanPrefabs(TestCase):
 
     def test_dose_rate_too_wide(self):
         with self.assertRaises(ValueError):
-            self.pg.add_dose_rate_beams(
+            DoseRate(
+                machine=self.pg.machine,
                 dose_rates=(100, 150, 200, 250, 300, 350, 400, 600),
                 roi_size_mm=30,
                 y1=-10,
@@ -590,12 +610,14 @@ class TestPlanPrefabs(TestCase):
             )
 
     def test_mlc_speed_beams(self):
-        self.pg.add_mlc_speed_beams(
+        procedure = MLCSpeed(
+            self.pg.machine,
             speeds=(0.5, 1, 1.5, 2),
             y1=-100,
             y2=100,
             mu=123,
         )
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 2)
         self.assertEqual(dcm.BeamSequence[0].BeamName, "MLC Speed Ref")
@@ -610,7 +632,8 @@ class TestPlanPrefabs(TestCase):
 
     def test_mlc_speed_too_fast(self):
         with self.assertRaises(ValueError):
-            self.pg.add_mlc_speed_beams(
+            MLCSpeed(
+                self.pg.machine,
                 speeds=(10, 20, 30, 40, 50),
                 y1=-100,
                 y2=100,
@@ -618,7 +641,8 @@ class TestPlanPrefabs(TestCase):
 
     def test_mlc_speed_too_wide(self):
         with self.assertRaises(ValueError):
-            self.pg.add_mlc_speed_beams(
+            MLCSpeed(
+                self.pg.machine,
                 speeds=(0.5, 1, 1.5, 2),
                 roi_size_mm=50,
                 y1=-100,
@@ -627,7 +651,8 @@ class TestPlanPrefabs(TestCase):
 
     def test_0_mlc_speed(self):
         with self.assertRaises(ValueError):
-            self.pg.add_mlc_speed_beams(
+            MLCSpeed(
+                self.pg.machine,
                 speeds=(0, 1, 2),
                 y1=-100,
                 y2=100,
@@ -635,12 +660,14 @@ class TestPlanPrefabs(TestCase):
 
     def test_gantry_speed_beams(self):
         # max speed is 2.5 by default
-        self.pg.add_gantry_speed_beams(
+        procedure = GantrySpeed(
+            self.pg.machine,
             speeds=(1, 2, 3, 4),
             y1=-100,
             y2=100,
             mu=123,
         )
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 2)
         self.assertEqual(dcm.BeamSequence[0].BeamName, "GS")
@@ -654,7 +681,8 @@ class TestPlanPrefabs(TestCase):
     def test_gantry_speed_too_fast(self):
         # max speed is 4.8 by default
         with self.assertRaises(ValueError):
-            self.pg.add_gantry_speed_beams(
+            GantrySpeed(
+                self.pg.machine,
                 speeds=(1, 2, 3, 4, 5),
                 y1=-100,
                 y2=100,
@@ -662,7 +690,8 @@ class TestPlanPrefabs(TestCase):
 
     def test_gantry_speed_too_wide(self):
         with self.assertRaises(ValueError):
-            self.pg.add_gantry_speed_beams(
+            GantrySpeed(
+                self.pg.machine,
                 speeds=(1, 2, 3, 4),
                 roi_size_mm=50,
                 y1=-100,
@@ -671,15 +700,17 @@ class TestPlanPrefabs(TestCase):
 
     def test_gantry_range_over_360(self):
         with self.assertRaises(ValueError):
-            self.pg.add_gantry_speed_beams(
+            GantrySpeed(
+                self.pg.machine,
                 speeds=(4, 4, 4, 4),
                 y1=-100,
                 y2=100,
                 mu=250,
             )
 
-    def test_vmat_t2(self):
-        self.pg.add_vmat_drgs()
+    def test_vmat_drgs(self):
+        procedure = VMATDRGS(self.pg.machine)
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 2)
 
@@ -700,12 +731,14 @@ class TestHalcyonPrefabs(TestCase):
         )
 
     def test_create_picket_fence_proximal(self):
-        self.pg.add_picketfence_beam(
+        procedure = PicketFenceHalcyon(
+            machine=self.pg.machine,
             stack=Stack.PROXIMAL,
             mu=123,
             beam_name="Picket Fence",
             strip_positions_mm=(-50, -30, -10, 10, 30, 50),
         )
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 1)
         self.assertEqual(dcm.BeamSequence[0].BeamName, "Picket Fence")
@@ -733,12 +766,14 @@ class TestHalcyonPrefabs(TestCase):
         self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
 
     def test_create_picket_fence_distal(self):
-        self.pg.add_picketfence_beam(
+        procedure = PicketFenceHalcyon(
+            machine=self.pg.machine,
             stack=Stack.DISTAL,
             mu=123,
             beam_name="Picket Fence",
             strip_positions_mm=(-50, -30, -10, 10, 30, 50),
         )
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 1)
         self.assertEqual(dcm.BeamSequence[0].BeamName, "Picket Fence")
@@ -766,12 +801,14 @@ class TestHalcyonPrefabs(TestCase):
         self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
 
     def test_create_picket_fence_both(self):
-        self.pg.add_picketfence_beam(
+        procedure = PicketFenceHalcyon(
+            machine=self.pg.machine,
             stack=Stack.BOTH,
             mu=123,
             beam_name="Picket Fence",
             strip_positions_mm=(-50, -30, -10, 10, 30, 50),
         )
+        self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 1)
         self.assertEqual(dcm.BeamSequence[0].BeamName, "Picket Fence")
