@@ -16,8 +16,9 @@ definitions:
         name: Pre-commit Checks
         <<: *bb-runner
         script:
-          - uv pip install pre-commit
-          - uv tool run pre-commit run --all-files
+          - apt-get update
+          - apt-get -y install git
+          - uvx pre-commit run --all-files
         caches:
           - precommit
 
@@ -30,9 +31,20 @@ definitions:
               - "**.py"
               - "docs/**"
         script:
-          - uv run nox -s build_docs
-        caches:
-          - nox-build-docs
+          - pip install nox
+          - nox -s build_docs
+
+    - step: &run-tests
+        name: Run Tests
+        <<: *bb-runner
+        condition:
+          changesets:
+            includePaths:
+              - "**.py"
+              - "pyproject.toml"
+        script:
+          - uv pip install .[developer] --system
+          - uv run pytest --junitxml=./test-reports/conjuror_results.xml
 
 pipelines:
 
@@ -51,3 +63,4 @@ pipelines:
       - step: *pre-commit-checks
       - parallel:
           - step: *build-docs
+          - step: *run-tests

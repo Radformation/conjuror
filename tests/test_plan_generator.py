@@ -1,7 +1,9 @@
 import tempfile
 from unittest import TestCase
 
-
+import numpy as np
+import pydicom
+from matplotlib.figure import Figure
 from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
@@ -10,10 +12,23 @@ from conjuror.plans.mlc import (
     interpolate_control_points,
     next_sacrifice_shift,
     split_sacrifice_travel,
+    MLCShaper,
 )
-from conjuror.plans.plan_generator_base import *
-from conjuror.plans.plan_generator_halcyon import *
-from conjuror.plans.plan_generator_truebeam import *
+from conjuror.plans.plan_generator_base import BeamBase, FluenceMode, OvertravelError
+from conjuror.plans.plan_generator_halcyon import HalcyonPlanGenerator, Stack
+from conjuror.plans.plan_generator_truebeam import (
+    TrueBeamMachine,
+    TrueBeamPlanGenerator,
+    OpenField,
+    Beam,
+    DoseRate,
+    WinstonLutz,
+    MLCSpeed,
+    GantrySpeed,
+    VMATDRGS,
+    DEFAULT_SPECS_TB,
+    MLCTransmission,
+)
 from tests.utils import get_file_from_cloud_test_repo
 
 RT_PLAN_FILE = get_file_from_cloud_test_repo(["plan_generator", "Murray-plan.dcm"])
@@ -699,7 +714,6 @@ class TestPlanPrefabs(TestCase):
         self.assertEqual(len(dcm.BeamSequence), 2)
 
 
-
 HALCYON_MLC_INDEX = {
     Stack.DISTAL: -2,
     Stack.PROXIMAL: -1,
@@ -821,9 +835,9 @@ class TestMLCShaper(TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         # simplistic MLC setup
-        cls.leaf_boundaries: tuple[float, ...] = tuple(np.arange(
-            start=-200, stop=201, step=5
-        ).astype(float))
+        cls.leaf_boundaries: tuple[float, ...] = tuple(
+            np.arange(start=-200, stop=201, step=5).astype(float)
+        )
 
     def test_init(self):
         MLCShaper(
@@ -1155,6 +1169,7 @@ class TestInterpolateControlPoints(TestCase):
                 max_overtravel=140,
             )
 
+
 class TestVmatT2(TestCase):
     def test_defaults(self):
         VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120)
@@ -1173,7 +1188,13 @@ class TestVmatT2(TestCase):
 
     def test_replicate_original_test(self):
         original_file = get_file_from_cloud_test_repo(
-            ["plan_generator", "VMAT", "Millennium", "T2_DoseRateGantrySpeed_M120_TB_Rev02.dcm"])
+            [
+                "plan_generator",
+                "VMAT",
+                "Millennium",
+                "T2_DoseRateGantrySpeed_M120_TB_Rev02.dcm",
+            ]
+        )
         beam_name_dyn = "T2_DR_GS"
         beam_name_ref = "OpenBeam"
         max_gantry_speed = 4.8
@@ -1279,25 +1300,35 @@ class TestVmatT2(TestCase):
 
     def test_adding_static_beams(self):
         static_angles = (0, 90, 270, 180)
-        test = VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120, dynamic_delivery_at_static_gantry=static_angles)
+        test = VMATDRGS.from_machine(
+            DEFAULT_TRUEBEAM_HD120, dynamic_delivery_at_static_gantry=static_angles
+        )
         expected_number_of_beams = 6  # dynamic, reference, 4x static
         actual_number_of_beams = len(test.beams)
         self.assertEqual(actual_number_of_beams, expected_number_of_beams)
 
         for idx, expected_angle in enumerate(static_angles):
-            actual_angle = test.beams[idx + 2].to_dicom().ControlPointSequence[0].GantryAngle
+            actual_angle = (
+                test.beams[idx + 2].to_dicom().ControlPointSequence[0].GantryAngle
+            )
             self.assertEqual(actual_angle, expected_angle)
 
     def test_error_if_gantry_speeds_and_dose_rates_have_different_sizes(self):
         gantry_speeds = (1, 2, 3)
         dose_rates = (1, 2)
         with self.assertRaises(ValueError):
-            VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120, gantry_speeds=gantry_speeds, dose_rates=dose_rates)
+            VMATDRGS.from_machine(
+                DEFAULT_TRUEBEAM_HD120,
+                gantry_speeds=gantry_speeds,
+                dose_rates=dose_rates,
+            )
 
     def test_error_if_initial_gantry_offset_less_than_min(self):
         initial_gantry_offset = 0
         with self.assertRaises(ValueError):
-            VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120, initial_gantry_offset=initial_gantry_offset)
+            VMATDRGS.from_machine(
+                DEFAULT_TRUEBEAM_HD120, initial_gantry_offset=initial_gantry_offset
+            )
 
     def test_error_if_gantry_speeds_above_max(self):
         gantry_speeds = (1, 2, 5)
@@ -1306,14 +1337,21 @@ class TestVmatT2(TestCase):
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
         machine = TrueBeamMachine(False, specs)
         with self.assertRaises(ValueError):
-            VMATDRGS.from_machine(machine, gantry_speeds=gantry_speeds, dose_rates=dose_rates)
+            VMATDRGS.from_machine(
+                machine, gantry_speeds=gantry_speeds, dose_rates=dose_rates
+            )
 
     def test_error_if_dose_rates_above_max(self):
         gantry_speeds = (1, 2, 5)
         dose_rates = (1, 2, 300)
         max_dose_rate = 100
         with self.assertRaises(ValueError):
-            VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120, gantry_speeds=gantry_speeds, dose_rates=dose_rates, max_dose_rate=max_dose_rate)
+            VMATDRGS.from_machine(
+                DEFAULT_TRUEBEAM_HD120,
+                gantry_speeds=gantry_speeds,
+                dose_rates=dose_rates,
+                max_dose_rate=max_dose_rate,
+            )
 
     def test_error_if_axis_not_maxed_out(self):
         gantry_speeds = (5, 1, 1)

@@ -12,7 +12,7 @@ class MLCShaper:
 
     def __init__(
         self,
-        leaf_y_positions: tuple[float,...],
+        leaf_y_positions: tuple[float, ...],
         max_mlc_position: float,
         max_overtravel_mm: float,
         sacrifice_gap_mm: float | None = None,

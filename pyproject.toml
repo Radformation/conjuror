@@ -39,3 +39,7 @@ developer = [
 
 [tool.ruff]
 target-version = "py311"
+
+
+[tool.setuptools.packages.find]
+include = ["conjuror"]

@@ -20,8 +20,13 @@ from conjuror.images.layers import (
     clip_add,
     even_round,
 )
-from conjuror.images.simulators import Simulator, IMAGER_AS1200, Imager, IMAGER_AS500, \
-    IMAGER_AS1000
+from conjuror.images.simulators import (
+    Simulator,
+    IMAGER_AS1200,
+    Imager,
+    IMAGER_AS500,
+    IMAGER_AS1000,
+)
 
 np.random.seed(1234)  # noqa
 
@@ -133,14 +138,18 @@ class TestConstantLayer(TestCase):
 
 
 class NOOPLayer(Layer):
-    def apply(self, image: np.ndarray, pixel_size: float, mag_factor: float) -> np.ndarray:
+    def apply(
+        self, image: np.ndarray, pixel_size: float, mag_factor: float
+    ) -> np.ndarray:
         return image
 
 
 class TestArrayLayer(TestCase):
     def test_array_layer_same_size(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
-        as1200.add_layer(ArrayLayer(np.ones((as1200.image.shape[0], as1200.image.shape[1]))))
+        as1200.add_layer(
+            ArrayLayer(np.ones((as1200.image.shape[0], as1200.image.shape[1])))
+        )
         self.assertTrue(np.all(as1200.image == 1))
 
     def test_smaller_size(self):
@@ -150,7 +159,9 @@ class TestArrayLayer(TestCase):
         self.assertTrue(np.max(as1200.image) == 1)
         self.assertTrue(np.min(as1200.image) == 0)
         # test center is 1
-        self.assertTrue(as1200.image[as1200.image.shape[0] // 2, as1200.image.shape[1] // 2] == 1)
+        self.assertTrue(
+            as1200.image[as1200.image.shape[0] // 2, as1200.image.shape[1] // 2] == 1
+        )
         self.assertEqual(as1200.image.shape, original_shape)
 
     def test_bigger_size(self):

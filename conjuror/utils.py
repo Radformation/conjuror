@@ -4,7 +4,12 @@ import numpy as np
 from numpy import ndarray
 from pydicom import Dataset
 from pydicom.dataset import FileMetaDataset
-from pydicom.uid import generate_uid, RTImageStorage, ExplicitVRLittleEndian, SecondaryCaptureImageStorage
+from pydicom.uid import (
+    generate_uid,
+    RTImageStorage,
+    ExplicitVRLittleEndian,
+    SecondaryCaptureImageStorage,
+)
 
 
 def wrap360(value: float | ndarray) -> float | ndarray:
@@ -40,6 +45,7 @@ def _rt_image_position(array: ndarray, dpmm: float) -> list[float]:
     x_position = -(width_mm / 2) + (pixel_size_mm / 2)
     y_position = -(height_mm / 2) + (pixel_size_mm / 2)
     return [x_position, y_position]
+
 
 def array_to_dicom(
     array: ndarray,

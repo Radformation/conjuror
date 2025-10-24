@@ -46,9 +46,9 @@ class MachineSpecs:
         return replace(self, **overrides)
 
 
-
 class MachineBase(ABC):
     machine_specs: MachineSpecs
+
 
 TMachine = TypeVar("TMachine", bound=MachineBase)
 
@@ -157,7 +157,6 @@ class BeamBase(ABC):
             bld = np.array(rep * positions).T
             self.beam_limiting_device_positions[key] = bld
 
-
     def to_dicom(self) -> Dataset:
         """Return the beam as a DICOM dataset that represents a BeamSequence item."""
 
@@ -198,7 +197,7 @@ class BeamBase(ABC):
         # Infer if a beam is static or dynamic from the control points
         gantry_is_static = len(set(gantry_direction)) == 1
         dict_bld_is_static = {
-            k: np.all(pos == pos[:,0:1]) for k, pos in bld_positions.items()
+            k: np.all(pos == pos[:, 0:1]) for k, pos in bld_positions.items()
         }
         blds_are_static = np.all(list(dict_bld_is_static.values()))
         beam_is_static = gantry_is_static and blds_are_static
@@ -222,7 +221,7 @@ class BeamBase(ABC):
         for key, values in bld_positions.items():
             beam_limiting_device_position = Dataset()
             beam_limiting_device_position.RTBeamLimitingDeviceType = key
-            beam_limiting_device_position.LeafJawPositions = list(values[:,0])
+            beam_limiting_device_position.LeafJawPositions = list(values[:, 0])
             beam_limiting_device_position_sequence.append(beam_limiting_device_position)
         cp0.BeamLimitingDevicePositionSequence = beam_limiting_device_position_sequence
         cp0.GantryAngle = gantry_angles[0]
@@ -339,28 +338,34 @@ class BeamBase(ABC):
             stack_fluence_compact = np.zeros((number_of_leaf_pairs, imager.shape[1]))
             for cp_idx in range(1, self.number_of_control_points):
                 mu = meterset_per_cp[cp_idx]
-                mask = (x > leaves_b[:,cp_idx:cp_idx+1]) & (x <= leaves_a[:,cp_idx:cp_idx+1])
+                mask = (x > leaves_b[:, cp_idx : cp_idx + 1]) & (
+                    x <= leaves_a[:, cp_idx : cp_idx + 1]
+                )
                 stack_fluence_compact[mask] += mu
 
-            boundaries = next(bld for bld in self.beam_limiting_device_sequence if
-                              bld.RTBeamLimitingDeviceType == key).LeafPositionBoundaries
+            boundaries = next(
+                bld
+                for bld in self.beam_limiting_device_sequence
+                if bld.RTBeamLimitingDeviceType == key
+            ).LeafPositionBoundaries
             row_to_leaf_map = np.argmax(np.array([boundaries]).T - y > 0, axis=0) - 1
             for row in range(len(y)):
                 leaf = row_to_leaf_map[row]
                 if leaf < 0:
                     continue
-                stack_fluence[row,:] = stack_fluence_compact[leaf, :]
+                stack_fluence[row, :] = stack_fluence_compact[leaf, :]
             stack_fluences.append(stack_fluence)
 
         fluence = np.min(stack_fluences, axis=0)
         return fluence
 
+
 @dataclass
 class QAProcedureBase(Generic[TMachine], ABC):
     """An abstract base class for generic QA procedures."""
 
-    beams: list[BeamBase] = field(default_factory = list, kw_only=True)
-    machine : TMachine = field(init=False)
+    beams: list[BeamBase] = field(default_factory=list, kw_only=True)
+    machine: TMachine = field(init=False)
 
     @classmethod
     def from_machine(cls, machine: TMachine, **kwargs) -> Self:
@@ -384,7 +389,7 @@ class PlanGenerator(ABC):
     """
 
     machine_name: str
-    machine_specs : MachineSpecs
+    machine_specs: MachineSpecs
     machine: MachineBase
 
     def __init__(
@@ -394,7 +399,7 @@ class PlanGenerator(ABC):
         plan_name: str,
         patient_name: str | None,
         patient_id: str | None,
-        machine_specs : MachineSpecs,
+        machine_specs: MachineSpecs,
     ):
         """A tool for generating new QA RTPlan files based on an initial, somewhat empty RTPlan file.
 
@@ -569,9 +574,7 @@ class PlanGenerator(ABC):
         """
         return plot_fluences(self.as_dicom(), width_mm, resolution_mm, dtype, show=True)
 
-    def to_dicom_images(
-        self, imager: Imager, invert: bool = True
-    ) -> list[Dataset]:
+    def to_dicom_images(self, imager: Imager, invert: bool = True) -> list[Dataset]:
         """Generate simulated DICOM images of the plan. This provides a way to
         generate an end-to-end simulation of the plan. The images will always be
         at 1000mm SID.

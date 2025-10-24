@@ -5,7 +5,7 @@ import matplotlib
 
 TEST_FILES_DIR = osp.abspath(osp.join(osp.dirname(__file__), "test_files"))
 
-HIDE_PLOTS = True
+HIDE_PLOTS = os.environ.get("HIDE_PLOTS", default="True")
 
 if os.environ.get("CI") or HIDE_PLOTS:
     matplotlib.use("Agg")

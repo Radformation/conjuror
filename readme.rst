@@ -32,4 +32,3 @@ Usage
     from conjuror import PlanGenerator, PicketFence
     conjuror = PlanGenerator()
     conjuror.add_beamset(PicketFence(num_pickets=7))
-

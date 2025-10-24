@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import contextlib
 import hashlib
 import os
@@ -35,8 +34,8 @@ def access_gcp() -> storage.Client:
     # check if the credentials file is available (local dev)
     # if not, load from the env var (test pipeline)
     if not credentials_file.is_file():
-        with open(credentials_file, "wb") as f:
-            creds = base64.b64decode(os.environ.get("GOOGLE_CREDENTIALS", ""))
+        with open(credentials_file, "w") as f:
+            creds = os.environ.get("GOOGLE_CREDENTIALS", "")
             f.write(creds)
     client = storage.Client.from_service_account_json(str(credentials_file))
     try:

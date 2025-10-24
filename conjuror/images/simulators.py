@@ -20,12 +20,14 @@ def generate_file_metadata() -> Dataset:
 @dataclass
 class Imager:
     """Data class for an imager"""
+
     pixel_size: float
     shape: tuple[int, int]
 
-IMAGER_AS500 = Imager(pixel_size = 0.78125, shape = (384, 512))
-IMAGER_AS1000 = Imager(pixel_size = 0.390625, shape = (768, 1024))
-IMAGER_AS1200 = Imager(pixel_size = 0.336, shape = (1280, 1280))
+
+IMAGER_AS500 = Imager(pixel_size=0.78125, shape=(384, 512))
+IMAGER_AS1000 = Imager(pixel_size=0.390625, shape=(768, 1024))
+IMAGER_AS1200 = Imager(pixel_size=0.336, shape=(1280, 1280))
 
 
 class Simulator:
@@ -101,9 +103,10 @@ class Simulator:
             xaxis_title="Crossplane (mm)",
             yaxis_title="Inplane (mm)",
         )
-        fig.update_layout(title_text=f"Simulated {self.__class__.__name__} @{self.sid}mm SID", title_x=0.5)
+        fig.update_layout(
+            title_text=f"Simulated {self.__class__.__name__} @{self.sid}mm SID",
+            title_x=0.5,
+        )
         if show:
             fig.show()
         return fig
-
-

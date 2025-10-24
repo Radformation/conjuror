@@ -11,8 +11,16 @@ from pydicom.sequence import Sequence as DicomSequence
 
 from conjuror.images.simulators import Imager
 from conjuror.plans.mlc import MLCShaper
-from conjuror.plans.plan_generator_base import MachineSpecs, MachineBase, BeamBase, \
-    FluenceMode, QAProcedureBase, PlanGenerator, OvertravelError, GantryDirection
+from conjuror.plans.plan_generator_base import (
+    MachineSpecs,
+    MachineBase,
+    BeamBase,
+    FluenceMode,
+    QAProcedureBase,
+    PlanGenerator,
+    OvertravelError,
+    GantryDirection,
+)
 from conjuror.utils import wrap360
 
 
@@ -33,18 +41,20 @@ DEFAULT_SPECS_TB = MachineSpecs(
     max_gantry_speed=6.0, max_mlc_position=200, max_mlc_overtravel=140, max_mlc_speed=25
 )
 
+
 @dataclass
 class TrueBeamMachine(MachineBase):
     mlc_is_hd: bool
     machine_specs: MachineSpecs = DEFAULT_SPECS_TB
 
     @property
-    def mlc_boundaries(self) -> tuple[float,...]:
+    def mlc_boundaries(self) -> tuple[float, ...]:
         return MLC_BOUNDARIES_TB_HD120 if self.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
 
 
 class Beam(BeamBase):
     """A class that represents a TrueBeam beam."""
+
     def __init__(
         self,
         mlc_is_hd: bool,
@@ -118,7 +128,9 @@ class Beam(BeamBase):
         mlc = Dataset()
         mlc.RTBeamLimitingDeviceType = "MLCX"
         mlc.NumberOfLeafJawPairs = 60
-        mlc.LeafPositionBoundaries = list(MLC_BOUNDARIES_TB_HD120 if mlc_is_hd else MLC_BOUNDARIES_TB_MIL120)
+        mlc.LeafPositionBoundaries = list(
+            MLC_BOUNDARIES_TB_HD120 if mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
+        )
 
         bld_sequence = DicomSequence((jaw_x, jaw_y, jaw_asymx, jaw_asymy, mlc))
 
@@ -144,13 +156,14 @@ class Beam(BeamBase):
             couch_rot=couch_rot,
         )
 
+
 @dataclass
 class QAProcedure(QAProcedureBase, ABC):
-
     @staticmethod
     def _create_mlc(
-            machine: TrueBeamMachine, sacrifice_gap_mm: float = None,
-            sacrifice_max_move_mm: float = None
+        machine: TrueBeamMachine,
+        sacrifice_gap_mm: float = None,
+        sacrifice_max_move_mm: float = None,
     ) -> MLCShaper:
         """Utility to create MLC shaper instances."""
         return MLCShaper(
@@ -326,7 +339,6 @@ class MLCTransmission(QAProcedure):
     couch_rot: float = 0
     fluence_mode: FluenceMode = FluenceMode.STANDARD
 
-
     def compute(self):
         mlc = self._create_mlc(self.machine)
         if self.bank == "A":
@@ -336,7 +348,10 @@ class MLCTransmission(QAProcedure):
         else:
             raise ValueError("Bank must be 'A' or 'B'")
         # test for overtravel
-        if abs(self.x2 - self.x1) + self.overreach > self.machine.machine_specs.max_mlc_overtravel:
+        if (
+            abs(self.x2 - self.x1) + self.overreach
+            > self.machine.machine_specs.max_mlc_overtravel
+        ):
             raise OvertravelError(
                 "The MLC overtravel is too large for the given jaw positions and overreach. Reduce the x-jaw opening size and/or overreach value."
             )
@@ -410,6 +425,7 @@ class PicketFence(QAProcedure):
         Smaller values generate more control points and more back-and-forth movement.
         Too large of values may cause deliverability issues.
     """
+
     strip_width_mm: float = 3
     strip_positions_mm: tuple[float | int, ...] = (-45, -30, -15, 0, 15, 30, 45)
     y1: float = -100
@@ -439,7 +455,9 @@ class PicketFence(QAProcedure):
             raise ValueError(
                 "Picket fence beam exceeds MLC overtravel limits. Lower padding, the number of pickets, or the picket spacing."
             )
-        mlc = self._create_mlc(self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm)
+        mlc = self._create_mlc(
+            self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
+        )
         # create initial starting point; start under the jaws
         mlc.add_strip(
             position_mm=self.strip_positions_mm[0] - 2,
@@ -530,7 +548,6 @@ class WinstonLutz(QAProcedure):
     padding_mm: float = 5
 
     def compute(self):
-
         for axes in self.axes_positions:
             if self.defined_by_mlcs:
                 mlc_padding = 0
@@ -638,23 +655,32 @@ class DoseRate(QAProcedure):
     max_sacrificial_move_mm: float = 50
 
     def compute(self):
-
-        if self.roi_size_mm * len(self.dose_rates) > self.machine.machine_specs.max_mlc_overtravel:
+        if (
+            self.roi_size_mm * len(self.dose_rates)
+            > self.machine.machine_specs.max_mlc_overtravel
+        ):
             raise ValueError(
                 "The ROI size * number of dose rates must be less than the overall MLC allowable width"
             )
         # calculate MU
-        mlc_transition_time = self.roi_size_mm / self.machine.machine_specs.max_mlc_speed
+        mlc_transition_time = (
+            self.roi_size_mm / self.machine.machine_specs.max_mlc_speed
+        )
         min_mu = mlc_transition_time * max(self.dose_rates) * len(self.dose_rates) / 60
         mu = max(self.desired_mu, math.ceil(min_mu))
 
         # create MLC sacrifices
         times_to_transition = [
-            mu * 60 / (dose_rate * len(self.dose_rates)) for dose_rate in self.dose_rates
+            mu * 60 / (dose_rate * len(self.dose_rates))
+            for dose_rate in self.dose_rates
         ]
-        sacrificial_movements = [tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition]
+        sacrificial_movements = [
+            tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition
+        ]
 
-        mlc = self._create_mlc(self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm)
+        mlc = self._create_mlc(
+            self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
+        )
         ref_mlc = self._create_mlc(self.machine)
 
         roi_centers = np.linspace(
@@ -839,15 +865,22 @@ class MLCSpeed(QAProcedure):
             )
         if min(self.speeds) <= 0:
             raise ValueError("Speeds must be greater than 0")
-        if self.roi_size_mm * len(self.speeds) > self.machine.machine_specs.max_mlc_overtravel:
+        if (
+            self.roi_size_mm * len(self.speeds)
+            > self.machine.machine_specs.max_mlc_overtravel
+        ):
             raise ValueError(
                 "The ROI size * number of speeds must be less than the overall MLC allowable width"
             )
         # create MLC positions
         times_to_transition = [self.roi_size_mm / speed for speed in self.speeds]
-        sacrificial_movements = [tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition]
+        sacrificial_movements = [
+            tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition
+        ]
 
-        mlc = self._create_mlc(self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm)
+        mlc = self._create_mlc(
+            self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
+        )
         ref_mlc = self._create_mlc(self.machine)
 
         roi_centers = np.linspace(
@@ -946,7 +979,6 @@ class MLCSpeed(QAProcedure):
         self.beams.append(beam)
 
 
-
 @dataclass
 class GantrySpeed(QAProcedure):
     """Create a single-image gantry speed test. Multiple speeds are generated. A reference beam is also
@@ -1028,12 +1060,17 @@ class GantrySpeed(QAProcedure):
             raise ValueError(
                 f"Maximum speed given {max(self.speeds)} is greater than the maximum gantry speed {self.machine.machine_specs.max_gantry_speed}"
             )
-        if self.roi_size_mm * len(self.speeds) > self.machine.machine_specs.max_mlc_overtravel:
+        if (
+            self.roi_size_mm * len(self.speeds)
+            > self.machine.machine_specs.max_mlc_overtravel
+        ):
             raise ValueError(
                 "The ROI size * number of speeds must be less than the overall MLC allowable width"
             )
         # determine sacrifices and gantry angles
-        gantry_deltas = [speed * self.mu * 60 / self.max_dose_rate for speed in self.speeds]
+        gantry_deltas = [
+            speed * self.mu * 60 / self.max_dose_rate for speed in self.speeds
+        ]
         gantry_sign = -1 if self.gantry_rot_dir == GantryDirection.CLOCKWISE else 1
         g_angles_uncorrected = [self.start_gantry_angle] + (
             self.start_gantry_angle + gantry_sign * np.cumsum(gantry_deltas)
@@ -1120,7 +1157,6 @@ class GantrySpeed(QAProcedure):
         self.beams.append(ref_beam)
 
 
-
 @dataclass
 class VMATDRGS(QAProcedure):
     """Create beams like Clif Ling VMAT DRGS tests. The defaults use an optimized selection for a TrueBeam.
@@ -1175,20 +1211,20 @@ class VMATDRGS(QAProcedure):
 
     dose_rates: tuple[float, ...] = (600, 600, 600, 600, 500, 400, 200)
     gantry_speeds: tuple[float, ...] = (3, 4, 5, 6, 6, 6, 6)
-    mu_per_segment: float = 48.
-    mu_per_transition: float = 8.
+    mu_per_segment: float = 48.0
+    mu_per_transition: float = 8.0
     correct_fluence: bool = True
-    gantry_motion_per_transition: float = 10.
+    gantry_motion_per_transition: float = 10.0
     gantry_rotation_clockwise: bool = True
-    initial_gantry_offset: float = 1.
-    mlc_span: float = 138.
+    initial_gantry_offset: float = 1.0
+    mlc_span: float = 138.0
     mlc_motion_reverse: bool = True
-    mlc_gap: float = 2.
-    jaw_padding: float = 0.
+    mlc_gap: float = 2.0
+    jaw_padding: float = 0.0
     energy: float = 6
     fluence_mode: FluenceMode = FluenceMode.STANDARD
     max_dose_rate: int = 600
-    reference_beam_mu: float = 100.
+    reference_beam_mu: float = 100.0
     reference_beam_add_before: bool = False
     dynamic_delivery_at_static_gantry: tuple[float, ...] = ()
 
@@ -1216,7 +1252,11 @@ class VMATDRGS(QAProcedure):
 
     def compute(self):
         # store parameters common to all beams
-        mlc_boundaries = MLC_BOUNDARIES_TB_HD120 if self.machine.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
+        mlc_boundaries = (
+            MLC_BOUNDARIES_TB_HD120
+            if self.machine.mlc_is_hd
+            else MLC_BOUNDARIES_TB_MIL120
+        )
         self._y1 = mlc_boundaries[0]
         self._y2 = mlc_boundaries[-1]
         self._x1 = -(self.mlc_span / 2 + self.jaw_padding)
@@ -1231,9 +1271,13 @@ class VMATDRGS(QAProcedure):
         if len(gantry_speeds) != len(dose_rates):
             raise ValueError("gantry_speeds and dose_rates must have the same length")
         if self.initial_gantry_offset < self.MIN_GANTRY_OFFSET:
-            raise ValueError(f"The initial gantry offset cannot be smaller than {self.MIN_GANTRY_OFFSET} deg. Using 180 deg can cause ambiguity in the rotation direction.")
+            raise ValueError(
+                f"The initial gantry offset cannot be smaller than {self.MIN_GANTRY_OFFSET} deg. Using 180 deg can cause ambiguity in the rotation direction."
+            )
 
-        gantry_speeds_normalized = gantry_speeds / self.machine.machine_specs.max_gantry_speed
+        gantry_speeds_normalized = (
+            gantry_speeds / self.machine.machine_specs.max_gantry_speed
+        )
         dose_rates_normalized = dose_rates / self.max_dose_rate
         # Verify that there are no requested speeds above limit
         if np.any(gantry_speeds_normalized > 1):
@@ -1266,10 +1310,14 @@ class VMATDRGS(QAProcedure):
         )
         gantry_motion = np.append(0, gantry_motion)
 
-        dose_motion = 1.0 * np.tile([self.mu_per_segment, self.mu_per_transition], num_segments)
+        dose_motion = 1.0 * np.tile(
+            [self.mu_per_segment, self.mu_per_transition], num_segments
+        )
         dose_motion = np.append([0, self.mu_per_transition], dose_motion)
         if self.correct_fluence:
-            dose_motion[[1, -1]] = self.mu_per_transition * (1 - self.mlc_gap / segment_width)
+            dose_motion[[1, -1]] = self.mu_per_transition * (
+                1 - self.mlc_gap / segment_width
+            )
 
         mlc_motion_ini = [0, segment_width - self.mlc_gap]
         mlc_motion_mid = np.tile([0, segment_width], num_segments - 1)
@@ -1308,9 +1356,9 @@ class VMATDRGS(QAProcedure):
 
         # Create reference beam
         reference_meterset = [0, self.reference_beam_mu]
-        reference_gantry_angle = [float(
-            gantry_angles[0 if self.reference_beam_add_before else -1]
-        )]
+        reference_gantry_angle = [
+            float(gantry_angles[0 if self.reference_beam_add_before else -1])
+        ]
         reference_mlc_positions_a = 2 * [float(mlc_positions_a[0])]
         reference_mlc_positions_b = 2 * [float(mlc_positions_b[-1])]
         reference_beam = self._truebeam_beam(
@@ -1342,11 +1390,12 @@ class VMATDRGS(QAProcedure):
         self.beams = beams
 
     def _truebeam_beam(
-        self, beam_name: str,
+        self,
+        beam_name: str,
         metersets: Sequence[float],
         gantry_angles: Sequence[float],
         mlc_positions_a: Sequence[float],
-        mlc_positions_b: Sequence[float]
+        mlc_positions_b: Sequence[float],
     ) -> BeamBase:
         """Multiple similar beams are created for the VMAT test.
         Common parameters are stored as attributes, whereas the dynamic axes
@@ -1477,7 +1526,7 @@ class VMATDRGS(QAProcedure):
         beams = {"Reference": self.reference_beam, "Dynamic": self.dynamic_beam}
         for idx, (title, beam) in enumerate(beams.items()):
             fluence = beam.generate_fluence(imager)
-            plt.subplot(1,2,idx+1)
+            plt.subplot(1, 2, idx + 1)
             plt.imshow(fluence)
             plt.title(title)
         plt.show()
@@ -1494,15 +1543,14 @@ class VMATDRGS(QAProcedure):
         """
         beam = self.dynamic_beam
         fluence = beam.generate_fluence(imager)
-        profile = fluence[imager.shape[0]//2,:]
+        profile = fluence[imager.shape[0] // 2, :]
         profile_max = profile.max()
         plt.plot(profile)
-        plt.ylim((1-zoom/100)*profile_max, (1+zoom/100)*profile_max)
+        plt.ylim((1 - zoom / 100) * profile_max, (1 + zoom / 100) * profile_max)
         plt.show()
 
 
 class TrueBeamPlanGenerator(PlanGenerator):
-
     machine: TrueBeamMachine
 
     def __init__(
@@ -1512,15 +1560,10 @@ class TrueBeamPlanGenerator(PlanGenerator):
         plan_name: str,
         patient_name: str | None = None,
         patient_id: str | None = None,
-        machine_specs: MachineSpecs = DEFAULT_SPECS_TB
+        machine_specs: MachineSpecs = DEFAULT_SPECS_TB,
     ):
         super().__init__(
-            ds,
-            plan_label,
-            plan_name,
-            patient_name,
-            patient_id,
-            machine_specs
+            ds, plan_label, plan_name, patient_name, patient_id, machine_specs
         )
 
         mlc_is_hd = any(
@@ -1541,6 +1584,3 @@ class TrueBeamPlanGenerator(PlanGenerator):
             raise ValueError(
                 "The machine on the template plan does not seem to be a TrueBeam machine."
             )
-
-
-

@@ -8,21 +8,32 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 
 from conjuror.plans.mlc import MLCShaper
-from conjuror.plans.plan_generator_base import MachineSpecs, MachineBase, BeamBase, \
-    FluenceMode, QAProcedureBase, PlanGenerator
+from conjuror.plans.plan_generator_base import (
+    MachineSpecs,
+    MachineBase,
+    BeamBase,
+    FluenceMode,
+    QAProcedureBase,
+    PlanGenerator,
+)
 
 MLC_BOUNDARIES_HAL_DIST = tuple(np.arange(-140, 140 + 1, 10).astype(float))
 MLC_BOUNDARIES_HAL_PROX = tuple(np.arange(-145, 145 + 1, 10).astype(float))
 
 DEFAULT_SPECS_HAL = MachineSpecs(
-    max_gantry_speed=24.0, max_mlc_position=140, max_mlc_overtravel=140, max_mlc_speed=25
+    max_gantry_speed=24.0,
+    max_mlc_position=140,
+    max_mlc_overtravel=140,
+    max_mlc_speed=25,
 )
+
 
 @dataclass
 class HalcyonMachine(MachineBase):
     machine_specs: MachineSpecs = DEFAULT_SPECS_HAL
     mlc_boundaries_dist = MLC_BOUNDARIES_HAL_DIST
     mlc_boundaries_prox = MLC_BOUNDARIES_HAL_PROX
+
 
 class Stack(Enum):
     DISTAL = "distal"
@@ -106,8 +117,8 @@ class HalcyonBeam(BeamBase):
             couch_rot=0,
         )
 
-class QAProcedure(QAProcedureBase, ABC):
 
+class QAProcedure(QAProcedureBase, ABC):
     @staticmethod
     def _create_mlc(machine: HalcyonMachine) -> tuple[MLCShaper, MLCShaper]:
         """Create 2 MLC shaper objects, one for each stack."""
@@ -155,6 +166,7 @@ class PicketFence(QAProcedure):
     beam_name : str
         The name of the beam.
     """
+
     stack: Stack
     strip_width_mm: float = 3
     strip_positions_mm: tuple[float, ...] = (-45, -30, -15, 0, 15, 30, 45)
@@ -166,7 +178,6 @@ class PicketFence(QAProcedure):
     mu: int = 200
     beam_name: str = "PF"
 
-
     def compute(self):
         prox_mlc, dist_mlc = self._create_mlc(self.machine)
 
@@ -175,7 +186,10 @@ class PicketFence(QAProcedure):
         # If you didn't do this, the first picket might be different as it has the advantage
         # of starting from a static position vs the rest of the pickets being dynamic.
         strip_positions = [self.strip_positions_mm[0] - 2, *self.strip_positions_mm]
-        metersets = [0, *[1 / len(self.strip_positions_mm) for _ in self.strip_positions_mm]]
+        metersets = [
+            0,
+            *[1 / len(self.strip_positions_mm) for _ in self.strip_positions_mm],
+        ]
 
         for strip, meterset in zip(strip_positions, metersets):
             if self.stack in (Stack.DISTAL, Stack.BOTH):
@@ -223,15 +237,10 @@ class HalcyonPlanGenerator(PlanGenerator):
         plan_name: str,
         patient_name: str | None = None,
         patient_id: str | None = None,
-        machine_specs: MachineSpecs = DEFAULT_SPECS_HAL
+        machine_specs: MachineSpecs = DEFAULT_SPECS_HAL,
     ):
         super().__init__(
-            ds,
-            plan_label,
-            plan_name,
-            patient_name,
-            patient_id,
-            machine_specs
+            ds, plan_label, plan_name, patient_name, patient_id, machine_specs
         )
         self.machine = HalcyonMachine(machine_specs=machine_specs)
 
@@ -245,5 +254,3 @@ class HalcyonPlanGenerator(PlanGenerator):
             raise ValueError(
                 "The machine on the template plan does not seem to be a Halcyon machine."
             )
-
-
