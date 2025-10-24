@@ -6,14 +6,143 @@ from typing import Literal
 
 import numpy as np
 from matplotlib import pyplot as plt
+from pydicom.dataset import Dataset
+from pydicom.sequence import Sequence as DicomSequence
 
 from conjuror.images.simulators import Imager
 from conjuror.plans.mlc import MLCShaper
-from conjuror.plans.plan_generator import QAProcedureBase, TrueBeamMachine, FluenceMode, \
-    Beam, OvertravelError, GantryDirection, MLC_BOUNDARIES_TB_HD120, \
-    MLC_BOUNDARIES_TB_MIL120, MachineSpecs
+from conjuror.plans.plan_generator_base import MachineSpecs, MachineBase, BeamBase, \
+    FluenceMode, QAProcedureBase, PlanGenerator, OvertravelError, GantryDirection
 from conjuror.utils import wrap360
 
+
+# MLC boundaries are immutable by design, so they are stored as tuples.
+# However, pydicom expects lists, so these are converted to lists when necessary (Beam).
+MLC_BOUNDARIES_TB_MIL120 = (
+    tuple(np.arange(-200, -100 + 1, 10).astype(float))
+    + tuple(np.arange(-95, 95 + 1, 5).astype(float))
+    + tuple(np.arange(100, 200 + 1, 10).astype(float))
+)
+MLC_BOUNDARIES_TB_HD120 = (
+    tuple(np.arange(-110, -40 + 1, 5).astype(float))
+    + tuple(np.arange(-37.5, 37.5 + 1, 2.5).astype(float))
+    + tuple(np.arange(40, 110 + 1, 5).astype(float))
+)
+
+DEFAULT_SPECS_TB = MachineSpecs(
+    max_gantry_speed=6.0, max_mlc_position=200, max_mlc_overtravel=140, max_mlc_speed=25
+)
+
+@dataclass
+class TrueBeamMachine(MachineBase):
+    mlc_is_hd: bool
+    machine_specs: MachineSpecs = DEFAULT_SPECS_TB
+
+    @property
+    def mlc_boundaries(self) -> tuple[float,...]:
+        return MLC_BOUNDARIES_TB_HD120 if self.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
+
+
+class Beam(BeamBase):
+    """A class that represents a TrueBeam beam."""
+    def __init__(
+        self,
+        mlc_is_hd: bool,
+        beam_name: str,
+        energy: float,
+        fluence_mode: FluenceMode,
+        dose_rate: int,
+        metersets: Sequence[float],
+        gantry_angles: float | Sequence[float],
+        x1: float,
+        x2: float,
+        y1: float,
+        y2: float,
+        mlc_positions: list[list[float]],
+        coll_angle: float,
+        couch_vrt: float,
+        couch_lat: float,
+        couch_lng: float,
+        couch_rot: float,
+    ):
+        """
+        Parameters
+        ----------
+        mlc_is_hd : bool
+            Whether the MLC type is HD or Millennium
+        beam_name : str
+            The name of the beam. Must be less than 16 characters.
+        energy : float
+            The energy of the beam.
+        fluence_mode : FluenceMode
+            The fluence mode of the beam.
+        dose_rate : int
+            The dose rate of the beam.
+        metersets : Sequence[float]
+            The meter sets for each control point. The length must match the number of control points in mlc_positions.
+        gantry_angles : Union[float, Sequence[float]]
+            The gantry angle(s) of the beam. If a single number, it's assumed to be a static beam. If multiple numbers, it's assumed to be a dynamic beam.
+        x1 : float
+            The left jaw position.
+        x2 : float
+            The right jaw position.
+        y1 : float
+            The bottom jaw position.
+        y2 : float
+            The top jaw position.
+        mlc_positions : list[list[float]]
+            The MLC positions for each control point. This is the x-position of each leaf for each control point.
+        coll_angle : float
+            The collimator angle.
+        couch_vrt : float
+            The couch vertical position.
+        couch_lat : float
+            The couch lateral position.
+        couch_lng : float
+            The couch longitudinal position.
+        couch_rot : float
+            The couch rotation.
+        """
+        jaw_x = Dataset()
+        jaw_x.RTBeamLimitingDeviceType = "X"
+        jaw_x.NumberOfLeafJawPairs = 1
+        jaw_y = Dataset()
+        jaw_y.RTBeamLimitingDeviceType = "Y"
+        jaw_y.NumberOfLeafJawPairs = 1
+        jaw_asymx = Dataset()
+        jaw_asymx.RTBeamLimitingDeviceType = "ASYMX"
+        jaw_asymx.NumberOfLeafJawPairs = 1
+        jaw_asymy = Dataset()
+        jaw_asymy.RTBeamLimitingDeviceType = "ASYMX"
+        jaw_asymy.NumberOfLeafJawPairs = 1
+        mlc = Dataset()
+        mlc.RTBeamLimitingDeviceType = "MLCX"
+        mlc.NumberOfLeafJawPairs = 60
+        mlc.LeafPositionBoundaries = list(MLC_BOUNDARIES_TB_HD120 if mlc_is_hd else MLC_BOUNDARIES_TB_MIL120)
+
+        bld_sequence = DicomSequence((jaw_x, jaw_y, jaw_asymx, jaw_asymy, mlc))
+
+        beam_limiting_device_positions = {
+            "ASYMX": [[x1, x2]],
+            "ASYMY": [[y1, y2]],
+            "MLCX": mlc_positions,
+        }
+
+        super().__init__(
+            beam_limiting_device_sequence=bld_sequence,
+            beam_name=beam_name,
+            energy=energy,
+            fluence_mode=fluence_mode,
+            dose_rate=dose_rate,
+            metersets=metersets,
+            gantry_angles=gantry_angles,
+            beam_limiting_device_positions=beam_limiting_device_positions,
+            coll_angle=coll_angle,
+            couch_vrt=couch_vrt,
+            couch_lat=couch_lat,
+            couch_lng=couch_lng,
+            couch_rot=couch_rot,
+        )
 
 @dataclass
 class QAProcedure(QAProcedureBase, ABC):
@@ -114,7 +243,7 @@ class OpenField(QAProcedure):
             x_outfield_position=self.x1 - mlc_padding - jaw_padding - 20,
             meterset_at_target=1.0,
         )
-        beam = Beam.to_truebeam(
+        beam = Beam(
             beam_name=self.beam_name,
             energy=self.energy,
             dose_rate=self.dose_rate,
@@ -216,7 +345,7 @@ class MLCTransmission(QAProcedure):
             strip_width_mm=1,
             meterset_at_target=1,
         )
-        beam = Beam.to_truebeam(
+        beam = Beam(
             beam_name=f"{self.beam_name} {self.bank}",
             energy=self.energy,
             dose_rate=self.dose_rate,
@@ -325,7 +454,7 @@ class PicketFence(QAProcedure):
                 strip_width_mm=self.strip_width_mm,
                 meterset_at_target=1 / len(self.strip_positions_mm),
             )
-        beam = Beam.to_truebeam(
+        beam = Beam(
             beam_name=self.beam_name,
             energy=self.energy,
             dose_rate=self.dose_rate,
@@ -423,7 +552,7 @@ class WinstonLutz(QAProcedure):
                 axes.get("name")
                 or f"G{axes['gantry']:g}C{axes['collimator']:g}P{axes['couch']:g}"
             )
-            beam = Beam.to_truebeam(
+            beam = Beam(
                 beam_name=beam_name,
                 energy=self.energy,
                 dose_rate=self.dose_rate,
@@ -582,7 +711,7 @@ class DoseRate(QAProcedure):
                 meterset_transition=0.5 / len(self.dose_rates),
                 sacrificial_distance_mm=sacrifice_distance,
             )
-        ref_beam = Beam.to_truebeam(
+        ref_beam = Beam(
             beam_name="DR Ref",
             energy=self.energy,
             dose_rate=self.default_dose_rate,
@@ -602,7 +731,7 @@ class DoseRate(QAProcedure):
             mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(ref_beam)
-        beam = Beam.to_truebeam(
+        beam = Beam(
             beam_name=f"DR{min(self.dose_rates)}-{max(self.dose_rates)}",
             energy=self.energy,
             dose_rate=self.default_dose_rate,
@@ -775,7 +904,7 @@ class MLCSpeed(QAProcedure):
                 meterset_transition=0.5 / len(self.speeds),
                 sacrificial_distance_mm=sacrifice_distance,
             )
-        ref_beam = Beam.to_truebeam(
+        ref_beam = Beam(
             beam_name=f"{self.beam_name} Ref",
             energy=self.energy,
             dose_rate=self.default_dose_rate,
@@ -795,7 +924,7 @@ class MLCSpeed(QAProcedure):
             mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(ref_beam)
-        beam = Beam.to_truebeam(
+        beam = Beam(
             beam_name=self.beam_name,
             energy=self.energy,
             dose_rate=self.default_dose_rate,
@@ -949,7 +1078,7 @@ class GantrySpeed(QAProcedure):
                 meterset_transition=1 / len(self.speeds),
             )
 
-        beam = Beam.to_truebeam(
+        beam = Beam(
             beam_name=self.beam_name,
             energy=self.energy,
             dose_rate=self.max_dose_rate,
@@ -969,7 +1098,7 @@ class GantrySpeed(QAProcedure):
             mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(beam)
-        ref_beam = Beam.to_truebeam(
+        ref_beam = Beam(
             beam_name=f"{self.beam_name} Ref",
             energy=self.energy,
             dose_rate=self.max_dose_rate,
@@ -1078,11 +1207,11 @@ class VMATDRGS(QAProcedure):
     _y2: float = field(init=False)
 
     @property
-    def reference_beam(self) -> Beam:
+    def reference_beam(self) -> BeamBase:
         return self.beams[self.reference_beam_idx]
 
     @property
-    def dynamic_beam(self) -> Beam:
+    def dynamic_beam(self) -> BeamBase:
         return self.beams[self.dynamic_beam_idx]
 
     def compute(self):
@@ -1193,7 +1322,7 @@ class VMATDRGS(QAProcedure):
         )
 
         # Append the dynamic and reference beams according to the order defined in init
-        beams: list[Beam | None] = 2 * [None]
+        beams: list[BeamBase | None] = 2 * [None]
         self.dynamic_beam_idx = 1 if self.reference_beam_add_before else 0
         self.reference_beam_idx = 0 if self.reference_beam_add_before else 1
         beams[self.dynamic_beam_idx] = dynamic_beam
@@ -1218,7 +1347,7 @@ class VMATDRGS(QAProcedure):
         gantry_angles: Sequence[float],
         mlc_positions_a: Sequence[float],
         mlc_positions_b: Sequence[float]
-    ) -> Beam:
+    ) -> BeamBase:
         """Multiple similar beams are created for the VMAT test.
         Common parameters are stored as attributes, whereas the dynamic axes
         are passed as arguments to this method."""
@@ -1229,7 +1358,7 @@ class VMATDRGS(QAProcedure):
         beam_mlc_positions = np.vstack((beam_mlc_position_b, beam_mlc_position_a))
         beam_mlc_positions = beam_mlc_positions.transpose().tolist()
 
-        return Beam.to_truebeam(
+        return Beam(
             mlc_is_hd=self.machine.mlc_is_hd,
             beam_name=beam_name,
             energy=self.energy,
@@ -1370,4 +1499,48 @@ class VMATDRGS(QAProcedure):
         plt.plot(profile)
         plt.ylim((1-zoom/100)*profile_max, (1+zoom/100)*profile_max)
         plt.show()
+
+
+class TrueBeamPlanGenerator(PlanGenerator):
+
+    machine: TrueBeamMachine
+
+    def __init__(
+        self,
+        ds: Dataset,
+        plan_label: str,
+        plan_name: str,
+        patient_name: str | None = None,
+        patient_id: str | None = None,
+        machine_specs: MachineSpecs = DEFAULT_SPECS_TB
+    ):
+        super().__init__(
+            ds,
+            plan_label,
+            plan_name,
+            patient_name,
+            patient_id,
+            machine_specs
+        )
+
+        mlc_is_hd = any(
+            bld.LeafPositionBoundaries[0] == -110
+            for bs in ds.BeamSequence
+            for bld in bs.BeamLimitingDeviceSequence
+            if bld.RTBeamLimitingDeviceType == "MLCX"
+        )
+        self.machine = TrueBeamMachine(mlc_is_hd, machine_specs=machine_specs)
+
+    def _validate_machine_type(self, beam_sequence: DicomSequence):
+        has_valid_mlc_data: bool = any(
+            bld.RTBeamLimitingDeviceType == "MLCX"
+            for bs in beam_sequence
+            for bld in bs.BeamLimitingDeviceSequence
+        )
+        if not has_valid_mlc_data:
+            raise ValueError(
+                "The machine on the template plan does not seem to be a TrueBeam machine."
+            )
+
+
 

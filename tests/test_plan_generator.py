@@ -5,15 +5,15 @@ from unittest import TestCase
 from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
-from conjuror.plans import procedures_halcyon, procedures_truebeam
+from conjuror.plans import plan_generator_halcyon, plan_generator_truebeam
 from conjuror.plans.mlc import (
     interpolate_control_points,
     next_sacrifice_shift,
     split_sacrifice_travel,
 )
-from conjuror.plans.plan_generator import *
-from conjuror.plans.procedures_halcyon import *
-from conjuror.plans.procedures_truebeam import *
+from conjuror.plans.plan_generator_base import *
+from conjuror.plans.plan_generator_halcyon import *
+from conjuror.plans.plan_generator_truebeam import *
 from tests.utils import get_file_from_cloud_test_repo
 
 RT_PLAN_FILE = get_file_from_cloud_test_repo(["plan_generator", "Murray-plan.dcm"])
@@ -165,8 +165,8 @@ class TestPlanGenerator(TestCase):
             )
 
 
-def create_beam(**kwargs) -> Beam:
-    return Beam.to_truebeam(
+def create_beam(**kwargs) -> BeamBase:
+    return Beam(
         beam_name=kwargs.get("beam_name", "name"),
         energy=kwargs.get("energy", 6),
         dose_rate=kwargs.get("dose_rate", 600),
@@ -451,7 +451,7 @@ class TestPlanPrefabs(TestCase):
             self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
 
     def test_create_picket_fence(self):
-        procedure = procedures_truebeam.PicketFence(
+        procedure = plan_generator_truebeam.PicketFence(
             y1=-10,
             y2=10,
             mu=123,
@@ -494,7 +494,7 @@ class TestPlanPrefabs(TestCase):
 
     def test_picket_fence_too_wide(self):
         with self.assertRaises(ValueError):
-            procedure = procedures_truebeam.PicketFence(
+            procedure = plan_generator_truebeam.PicketFence(
                 y1=-10,
                 y2=10,
                 mu=123,
@@ -715,7 +715,7 @@ class TestHalcyonPrefabs(TestCase):
         )
 
     def test_create_picket_fence_proximal(self):
-        procedure = procedures_halcyon.PicketFence(
+        procedure = plan_generator_halcyon.PicketFence(
             stack=Stack.PROXIMAL,
             mu=123,
             beam_name="Picket Fence",
@@ -749,7 +749,7 @@ class TestHalcyonPrefabs(TestCase):
         self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
 
     def test_create_picket_fence_distal(self):
-        procedure = procedures_halcyon.PicketFence(
+        procedure = plan_generator_halcyon.PicketFence(
             stack=Stack.DISTAL,
             mu=123,
             beam_name="Picket Fence",
@@ -783,7 +783,7 @@ class TestHalcyonPrefabs(TestCase):
         self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
 
     def test_create_picket_fence_both(self):
-        procedure = procedures_halcyon.PicketFence(
+        procedure = plan_generator_halcyon.PicketFence(
             stack=Stack.BOTH,
             mu=123,
             beam_name="Picket Fence",

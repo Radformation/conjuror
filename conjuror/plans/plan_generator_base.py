@@ -5,7 +5,7 @@ from copy import deepcopy
 from dataclasses import dataclass, replace, field
 from enum import Enum
 from pathlib import Path
-from typing import Self
+from typing import Self, TypeVar, Generic
 
 import numpy as np
 import pydicom
@@ -18,22 +18,6 @@ from ..images.layers import ArrayLayer
 from ..images.simulators import Simulator, Imager
 from ..utils import wrap180
 from .fluence import generate_fluences, plot_fluences
-
-
-# MLC boundaries are immutable by design, so they are stored as tuples.
-# However, pydicom expects lists, so these are converted to lists when necessary (Beam).
-MLC_BOUNDARIES_TB_MIL120 = (
-    tuple(np.arange(-200, -100 + 1, 10).astype(float))
-    + tuple(np.arange(-95, 95 + 1, 5).astype(float))
-    + tuple(np.arange(100, 200 + 1, 10).astype(float))
-)
-MLC_BOUNDARIES_TB_HD120 = (
-    tuple(np.arange(-110, -40 + 1, 5).astype(float))
-    + tuple(np.arange(-37.5, 37.5 + 1, 2.5).astype(float))
-    + tuple(np.arange(40, 110 + 1, 5).astype(float))
-)
-MLC_BOUNDARIES_HAL_DIST = tuple(np.arange(-140, 140 + 1, 10).astype(float))
-MLC_BOUNDARIES_HAL_PROX = tuple(np.arange(-145, 145 + 1, 10).astype(float))
 
 
 @dataclass(frozen=True)
@@ -62,30 +46,11 @@ class MachineSpecs:
         return replace(self, **overrides)
 
 
-DEFAULT_SPECS_TB = MachineSpecs(
-    max_gantry_speed=6.0, max_mlc_position=200, max_mlc_overtravel=140, max_mlc_speed=25
-)
 
-DEFAULT_SPECS_HAL = MachineSpecs(
-    max_gantry_speed=24.0, max_mlc_position=140, max_mlc_overtravel=140, max_mlc_speed=25
-)
+class MachineBase(ABC):
+    machine_specs: MachineSpecs
 
-
-@dataclass
-class TrueBeamMachine:
-    mlc_is_hd: bool
-    machine_specs: MachineSpecs = DEFAULT_SPECS_TB
-
-    @property
-    def mlc_boundaries(self) -> tuple[float,...]:
-        return MLC_BOUNDARIES_TB_HD120 if self.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
-
-
-@dataclass
-class HalcyonMachine:
-    machine_specs: MachineSpecs = DEFAULT_SPECS_HAL
-    mlc_boundaries_dist = MLC_BOUNDARIES_HAL_DIST
-    mlc_boundaries_prox = MLC_BOUNDARIES_HAL_PROX
+TMachine = TypeVar("TMachine", bound=MachineBase)
 
 
 class GantryDirection(Enum):
@@ -105,7 +70,7 @@ class FluenceMode(Enum):
     SRS = "SRS"
 
 
-class Beam(ABC):
+class BeamBase(ABC):
     """Represents a DICOM beam dataset. Has methods for creating the dataset and adding control points.
     Generally not created on its own but rather under the hood as part of a PlanGenerator object.
 
@@ -344,182 +309,6 @@ class Beam(ABC):
         beam.ControlPointSequence = DicomSequence()
         return beam
 
-
-    @classmethod
-    def to_truebeam(
-        cls,
-        mlc_is_hd: bool,
-        beam_name: str,
-        energy: float,
-        fluence_mode: FluenceMode,
-        dose_rate: int,
-        metersets: Sequence[float],
-        gantry_angles: float | Sequence[float],
-        x1: float,
-        x2: float,
-        y1: float,
-        y2: float,
-        mlc_positions: list[list[float]],
-        coll_angle: float,
-        couch_vrt: float,
-        couch_lat: float,
-        couch_lng: float,
-        couch_rot: float,
-    ) -> Self:
-        """
-        Parameters
-        ----------
-        mlc_is_hd : bool
-            Whether the MLC type is HD or Millennium
-        beam_name : str
-            The name of the beam. Must be less than 16 characters.
-        energy : float
-            The energy of the beam.
-        fluence_mode : FluenceMode
-            The fluence mode of the beam.
-        dose_rate : int
-            The dose rate of the beam.
-        metersets : Sequence[float]
-            The meter sets for each control point. The length must match the number of control points in mlc_positions.
-        gantry_angles : Union[float, Sequence[float]]
-            The gantry angle(s) of the beam. If a single number, it's assumed to be a static beam. If multiple numbers, it's assumed to be a dynamic beam.
-        x1 : float
-            The left jaw position.
-        x2 : float
-            The right jaw position.
-        y1 : float
-            The bottom jaw position.
-        y2 : float
-            The top jaw position.
-        mlc_positions : list[list[float]]
-            The MLC positions for each control point. This is the x-position of each leaf for each control point.
-        coll_angle : float
-            The collimator angle.
-        couch_vrt : float
-            The couch vertical position.
-        couch_lat : float
-            The couch lateral position.
-        couch_lng : float
-            The couch longitudinal position.
-        couch_rot : float
-            The couch rotation.
-        """
-        jaw_x = Dataset()
-        jaw_x.RTBeamLimitingDeviceType = "X"
-        jaw_x.NumberOfLeafJawPairs = 1
-        jaw_y = Dataset()
-        jaw_y.RTBeamLimitingDeviceType = "Y"
-        jaw_y.NumberOfLeafJawPairs = 1
-        jaw_asymx = Dataset()
-        jaw_asymx.RTBeamLimitingDeviceType = "ASYMX"
-        jaw_asymx.NumberOfLeafJawPairs = 1
-        jaw_asymy = Dataset()
-        jaw_asymy.RTBeamLimitingDeviceType = "ASYMX"
-        jaw_asymy.NumberOfLeafJawPairs = 1
-        mlc = Dataset()
-        mlc.RTBeamLimitingDeviceType = "MLCX"
-        mlc.NumberOfLeafJawPairs = 60
-        mlc.LeafPositionBoundaries = list(MLC_BOUNDARIES_TB_HD120 if mlc_is_hd else MLC_BOUNDARIES_TB_MIL120)
-
-        bld_sequence = DicomSequence((jaw_x, jaw_y, jaw_asymx, jaw_asymy, mlc))
-
-        beam_limiting_device_positions = {
-            "ASYMX": [[x1, x2]],
-            "ASYMY": [[y1, y2]],
-            "MLCX": mlc_positions,
-        }
-
-        return cls(
-            beam_limiting_device_sequence=bld_sequence,
-            beam_name=beam_name,
-            energy=energy,
-            fluence_mode=fluence_mode,
-            dose_rate=dose_rate,
-            metersets=metersets,
-            gantry_angles=gantry_angles,
-            beam_limiting_device_positions=beam_limiting_device_positions,
-            coll_angle=coll_angle,
-            couch_vrt=couch_vrt,
-            couch_lat=couch_lat,
-            couch_lng=couch_lng,
-            couch_rot=couch_rot,
-        )
-
-
-    @classmethod
-    def to_halcyon(
-        cls,
-        beam_name: str,
-        metersets: Sequence[float],
-        gantry_angles: float | Sequence[float],
-        distal_mlc_positions: list[list[float]],
-        proximal_mlc_positions: list[list[float]],
-        coll_angle: float,
-        couch_vrt: float,
-        couch_lat: float,
-        couch_lng: float,
-    ) -> Self:
-        """
-        Parameters
-        ----------
-        beam_name : str
-            The name of the beam. Must be less than 16 characters.
-        metersets : Sequence[float]
-            The meter sets for each control point. The length must match the number of control points in mlc_positions.
-        gantry_angles : Union[float, Sequence[float]]
-            The gantry angle(s) of the beam. If a single number, it's assumed to be a static beam. If multiple numbers, it's assumed to be a dynamic beam.
-        distal_mlc_positions : list[list[float]]
-            The distal MLC positions for each control point. This is the x-position of each leaf for each control point.
-        proximal_mlc_positions : list[list[float]]
-            The proximal MLC positions for each control point. This is the x-position of each leaf for each control point.
-        coll_angle : float
-            The collimator angle.
-        couch_vrt : float
-            The couch vertical position.
-        couch_lat : float
-            The couch lateral position.
-        couch_lng : float
-            The couch longitudinal position.
-        """
-        jaw_x = Dataset()
-        jaw_x.RTBeamLimitingDeviceType = "X"
-        jaw_x.NumberOfLeafJawPairs = 1
-        jaw_y = Dataset()
-        jaw_y.RTBeamLimitingDeviceType = "Y"
-        jaw_y.NumberOfLeafJawPairs = 1
-        mlc_x1 = Dataset()
-        mlc_x1.RTBeamLimitingDeviceType = "MLCX1"
-        mlc_x1.NumberOfLeafJawPairs = 28
-        mlc_x1.LeafPositionBoundaries = list(MLC_BOUNDARIES_HAL_DIST)
-        mlc_x2 = Dataset()
-        mlc_x2.RTBeamLimitingDeviceType = "MLCX2"
-        mlc_x2.NumberOfLeafJawPairs = 29
-        mlc_x2.LeafPositionBoundaries = list(MLC_BOUNDARIES_HAL_PROX)
-        bld_sequence = DicomSequence((jaw_x, jaw_y, mlc_x1, mlc_x2))
-
-        beam_limiting_device_positions = {
-            "X": [[-140, 140]],
-            "Y": [[-140, 140]],
-            "MLCX1": distal_mlc_positions,
-            "MLCX2": proximal_mlc_positions,
-        }
-
-        return cls(
-            beam_limiting_device_sequence=bld_sequence,
-            beam_name=beam_name,
-            energy=6,
-            fluence_mode=FluenceMode.FFF,
-            dose_rate=600,
-            metersets=metersets,
-            gantry_angles=gantry_angles,
-            beam_limiting_device_positions=beam_limiting_device_positions,
-            coll_angle=coll_angle,
-            couch_vrt=couch_vrt,
-            couch_lat=couch_lat,
-            couch_lng=couch_lng,
-            couch_rot=0,
-        )
-
     def generate_fluence(self, imager: Imager) -> np.ndarray:
         """Generate the fluence map from the RT Plan.
 
@@ -567,16 +356,16 @@ class Beam(ABC):
         return fluence
 
 @dataclass
-class QAProcedureBase(ABC):
+class QAProcedureBase(Generic[TMachine], ABC):
     """An abstract base class for generic QA procedures."""
 
-    beams: list[Beam] = field(default_factory = list, kw_only=True)
-    machine : TrueBeamMachine | HalcyonMachine = field(init=False)
+    beams: list[BeamBase] = field(default_factory = list, kw_only=True)
+    machine : TMachine = field(init=False)
 
     @classmethod
-    def from_machine(cls, machine: TrueBeamMachine | HalcyonMachine, **kwargs) -> Self:
-        cls.machine = machine
+    def from_machine(cls, machine: TMachine, **kwargs) -> Self:
         c = cls(**kwargs)
+        c.machine = machine
         c.compute()
         return c
 
@@ -596,7 +385,7 @@ class PlanGenerator(ABC):
 
     machine_name: str
     machine_specs : MachineSpecs
-    machine: TrueBeamMachine | HalcyonMachine
+    machine: MachineBase
 
     def __init__(
         self,
@@ -723,7 +512,7 @@ class PlanGenerator(ABC):
     def _validate_machine_type(self, beam_sequence: DicomSequence):
         pass
 
-    def add_beam(self, beam: Beam):
+    def add_beam(self, beam: BeamBase):
         """Add a beam to the plan using the Beam object. Although public,
         this is a low-level method that is used by the higher-level methods like add_open_field_beam.
         This handles the associated metadata like the referenced beam sequence and fraction group sequence.
@@ -814,84 +603,6 @@ class PlanGenerator(ABC):
             )
             image_ds.append(ds)
         return image_ds
-
-
-class TrueBeamPlanGenerator(PlanGenerator):
-
-    machine: TrueBeamMachine
-
-    def __init__(
-        self,
-        ds: Dataset,
-        plan_label: str,
-        plan_name: str,
-        patient_name: str | None = None,
-        patient_id: str | None = None,
-        machine_specs: MachineSpecs = DEFAULT_SPECS_TB
-    ):
-        super().__init__(
-            ds,
-            plan_label,
-            plan_name,
-            patient_name,
-            patient_id,
-            machine_specs
-        )
-
-        mlc_is_hd = any(
-            bld.LeafPositionBoundaries[0] == -110
-            for bs in ds.BeamSequence
-            for bld in bs.BeamLimitingDeviceSequence
-            if bld.RTBeamLimitingDeviceType == "MLCX"
-        )
-        self.machine = TrueBeamMachine(mlc_is_hd, machine_specs=machine_specs)
-
-    def _validate_machine_type(self, beam_sequence: DicomSequence):
-        has_valid_mlc_data: bool = any(
-            bld.RTBeamLimitingDeviceType == "MLCX"
-            for bs in beam_sequence
-            for bld in bs.BeamLimitingDeviceSequence
-        )
-        if not has_valid_mlc_data:
-            raise ValueError(
-                "The machine on the template plan does not seem to be a TrueBeam machine."
-            )
-
-class HalcyonPlanGenerator(PlanGenerator):
-    """A class to generate a plan with two beams stacked on top of each other such as the Halcyon. This
-    also assumes no jaws."""
-
-    machine: HalcyonMachine
-
-    def __init__(
-        self,
-        ds: Dataset,
-        plan_label: str,
-        plan_name: str,
-        patient_name: str | None = None,
-        patient_id: str | None = None,
-        machine_specs: MachineSpecs = DEFAULT_SPECS_HAL
-    ):
-        super().__init__(
-            ds,
-            plan_label,
-            plan_name,
-            patient_name,
-            patient_id,
-            machine_specs
-        )
-        self.machine = HalcyonMachine(machine_specs=machine_specs)
-
-    def _validate_machine_type(self, beam_sequence: DicomSequence):
-        has_valid_mlc_data: bool = any(
-            bld.RTBeamLimitingDeviceType == "MLCX1"
-            for bs in beam_sequence
-            for bld in bs.BeamLimitingDeviceSequence
-        )
-        if not has_valid_mlc_data:
-            raise ValueError(
-                "The machine on the template plan does not seem to be a Halcyon machine."
-            )
 
 
 class OvertravelError(ValueError):
