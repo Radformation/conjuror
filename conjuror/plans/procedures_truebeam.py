@@ -114,7 +114,7 @@ class OpenField(QAProcedure):
             x_outfield_position=self.x1 - mlc_padding - jaw_padding - 20,
             meterset_at_target=1.0,
         )
-        beam = Beam.for_truebeam(
+        beam = Beam.to_truebeam(
             beam_name=self.beam_name,
             energy=self.energy,
             dose_rate=self.dose_rate,
@@ -216,7 +216,7 @@ class MLCTransmission(QAProcedure):
             strip_width_mm=1,
             meterset_at_target=1,
         )
-        beam = Beam.for_truebeam(
+        beam = Beam.to_truebeam(
             beam_name=f"{self.beam_name} {self.bank}",
             energy=self.energy,
             dose_rate=self.dose_rate,
@@ -325,7 +325,7 @@ class PicketFence(QAProcedure):
                 strip_width_mm=self.strip_width_mm,
                 meterset_at_target=1 / len(self.strip_positions_mm),
             )
-        beam = Beam.for_truebeam(
+        beam = Beam.to_truebeam(
             beam_name=self.beam_name,
             energy=self.energy,
             dose_rate=self.dose_rate,
@@ -423,7 +423,7 @@ class WinstonLutz(QAProcedure):
                 axes.get("name")
                 or f"G{axes['gantry']:g}C{axes['collimator']:g}P{axes['couch']:g}"
             )
-            beam = Beam.for_truebeam(
+            beam = Beam.to_truebeam(
                 beam_name=beam_name,
                 energy=self.energy,
                 dose_rate=self.dose_rate,
@@ -582,7 +582,7 @@ class DoseRate(QAProcedure):
                 meterset_transition=0.5 / len(self.dose_rates),
                 sacrificial_distance_mm=sacrifice_distance,
             )
-        ref_beam = Beam.for_truebeam(
+        ref_beam = Beam.to_truebeam(
             beam_name="DR Ref",
             energy=self.energy,
             dose_rate=self.default_dose_rate,
@@ -602,7 +602,7 @@ class DoseRate(QAProcedure):
             mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(ref_beam)
-        beam = Beam.for_truebeam(
+        beam = Beam.to_truebeam(
             beam_name=f"DR{min(self.dose_rates)}-{max(self.dose_rates)}",
             energy=self.energy,
             dose_rate=self.default_dose_rate,
@@ -775,7 +775,7 @@ class MLCSpeed(QAProcedure):
                 meterset_transition=0.5 / len(self.speeds),
                 sacrificial_distance_mm=sacrifice_distance,
             )
-        ref_beam = Beam.for_truebeam(
+        ref_beam = Beam.to_truebeam(
             beam_name=f"{self.beam_name} Ref",
             energy=self.energy,
             dose_rate=self.default_dose_rate,
@@ -795,7 +795,7 @@ class MLCSpeed(QAProcedure):
             mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(ref_beam)
-        beam = Beam.for_truebeam(
+        beam = Beam.to_truebeam(
             beam_name=self.beam_name,
             energy=self.energy,
             dose_rate=self.default_dose_rate,
@@ -949,7 +949,7 @@ class GantrySpeed(QAProcedure):
                 meterset_transition=1 / len(self.speeds),
             )
 
-        beam = Beam.for_truebeam(
+        beam = Beam.to_truebeam(
             beam_name=self.beam_name,
             energy=self.energy,
             dose_rate=self.max_dose_rate,
@@ -969,7 +969,7 @@ class GantrySpeed(QAProcedure):
             mlc_is_hd=self.machine.mlc_is_hd,
         )
         self.beams.append(beam)
-        ref_beam = Beam.for_truebeam(
+        ref_beam = Beam.to_truebeam(
             beam_name=f"{self.beam_name} Ref",
             energy=self.energy,
             dose_rate=self.max_dose_rate,
@@ -1229,7 +1229,7 @@ class VMATDRGS(QAProcedure):
         beam_mlc_positions = np.vstack((beam_mlc_position_b, beam_mlc_position_a))
         beam_mlc_positions = beam_mlc_positions.transpose().tolist()
 
-        return Beam.for_truebeam(
+        return Beam.to_truebeam(
             mlc_is_hd=self.machine.mlc_is_hd,
             beam_name=beam_name,
             energy=self.energy,
@@ -1337,7 +1337,7 @@ class VMATDRGS(QAProcedure):
         plt.show()
         pass
 
-    def plot_fluence(self, imager: Imager):
+    def plot_fluence(self, imager: Imager) -> None:
         """Plot the fluence for the reference and dynamic beams
 
         Parameters

@@ -100,7 +100,7 @@ class PicketFence(QAProcedure):
                 if self.stack == Stack.PROXIMAL:
                     dist_mlc.park(meterset=meterset)
 
-        beam = Beam.for_halcyon(
+        beam = Beam.to_halcyon(
             beam_name=self.beam_name,
             gantry_angles=self.gantry_angle,
             coll_angle=self.coll_angle,

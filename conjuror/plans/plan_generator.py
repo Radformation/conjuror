@@ -346,7 +346,7 @@ class Beam(ABC):
 
 
     @classmethod
-    def for_truebeam(
+    def to_truebeam(
         cls,
         mlc_is_hd: bool,
         beam_name: str,
@@ -447,7 +447,7 @@ class Beam(ABC):
 
 
     @classmethod
-    def for_halcyon(
+    def to_halcyon(
         cls,
         beam_name: str,
         metersets: Sequence[float],
@@ -520,7 +520,20 @@ class Beam(ABC):
             couch_rot=0,
         )
 
-    def generate_fluence(self, imager: Imager):
+    def generate_fluence(self, imager: Imager) -> np.ndarray:
+        """Generate the fluence map from the RT Plan.
+
+        Parameters
+        ----------
+        imager : Imager
+            The imager to use to generate the images. This provides the
+            size of the image and the pixel size.
+
+        Returns
+        -------
+        np.ndarray
+            The fluence map. Will be the same shape as the imager.
+        """
         meterset_per_cp = np.diff(self.metersets, prepend=0)
         x = imager.pixel_size * (np.arange(imager.shape[1]) - (imager.shape[1] - 1) / 2)
         y = imager.pixel_size * (np.arange(imager.shape[0]) - (imager.shape[0] - 1) / 2)
