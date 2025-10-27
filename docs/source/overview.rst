@@ -29,8 +29,6 @@ For detailed reference:
 
 `DICOM Composite Information Object Definitions <https://dicom.nema.org/medical/dicom/current/output/html/part03.html#chapter_A>`__
 
-`DICOM RT Plan IOD <https://dicom.nema.org/medical/dicom/current/output/html/part03.html#sect_A.20>`__
-
 
 Design and Conventions
 ----------------------
@@ -44,19 +42,6 @@ Conjuror follows established clinical and engineering conventions for radiation 
 * IEC 61217 is adopted as the coordinate system standard.
 
   *IEC. 2011. Ed 2. Radiotherapy Equipment - Coordinates, Movements and Scales.*
-
-System Compatibility
---------------------
-
-Conjuror is tailored for the Varian platforms:
-
-* `ARIA <https://varian.widen.net/s/jdrkjxxqj8/varian_dicomworklist_v18.1_dicomconformancestatement>`__
-
-* `TrueBeam <https://varian.widen.net/s/kvprxqw7zm/varian_truebeam_v4.1_dicom_conformance_statement>`__
-
-* `Halcyon <https://varian.widen.net/s/bnbzp6vs77/varian_halcyon_imaging_v4.0_dicom_conformance_statement>`__
-
-The generated RT objects adhere to system-specific DICOM tag structures and private data elements known to these platforms.
 
 Dependencies and Integration
 ----------------------------

@@ -12,4 +12,11 @@
 
    overview
 
+.. toctree::
+   :hidden:
+   :caption: PlanGen
+
+   plans/overview
+   plans/create_plans
+
 
