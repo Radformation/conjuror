@@ -44,13 +44,3 @@ The Plan Generator operates using the following core entities and their relation
 * **Procedure** - Represents a logical grouping of Beams based on domain-specific use cases. Although Procedure is not a DICOM-standard entity, it facilitates the creation of QA tests. For example, a Winston–Lutz procedure may include multiple Beams, each corresponding to a unique combination of gantry, collimator, and couch positions.
 
 * **Plan** - Represents a DICOM RT Plan that encompasses all Beams across all Procedures. Since Procedure is not part of the DICOM hierarchy, Beams in a Plan are stored as a sequential, ungrouped list. Per DICOM standard it also contains the information about the patient and other metadata.
-
-
-
-
-
-
-
-
-
-

@@ -176,4 +176,3 @@ Custom procedures can be created by extending the ``QAProcedureBase`` abstract c
         machine = TrueBeamMachine(mlc_is_hd=False)
         circle = CircleProcedure.from_machine(machine, radius = 5.0)
         circle.plot()
-

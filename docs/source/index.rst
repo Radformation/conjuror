@@ -18,5 +18,3 @@
 
    plans/overview
    plans/create_plans
-
-
