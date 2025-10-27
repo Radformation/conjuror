@@ -60,4 +60,4 @@ Integration
 
 * pylinac – integration for image analysis.
 
-* RadMachine – integration for UI interface within Radformation’s machine QA environment.
+* RadMachine - integration for graphical interface within Radformation’s machine QA environment.
