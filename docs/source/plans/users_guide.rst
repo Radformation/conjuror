@@ -153,7 +153,7 @@ By default, most machines use a set of standard parameter values. However, when 
 Create custom procedures
 ########################
 
-Custom procedures can be created by extending the ``QAProcedureBase`` abstract class. When creating a custom procedure a target machine needs to be specified (for example when creating a new procedure to create a circle, the MLC leaf side boundaries need to be known). To facilitate the creation of procedures without the need of a base plan, one case create a ``Machine`` class and then create a procedure using the ``.from_machine`` class method.
+Custom procedures can be created by extending the ``QAProcedureBase`` abstract class. When defining a custom procedure, a target machine must be specified — for example, when implementing a procedure to create a circle, the MLC leaf side boundaries need to be known. To simplify procedure creation without relying on a base plan, you can instantiate a ``Machine`` class and then generate the procedure using the ``.from_machine`` class method.
 
 .. code-block:: python
 
@@ -166,12 +166,12 @@ Custom procedures can be created by extending the ``QAProcedureBase`` abstract c
         radius: float
 
         def compute(self):
-            pass
             # business logic
+            pass
 
         def plot(self):
-            pass
             # business logic
+            pass
 
     def test_circle():
         machine = TrueBeamMachine(mlc_is_hd=False)
