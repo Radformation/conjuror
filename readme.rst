@@ -24,6 +24,18 @@ To install the development version of Conjuror, clone the repository and install
      uv venv
      uv pip install .[developer]
 
+Additionally, the developer should install ``pre-commit`` hooks to ensure linting and format consistency:
+
+.. code-block:: console
+
+    pre-commit install
+
+For one-off checks of the repo:
+
+.. code-block:: console
+
+   pre-commit run --all-files
+
 Usage
 =====
 
