@@ -17,4 +17,4 @@
    :caption: PlanGen
 
    plans/overview
-   plans/create_plans
+   plans/users_guide

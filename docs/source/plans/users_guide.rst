@@ -1,6 +1,6 @@
-=====
-Usage
-=====
+============
+User's guide
+============
 
 Typical use
 -----------
@@ -128,6 +128,15 @@ The Plan Generator accounts for specific machine parameters — such as maximum 
 
 By default, most machines use a set of standard parameter values. However, when necessary, it is possible to define custom machine specifications to reflect site-specific configurations or non-standard equipment. There are two supported methods for creating custom machine specifications:
 
+* take default machine specs and replace one or more parameters.
+
+.. code-block:: python
+
+    from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator, DEFAULT_SPECS_TB
+    specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=4.8, max_mlc_speed=20)
+    generator = TrueBeamPlanGenerator(..., machine_specs=machine_specs)
+
+
 * create new machine specs via ``MachineSpecs``
 
 .. code-block:: python
@@ -138,14 +147,6 @@ By default, most machines use a set of standard parameter values. However, when 
        max_mlc_position=200,
        max_mlc_overtravel=100,
        max_mlc_speed = 20)
-    generator = TrueBeamPlanGenerator(..., machine_specs=machine_specs)
-
-* take default machine specs and replace one or more parameters.
-
-.. code-block:: python
-
-    from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator, DEFAULT_SPECS_TB
-    specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=4.8, max_mlc_speed=20)
     generator = TrueBeamPlanGenerator(..., machine_specs=machine_specs)
 
 
