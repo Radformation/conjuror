@@ -71,8 +71,7 @@ class FluenceMode(Enum):
 
 
 class BeamBase(ABC):
-    """Represents a DICOM beam dataset. Has methods for creating the dataset and adding control points.
-    """
+    """Represents a DICOM beam dataset. Has methods for creating the dataset and adding control points."""
 
     ROUNDING_DECIMALS = 6
 

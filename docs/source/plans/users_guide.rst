@@ -199,4 +199,3 @@ Derived classes - Halcyon
 ##########################
 .. autoclass:: conjuror.plans.plan_generator_halcyon.PlanGenerator
 .. autoclass:: conjuror.plans.plan_generator_halcyon.Beam
-
