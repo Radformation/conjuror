@@ -24,6 +24,8 @@ extensions = [
     "sphinx_design",
 ]
 
+autoclass_content = "both"
+
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

@@ -177,3 +177,26 @@ Custom procedures can be created by extending the ``QAProcedureBase`` abstract c
         machine = TrueBeamMachine(mlc_is_hd=False)
         circle = CircleProcedure.from_machine(machine, radius = 5.0)
         circle.plot()
+
+
+API
+---
+
+Base classes
+############
+
+.. autoclass:: conjuror.plans.plan_generator_base.PlanGenerator
+.. autoclass:: conjuror.plans.plan_generator_base.QAProcedureBase
+.. autoclass:: conjuror.plans.plan_generator_base.BeamBase
+.. autoclass:: conjuror.plans.plan_generator_base.MachineSpecs
+
+Derived classes - TrueBeam
+##########################
+.. autoclass:: conjuror.plans.plan_generator_truebeam.PlanGenerator
+.. autoclass:: conjuror.plans.plan_generator_truebeam.Beam
+
+Derived classes - Halcyon
+##########################
+.. autoclass:: conjuror.plans.plan_generator_halcyon.PlanGenerator
+.. autoclass:: conjuror.plans.plan_generator_halcyon.Beam
+
