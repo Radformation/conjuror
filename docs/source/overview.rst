@@ -5,8 +5,7 @@ General Overview
 Conjuror
 --------
 
-Conjuror is a Python-based toolkit designed to generate DICOM objects for use in radiation therapy workflows.
-It simplifies the creation and manipulation of specialized DICOM files, specifically:
+Conjuror is a Python-based toolkit designed to generate DICOM objects for use in radiation therapy machine QA workflows. It simplifies the creation and manipulation of specialized DICOM files, specifically:
 
 * RT Plan (Radiotherapy Plan) objects
 

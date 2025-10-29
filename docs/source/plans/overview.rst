@@ -1,9 +1,9 @@
-================
-PlanGen Overview
-================
+========
+Overview
+========
 
-PlanGen
---------
+Plan Generator
+--------------
 
 The Plan Generator enables users to create custom RT DICOM plans specifically designed for machine quality assurance (QA) workflows. The Plan Generator provides a flexible feature set that allows it to operate as a standalone tool or within RadMachine.
 
