@@ -11,3 +11,10 @@
    :caption: Introduction
 
    overview
+
+.. toctree::
+   :hidden:
+   :caption: PlanGen
+
+   plans/overview
+   plans/users_guide
