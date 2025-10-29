@@ -24,7 +24,7 @@ Typical use
 Creating a generator
 --------------------
 
-To use the Plan Generator, a base RT Plan file (or dataset) is required from the specific machine and institution for which the plans will be generated. In most cases, the resulting plan will be imported into Eclipse and associated with an existing patient. Using a base plan as a template ensures that machine and patient identifiers remain consistent with the clinical database.
+To use the Plan Generator, a base RT Plan file (or dataset) is required from the specific machine and institution for which the plans will be generated (see :ref:`creating-a-base-plan`). In most cases, the resulting plan will be imported into Eclipse and associated with an existing patient. Using a base plan as a template ensures that machine and patient identifiers remain consistent with the clinical database.
 
 While plans created with the Plan Generator can, in principle, be loaded directly onto the treatment machine, it is recommended to first import them into Eclipse. Eclipse performs comprehensive plan validation, ensuring all tags conform to machine specifications. After validation, the plan can then be exported from Eclipse for delivery on the machine.
 
@@ -34,12 +34,13 @@ While plans created with the Plan Generator can, in principle, be loaded directl
     rt_plan_file = r"C:\path\to\base_plan_truebeam_millennium_mlc.dcm"
     generator = TrueBeamPlanGenerator(rt_plan_file, plan_name="New QA Plan", plan_label="New QA")
 
-    or
+    # or
 
     from conjuror.plans.plan_generator_halcyon import HalcyonPlanGenerator
     rt_plan_file = r"C:\path\to\base_plan_halcyon.dcm"
     generator = HalcyonPlanGenerator(rt_plan_file, plan_name="New QA Plan", plan_label="New QA")
 
+.. _creating-a-base-plan:
 
 Creating a base plan
 ####################
@@ -128,7 +129,7 @@ The Plan Generator accounts for specific machine parameters — such as maximum 
 
 By default, most machines use a set of standard parameter values. However, when necessary, it is possible to define custom machine specifications to reflect site-specific configurations or non-standard equipment. There are two supported methods for creating custom machine specifications:
 
-* take default machine specs and replace one or more parameters.
+* Take default machine specs and replace one or more parameters.
 
 .. code-block:: python
 
@@ -137,7 +138,7 @@ By default, most machines use a set of standard parameter values. However, when 
     generator = TrueBeamPlanGenerator(..., machine_specs=machine_specs)
 
 
-* create new machine specs via ``MachineSpecs``
+* Create new machine specs via ``MachineSpecs``
 
 .. code-block:: python
 
