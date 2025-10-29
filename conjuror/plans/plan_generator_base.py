@@ -71,11 +71,7 @@ class FluenceMode(Enum):
 
 
 class BeamBase(ABC):
-    """Represents a DICOM beam dataset. Has methods for creating the dataset and adding control points.
-    Generally not created on its own but rather under the hood as part of a PlanGenerator object.
-
-    It contains enough independent logic steps that it's worth separating out from the PlanGenerator class.
-    """
+    """Represents a DICOM beam dataset. Has methods for creating the dataset and adding control points."""
 
     ROUNDING_DECIMALS = 6
 
@@ -401,8 +397,7 @@ class PlanGenerator(ABC):
         patient_id: str | None,
         machine_specs: MachineSpecs,
     ):
-        """A tool for generating new QA RTPlan files based on an initial, somewhat empty RTPlan file.
-
+        """
         Parameters
         ----------
         ds : Dataset

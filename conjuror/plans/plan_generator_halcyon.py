@@ -41,7 +41,7 @@ class Stack(Enum):
     BOTH = "both"
 
 
-class HalcyonBeam(BeamBase):
+class Beam(BeamBase):
     """A class that represents a Halcyon beam."""
 
     def __init__(
@@ -209,7 +209,7 @@ class PicketFence(QAProcedure):
                 if self.stack == Stack.PROXIMAL:
                     dist_mlc.park(meterset=meterset)
 
-        beam = HalcyonBeam(
+        beam = Beam(
             beam_name=self.beam_name,
             gantry_angles=self.gantry_angle,
             coll_angle=self.coll_angle,
