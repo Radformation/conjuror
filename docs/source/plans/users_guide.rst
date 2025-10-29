@@ -7,11 +7,12 @@ Typical use
 
 .. code-block:: python
 
-    from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator
+    from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator, OpenField
+    import pydicom
 
     # create generator
-    rt_plan_file = r"C:\path\to\base_plan_truebeam_millennium_mlc.dcm"
-    generator = TrueBeamPlanGenerator(rt_plan_file, plan_name="New QA Plan", plan_label="New QA")
+    base_plan = pydicom.dcmread(r"C:\path\to\base_plan_truebeam_millennium_mlc.dcm")
+    generator = TrueBeamPlanGenerator(base_plan, plan_name="New QA Plan", plan_label="New QA")
 
     # add procedures
     procedure = OpenField(x1=-5, x2=5, y1=-10, y2=110, defined_by_mlcs=True, padding_mm=10)
@@ -30,15 +31,17 @@ While plans created with the Plan Generator can, in principle, be loaded directl
 
 .. code-block:: python
 
+    import pydicom
+
     from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator
-    rt_plan_file = r"C:\path\to\base_plan_truebeam_millennium_mlc.dcm"
-    generator = TrueBeamPlanGenerator(rt_plan_file, plan_name="New QA Plan", plan_label="New QA")
+    base_plan = pydicom.dcmread(r"C:\path\to\base_plan_truebeam_millennium_mlc.dcm")
+    generator = TrueBeamPlanGenerator(base_plan, plan_name="New QA Plan", plan_label="New QA")
 
     # or
 
     from conjuror.plans.plan_generator_halcyon import HalcyonPlanGenerator
-    rt_plan_file = r"C:\path\to\base_plan_halcyon.dcm"
-    generator = HalcyonPlanGenerator(rt_plan_file, plan_name="New QA Plan", plan_label="New QA")
+    base_plan = pydicom.dcmread(r"C:\path\to\base_plan_halcyon.dcm")
+    generator = HalcyonPlanGenerator(base_plan, plan_name="New QA Plan", plan_label="New QA")
 
 .. _creating-a-base-plan:
 
@@ -72,7 +75,7 @@ The required tags in the base plan are:
 * Patient Name (0010, 0010) - This isn't changed, just referenced so that the exported plan has the same patient name.
 * Patient ID (0010, 0020) - This isn't changed, just referenced so that the exported plan has the same patient ID.
 * Machine Name (300A, 00B2) - This isn't changed, just referenced so that the exported plan has the same machine name.
-* Tolerance Table Sequence (300A, 0046) - This is required when trying to and will be reference by the generated beams. Only
+* Tolerance Table Sequence (300A, 0046) - This is required and will be reference by the generated beams. Only
   the first tolerance table is considered. This is not changed by the generator.
 * BeamSequence (300A, 00B0) - This is required for Truebeam machines to identify the MLC configuration (Millennium MLC or HD MLC). Specifically, the ``LeafPositionBoundaries`` of the last ``BeamLimitingDeviceSequence`` of the first beam.
 
@@ -83,7 +86,7 @@ The required tags in the base plan are:
 Modified tags from base plan
 ############################
 
-The metadata of the new plan will be mostly copied from the base plan with a few exception:
+The metadata of the new plan will be mostly copied from the base plan with a few exceptions:
 
 * RT Plan Label (300A, 0003) - This is changed to reflect the new plan label.
 * RT Plan Name (300A, 0002) - This is changed to reflect the new plan name.
@@ -135,20 +138,21 @@ By default, most machines use a set of standard parameter values. However, when 
 
     from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator, DEFAULT_SPECS_TB
     specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=4.8, max_mlc_speed=20)
-    generator = TrueBeamPlanGenerator(..., machine_specs=machine_specs)
+    generator = TrueBeamPlanGenerator(..., machine_specs=specs)
 
 
 * Create new machine specs via ``MachineSpecs``
 
 .. code-block:: python
 
-    from conjuror.plans.plan_generator import TrueBeamPlanGenerator, MachineSpecs
+    from conjuror.plans.plan_generator_base import MachineSpecs
+    from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator
     specs = MachineSpecs(
        max_gantry_speed=4.8,
        max_mlc_position=200,
        max_mlc_overtravel=100,
        max_mlc_speed = 20)
-    generator = TrueBeamPlanGenerator(..., machine_specs=machine_specs)
+    generator = TrueBeamPlanGenerator(..., machine_specs=specs)
 
 
 Create custom procedures
@@ -158,7 +162,8 @@ Custom procedures can be created by extending the ``QAProcedureBase`` abstract c
 
 .. code-block:: python
 
-    from conjuror.plans.plan_generator import QAProcedureBase, TrueBeamMachine
+    from conjuror.plans.plan_generator_base import QAProcedureBase
+    from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator
 
     @dataclass
     class CircleProcedure(QAProcedureBase):
