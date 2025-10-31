@@ -113,8 +113,8 @@ Once the plan generator has been created, QA procedures can be added to the plan
     procedure = OpenField(x1=-5, x2=5, y1=-10, y2=110, defined_by_mlcs=True, padding_mm=10)
     generator.add_procedure(procedure)
 
-Pre-defined procedures ** TO BE IMPLEMENTED **
-----------------------------------------------
+Pre-defined procedures
+----------------------
 
 The plan generator comes with pre-defined procedures for typical QA tests (Picket-Fence, Open field, etc). For a comprehensive list of available procedures use the list_procedure method:
 

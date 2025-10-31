@@ -324,6 +324,13 @@ class TestPlanGeneratorBeams(TestCase):
         self.assertIsInstance(figs, list)
         self.assertIsInstance(figs[0], Figure)
 
+    def test_list_procedure(self):
+        procedures = self.pg.list_procedures()
+        self.assertEqual(len(procedures), 8)
+
+        procedures = TrueBeamPlanGenerator.list_procedures()
+        self.assertEqual(len(procedures), 8)
+
 
 class TestPlanPrefabs(TestCase):
     def setUp(self) -> None:

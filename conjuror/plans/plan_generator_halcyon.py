@@ -1,4 +1,3 @@
-from abc import ABC
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -117,10 +116,8 @@ class Beam(BeamBase):
             couch_rot=0,
         )
 
-
-class QAProcedure(QAProcedureBase, ABC):
     @staticmethod
-    def _create_mlc(machine: HalcyonMachine) -> tuple[MLCShaper, MLCShaper]:
+    def create_mlc(machine: HalcyonMachine) -> tuple[MLCShaper, MLCShaper]:
         """Create 2 MLC shaper objects, one for each stack."""
         proximal_mlc = MLCShaper(
             leaf_y_positions=machine.mlc_boundaries_prox,
@@ -140,7 +137,7 @@ class QAProcedure(QAProcedureBase, ABC):
 
 
 @dataclass
-class PicketFence(QAProcedure):
+class PicketFence(QAProcedureBase):
     """Add a picket fence beam to the plan. The beam will be delivered with the MLCs stacked on top of each other.
 
     Parameters
@@ -179,7 +176,7 @@ class PicketFence(QAProcedure):
     beam_name: str = "PF"
 
     def compute(self):
-        prox_mlc, dist_mlc = self._create_mlc(self.machine)
+        prox_mlc, dist_mlc = Beam.create_mlc(self.machine)
 
         # we prepend the positions with an initial starting position 2mm from the first strip
         # that way, each picket is the same cadence where the leaves move into position dynamically.

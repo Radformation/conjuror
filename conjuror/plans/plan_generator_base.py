@@ -1,4 +1,6 @@
 import datetime
+import inspect
+import sys
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
@@ -601,6 +603,16 @@ class PlanGenerator(ABC):
             )
             image_ds.append(ds)
         return image_ds
+
+    @classmethod
+    def list_procedures(cls) -> list[str]:
+        module = sys.modules[cls.__module__]
+        procedures = [
+            name
+            for name, _cls in inspect.getmembers(module, inspect.isclass)
+            if issubclass(_cls, QAProcedureBase) and _cls is not QAProcedureBase
+        ]
+        return procedures
 
 
 class OvertravelError(ValueError):

@@ -1,5 +1,4 @@
 import math
-from abc import ABC
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Literal
@@ -156,11 +155,8 @@ class Beam(BeamBase):
             couch_rot=couch_rot,
         )
 
-
-@dataclass
-class QAProcedure(QAProcedureBase, ABC):
     @staticmethod
-    def _create_mlc(
+    def create_mlc(
         machine: TrueBeamMachine,
         sacrifice_gap_mm: float = None,
         sacrifice_max_move_mm: float = None,
@@ -176,7 +172,7 @@ class QAProcedure(QAProcedureBase, ABC):
 
 
 @dataclass
-class OpenField(QAProcedure):
+class OpenField(QAProcedureBase):
     """Create an open field beam.
 
     Parameters
@@ -246,7 +242,7 @@ class OpenField(QAProcedure):
         else:
             mlc_padding = self.padding_mm
             jaw_padding = 0
-        mlc = self._create_mlc(self.machine)
+        mlc = Beam.create_mlc(self.machine)
         mlc.add_rectangle(
             left_position=self.x1 - mlc_padding,
             right_position=self.x2 + mlc_padding,
@@ -279,7 +275,7 @@ class OpenField(QAProcedure):
 
 
 @dataclass
-class MLCTransmission(QAProcedure):
+class MLCTransmission(QAProcedureBase):
     """Add a single-image MLC transmission beam to the plan.
     The beam is delivered with the MLCs closed and moved to one side underneath the jaws.
 
@@ -340,7 +336,7 @@ class MLCTransmission(QAProcedure):
     fluence_mode: FluenceMode = FluenceMode.STANDARD
 
     def compute(self):
-        mlc = self._create_mlc(self.machine)
+        mlc = Beam.create_mlc(self.machine)
         if self.bank == "A":
             mlc_tips = self.x2 + self.overreach
         elif self.bank == "B":
@@ -383,7 +379,7 @@ class MLCTransmission(QAProcedure):
 
 
 @dataclass
-class PicketFence(QAProcedure):
+class PicketFence(QAProcedureBase):
     """Add a picket fence beam to the plan.
 
     Parameters
@@ -455,7 +451,7 @@ class PicketFence(QAProcedure):
             raise ValueError(
                 "Picket fence beam exceeds MLC overtravel limits. Lower padding, the number of pickets, or the picket spacing."
             )
-        mlc = self._create_mlc(
+        mlc = Beam.create_mlc(
             self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
         )
         # create initial starting point; start under the jaws
@@ -495,7 +491,7 @@ class PicketFence(QAProcedure):
 
 
 @dataclass
-class WinstonLutz(QAProcedure):
+class WinstonLutz(QAProcedureBase):
     """Add Winston-Lutz beams to the plan. Will create a beam for each set of axes positions.
     Field names are generated automatically based on the axes positions.
 
@@ -555,7 +551,7 @@ class WinstonLutz(QAProcedure):
             else:
                 mlc_padding = self.padding_mm
                 jaw_padding = 0
-            mlc = self._create_mlc(self.machine)
+            mlc = Beam.create_mlc(self.machine)
             mlc.add_rectangle(
                 left_position=self.x1 - mlc_padding,
                 right_position=self.x2 + mlc_padding,
@@ -592,7 +588,7 @@ class WinstonLutz(QAProcedure):
 
 
 @dataclass
-class DoseRate(QAProcedure):
+class DoseRate(QAProcedureBase):
     """Create a single-image dose rate test. Multiple ROIs are generated. A reference beam is also
     created where all ROIs are delivered at the default dose rate for comparison.
     The field names are generated automatically based on the min and max dose rates tested.
@@ -678,10 +674,10 @@ class DoseRate(QAProcedure):
             tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition
         ]
 
-        mlc = self._create_mlc(
+        mlc = Beam.create_mlc(
             self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
         )
-        ref_mlc = self._create_mlc(self.machine)
+        ref_mlc = Beam.create_mlc(self.machine)
 
         roi_centers = np.linspace(
             -self.roi_size_mm * len(self.dose_rates) / 2 + self.roi_size_mm / 2,
@@ -780,7 +776,7 @@ class DoseRate(QAProcedure):
 
 
 @dataclass
-class MLCSpeed(QAProcedure):
+class MLCSpeed(QAProcedureBase):
     """Create a single-image MLC speed test. Multiple speeds are generated. A reference beam is also
     generated. The reference beam is delivered at the maximum MLC speed.
 
@@ -878,10 +874,10 @@ class MLCSpeed(QAProcedure):
             tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition
         ]
 
-        mlc = self._create_mlc(
+        mlc = Beam.create_mlc(
             self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
         )
-        ref_mlc = self._create_mlc(self.machine)
+        ref_mlc = Beam.create_mlc(self.machine)
 
         roi_centers = np.linspace(
             -self.roi_size_mm * len(self.speeds) / 2 + self.roi_size_mm / 2,
@@ -980,7 +976,7 @@ class MLCSpeed(QAProcedure):
 
 
 @dataclass
-class GantrySpeed(QAProcedure):
+class GantrySpeed(QAProcedureBase):
     """Create a single-image gantry speed test. Multiple speeds are generated. A reference beam is also
     generated. The reference beam is delivered without gantry movement.
 
@@ -1082,8 +1078,8 @@ class GantrySpeed(QAProcedure):
                 "Gantry travel is >360 degrees. Lower the beam MU, use fewer speeds, or decrease the desired gantry speeds"
             )
 
-        mlc = self._create_mlc(self.machine)
-        ref_mlc = self._create_mlc(self.machine)
+        mlc = Beam.create_mlc(self.machine)
+        ref_mlc = Beam.create_mlc(self.machine)
 
         roi_centers = np.linspace(
             -self.roi_size_mm * len(self.speeds) / 2 + self.roi_size_mm / 2,
@@ -1158,7 +1154,7 @@ class GantrySpeed(QAProcedure):
 
 
 @dataclass
-class VMATDRGS(QAProcedure):
+class VMATDRGS(QAProcedureBase):
     """Create beams like Clif Ling VMAT DRGS tests. The defaults use an optimized selection for a TrueBeam.
 
     Parameters
