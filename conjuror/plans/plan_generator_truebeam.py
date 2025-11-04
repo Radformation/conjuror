@@ -1519,12 +1519,9 @@ class VMATDRGS(QAProcedureBase):
         imager : Imager
             The target imager.
         """
-        beams = {"Reference": self.reference_beam, "Dynamic": self.dynamic_beam}
-        for idx, (title, beam) in enumerate(beams.items()):
-            fluence = beam.generate_fluence(imager)
-            plt.subplot(1, 2, idx + 1)
-            plt.imshow(fluence)
-            plt.title(title)
+        fog, (ax1, ax2) = plt.subplots(1, 2)
+        self.reference_beam.plot_fluence(imager, ax1)
+        self.dynamic_beam.plot_fluence(imager, ax2)
         plt.show()
 
     def plot_fluence_profile(self, imager: Imager, zoom: float = 10):

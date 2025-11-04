@@ -11,7 +11,9 @@ from typing import Self, TypeVar, Generic
 
 import numpy as np
 import pydicom
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 from pydicom.uid import generate_uid
@@ -356,6 +358,27 @@ class BeamBase(ABC):
 
         fluence = np.min(stack_fluences, axis=0)
         return fluence
+
+    def plot_fluence(self, imager: Imager, ax: Axes = None) -> None:
+        """Plot the fluence map from the RT Beam.
+
+        Parameters
+        ----------
+        imager : Imager
+            The imager to use to generate the images. This provides the
+            size of the image and the pixel size.
+        ax : Axes, optional
+            The axes to use for plotting. If not provided, a new figure is created.
+        """
+        show = False
+        if ax is None:
+            fig, ax = plt.subplots()
+            show = True
+        fluence = self.generate_fluence(imager)
+        ax.imshow(fluence)
+        ax.set_title(self._beam_name)
+        if show:
+            plt.show()
 
 
 @dataclass

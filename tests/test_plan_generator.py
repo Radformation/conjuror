@@ -4,6 +4,7 @@ from unittest import TestCase
 import numpy as np
 import pydicom
 from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
@@ -265,6 +266,21 @@ class TestBeam(TestCase):
             .LeafJawPositions,
             [-11, 13],
         )
+
+    def test_plot_fluence(self):
+        # just tests it works
+        machine = TrueBeamMachine(mlc_is_hd=True)
+        procedure = OpenField.from_machine(machine, x1=-5, x2=7, y1=-11, y2=13)
+        beam = procedure.beams[0]
+
+        # new figure
+        beam.plot_fluence(IMAGER_AS1200)
+
+        # existing figure
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        beam.plot_fluence(IMAGER_AS1200, ax1)
+        beam.plot_fluence(IMAGER_AS1200, ax2)
+        plt.show()
 
 
 class TestPlanGeneratorBeams(TestCase):
