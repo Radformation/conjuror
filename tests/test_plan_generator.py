@@ -3,7 +3,7 @@ from unittest import TestCase
 
 import numpy as np
 import pydicom
-from matplotlib.figure import Figure
+from plotly.graph_objects import Figure
 import matplotlib.pyplot as plt
 from parameterized import parameterized
 

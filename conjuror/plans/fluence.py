@@ -1,7 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
-from matplotlib.figure import Figure
-from matplotlib.patches import Rectangle
+from plotly import graph_objects as go
 from pydicom import Dataset
 
 
@@ -116,7 +115,7 @@ def plot_fluences(
     resolution_mm: float,
     dtype: np.dtype = np.uint16,
     show: bool = True,
-) -> list[Figure]:
+) -> list[go.Figure]:
     """Plot the fluences of the dataset. Generates N figures where N is the number of Beams in the plan BeamSequence.
 
     Parameters
@@ -135,7 +134,7 @@ def plot_fluences(
     Returns
     -------
     list[Figure]
-        A list of matplotlib figures, one for each beam in the plan.
+        A list of plotly figures, one for each beam in the plan.
     """
     fluences = generate_fluences(plan, width_mm, resolution_mm, dtype)
     if len(fluences) == 0:
@@ -143,12 +142,20 @@ def plot_fluences(
     m = fluences.max()
     figs = []
     for i, fluence in enumerate(fluences):
-        fig, ax = plt.subplots()
-        ax.imshow(fluence, vmin=0, vmax=m)
-        ax.set_title(f"{plan.BeamSequence[i].BeamName}")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        # now plot the jaw positions as vertical/horizontal lines
+        fig = go.Figure()
+        fig.add_heatmap(
+            z=fluence,
+            colorscale="Viridis",
+            zmin=0,
+            zmax=m,
+            colorbar=dict(title="Fluence (a.u.)"),
+            showscale=True,
+        )
+        fig.update_layout(
+            title=f"Fluence Map - {plan.BeamSequence[i].BeamName}",
+        )
+
+        # now plot the jaw positions
         beam = plan.BeamSequence[i]
         cp = beam.ControlPointSequence[0]
         scale = 1 / resolution_mm
@@ -170,14 +177,14 @@ def plot_fluences(
             cp.BeamLimitingDevicePositionSequence[1].LeafJawPositions[1] * scale
             + y_offset
         )
-        rect = Rectangle(
-            xy=(left_x_jaw, bottom_y_jaw),
-            width=right_x_jaw - left_x_jaw,
-            height=top_y_jaw - bottom_y_jaw,
-            fill=False,
-            color="r",
+        fig.add_shape(
+            type="rect",
+            x0=left_x_jaw,
+            y0=bottom_y_jaw,
+            x1=right_x_jaw,
+            y1=top_y_jaw,
+            line=dict(color="red", width=2),
         )
-        ax.add_patch(rect)
         figs.append(fig)
     if show:
         plt.show()
