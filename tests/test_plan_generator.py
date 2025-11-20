@@ -8,18 +8,22 @@ import matplotlib.pyplot as plt
 from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
-from conjuror.plans import plan_generator_halcyon, plan_generator_truebeam
+from conjuror.plans import halcyon, truebeam
 from conjuror.plans.mlc import (
     interpolate_control_points,
     next_sacrifice_shift,
     split_sacrifice_travel,
     MLCShaper,
 )
-from conjuror.plans.plan_generator_base import BeamBase, FluenceMode, OvertravelError
-from conjuror.plans.plan_generator_halcyon import HalcyonPlanGenerator, Stack
-from conjuror.plans.plan_generator_truebeam import (
+from conjuror.plans.plan_generator import (
+    BeamBase,
+    FluenceMode,
+    OvertravelError,
+    PlanGenerator,
+)
+from conjuror.plans.halcyon import Stack, HalcyonMachine
+from conjuror.plans.truebeam import (
     TrueBeamMachine,
-    TrueBeamPlanGenerator,
     OpenField,
     Beam,
     DoseRate,
@@ -32,33 +36,45 @@ from conjuror.plans.plan_generator_truebeam import (
 )
 from tests.utils import get_file_from_cloud_test_repo
 
-RT_PLAN_FILE = get_file_from_cloud_test_repo(["plan_generator", "Murray-plan.dcm"])
-RT_PLAN_DS = pydicom.dcmread(RT_PLAN_FILE)
-HALCYON_PLAN_FILE = get_file_from_cloud_test_repo(
-    ["plan_generator", "Halcyon Prox.dcm"]
-)
+TB_PLAN_FILE = get_file_from_cloud_test_repo(["plan_generator", "Murray-plan.dcm"])
+TB_PLAN_DS = pydicom.dcmread(TB_PLAN_FILE)
+HAL_PLAN_FILE = get_file_from_cloud_test_repo(["plan_generator", "Halcyon Prox.dcm"])
 
 DEFAULT_TRUEBEAM_HD120 = TrueBeamMachine(mlc_is_hd=True)
 
 
-class TestPlanGenerator(TestCase):
-    def test_from_rt_plan_file(self):
-        # shouldn't raise; happy path
-        TrueBeamPlanGenerator.from_rt_plan_file(
-            RT_PLAN_FILE, plan_label="label", plan_name="my name"
-        )
+def _get_generator_from_dataset(dataset):
+    return PlanGenerator(dataset, plan_label="label", plan_name="name")
+
+
+def _get_generator_from_file(file):
+    return PlanGenerator.from_rt_plan_file(file, plan_label="label", plan_name="name")
+
+
+class TestPlanGeneratorCreation(TestCase):
+    GENERATOR_TEST_PARAMS = [
+        (TB_PLAN_FILE, TrueBeamMachine),
+        (HAL_PLAN_FILE, HalcyonMachine),
+    ]
+
+    @parameterized.expand(GENERATOR_TEST_PARAMS)
+    def test_from_dataset(self, file: str, plan_generator_type: type):
+        dataset = pydicom.dcmread(file)
+        pg = _get_generator_from_dataset(dataset)
+        self.assertIsInstance(pg.machine, plan_generator_type)
+
+    @parameterized.expand(GENERATOR_TEST_PARAMS)
+    def test_from_rt_plan_file(self, file: str, plan_generator_type: type):
+        pg = _get_generator_from_file(file)
+        self.assertIsInstance(pg.machine, plan_generator_type)
 
     def test_from_not_rt_plan_file(self):
         file = get_file_from_cloud_test_repo(["picket_fence", "AS500#2.dcm"])
         with self.assertRaises(ValueError):
-            TrueBeamPlanGenerator.from_rt_plan_file(
-                file, plan_label="label", plan_name="my name"
-            )
+            _get_generator_from_file(file)
 
     def test_to_file(self):
-        pg = TrueBeamPlanGenerator.from_rt_plan_file(
-            RT_PLAN_FILE, plan_label="label", plan_name="my name"
-        )
+        pg = _get_generator_from_file(TB_PLAN_FILE)
         pg.add_procedure(MLCSpeed())
         with tempfile.NamedTemporaryFile(delete=False) as t:
             pg.to_file(t.name)
@@ -67,93 +83,78 @@ class TestPlanGenerator(TestCase):
         self.assertEqual(ds.RTPlanLabel, "label")
         self.assertEqual(len(ds.BeamSequence), 2)
 
-    def test_from_rt_plan_dataset(self):
-        # happy path using a dicom dataset
-        dataset = pydicom.dcmread(RT_PLAN_FILE)
-        TrueBeamPlanGenerator(dataset, plan_label="label", plan_name="my name")
 
+class TestPlanGeneratorParameters(TestCase):
     def test_no_patient_id(self):
-        ds = pydicom.dcmread(RT_PLAN_FILE)
+        ds = pydicom.dcmread(TB_PLAN_FILE)
         ds.pop("PatientID")
         with self.assertRaises(ValueError):
-            TrueBeamPlanGenerator(ds, plan_label="label", plan_name="my name")
+            PlanGenerator(ds, plan_label="plan_label", plan_name="plan_name")
 
     def test_no_patient_name(self):
-        ds = pydicom.dcmread(RT_PLAN_FILE)
+        ds = pydicom.dcmread(TB_PLAN_FILE)
         ds.pop("PatientName")
         with self.assertRaises(ValueError):
-            TrueBeamPlanGenerator(ds, plan_label="label", plan_name="my name")
+            _get_generator_from_dataset(ds)
 
     def test_pass_patient_name(self):
-        ds = pydicom.dcmread(RT_PLAN_FILE)
-        pg = TrueBeamPlanGenerator(
-            ds, plan_label="label", plan_name="my name", patient_name="Jimbo Jones"
-        )
+        patient_name = "name"
+        ds = pydicom.dcmread(TB_PLAN_FILE)
+        pg = PlanGenerator(ds, plan_label="l", plan_name="n", patient_name=patient_name)
         pg_dcm = pg.as_dicom()
-        self.assertEqual(pg_dcm.PatientName, "Jimbo Jones")
+        self.assertEqual(pg_dcm.PatientName, patient_name)
 
     def test_pass_patient_id(self):
-        ds = pydicom.dcmread(RT_PLAN_FILE)
-        pg = TrueBeamPlanGenerator(
-            ds, plan_label="label", plan_name="my name", patient_id="12345"
-        )
+        patient_id = "id"
+        ds = pydicom.dcmread(TB_PLAN_FILE)
+        pg = PlanGenerator(ds, plan_label="l", plan_name="n", patient_id=patient_id)
         pg_dcm = pg.as_dicom()
-        self.assertEqual(pg_dcm.PatientID, "12345")
+        self.assertEqual(pg_dcm.PatientID, patient_id)
 
     def test_no_tolerance_table(self):
-        ds = pydicom.dcmread(RT_PLAN_FILE)
+        ds = pydicom.dcmread(TB_PLAN_FILE)
         ds.pop("ToleranceTableSequence")
         with self.assertRaises(ValueError):
-            TrueBeamPlanGenerator(ds, plan_label="label", plan_name="my name")
+            _get_generator_from_dataset(ds)
 
     def test_no_beam_sequence(self):
-        ds = pydicom.dcmread(RT_PLAN_FILE)
+        ds = pydicom.dcmread(TB_PLAN_FILE)
         ds.pop("BeamSequence")
         with self.assertRaises(ValueError):
-            TrueBeamPlanGenerator(ds, plan_label="label", plan_name="my name")
+            _get_generator_from_dataset(ds)
 
     def test_no_mlc_data(self):
-        ds = pydicom.dcmread(RT_PLAN_FILE)
+        ds = pydicom.dcmread(TB_PLAN_FILE)
         # pop MLC part of the data; at this point it's just an open field
         ds.BeamSequence[0].BeamLimitingDeviceSequence.pop()
         with self.assertRaises(ValueError):
-            TrueBeamPlanGenerator(ds, plan_label="label", plan_name="my name")
+            _get_generator_from_dataset(ds)
 
     def test_machine_name(self):
-        pg = TrueBeamPlanGenerator.from_rt_plan_file(
-            RT_PLAN_FILE, plan_label="label", plan_name="my name"
-        )
+        pg = _get_generator_from_file(TB_PLAN_FILE)
         self.assertEqual(pg.machine_name, "TrueBeamSN5837")
 
     def test_machine_name_set_on_beam(self):
         """Beam machine name is set when added to the plan"""
-        pg = TrueBeamPlanGenerator.from_rt_plan_file(
-            RT_PLAN_FILE, plan_label="label", plan_name="my name"
-        )
+        pg = _get_generator_from_file(TB_PLAN_FILE)
         pg.add_beam(create_beam())
         dcm = pg.as_dicom()
         self.assertEqual(dcm.BeamSequence[0].TreatmentMachineName, "TrueBeamSN5837")
 
     def test_leaf_boundaries(self):
-        pg = TrueBeamPlanGenerator.from_rt_plan_file(
-            RT_PLAN_FILE, plan_label="label", plan_name="my name"
-        )
+        pg = _get_generator_from_file(TB_PLAN_FILE)
         self.assertEqual(len(pg.machine.mlc_boundaries), 61)
         self.assertEqual(max(pg.machine.mlc_boundaries), 200)
         self.assertEqual(min(pg.machine.mlc_boundaries), -200)
 
     def test_instance_uid_changes(self):
-        dcm = pydicom.dcmread(RT_PLAN_FILE)
-        pg = TrueBeamPlanGenerator.from_rt_plan_file(
-            RT_PLAN_FILE, plan_label="label", plan_name="my name"
-        )
+        dcm = pydicom.dcmread(TB_PLAN_FILE)
+        pg = _get_generator_from_file(TB_PLAN_FILE)
         pg_dcm = pg.as_dicom()
         self.assertNotEqual(pg_dcm.SOPInstanceUID, dcm.SOPInstanceUID)
 
     def test_invert_array(self):
-        pg = TrueBeamPlanGenerator.from_rt_plan_file(
-            RT_PLAN_FILE, plan_label="label", plan_name="my name"
-        )
+        pg = _get_generator_from_file(TB_PLAN_FILE)
         procedure = OpenField(x1=100, x2=200, y1=100, y2=200, mu=100)
         pg.add_procedure(procedure)
         # test that non-inverted array is 0
@@ -166,19 +167,6 @@ class TestPlanGenerator(TestCase):
         inverted_array = pg_dcm[0].pixel_array
         # when inverted, the corner should NOT be 0
         self.assertAlmostEqual(float(inverted_array[0, 0]), 1000)
-
-    def test_incorrect_machine_type(self):
-        plan_file = RT_PLAN_FILE
-        with self.assertRaises(ValueError):
-            HalcyonPlanGenerator.from_rt_plan_file(
-                plan_file, plan_label="label", plan_name="my name"
-            )
-
-        plan_file = HALCYON_PLAN_FILE
-        with self.assertRaises(ValueError):
-            TrueBeamPlanGenerator.from_rt_plan_file(
-                plan_file, plan_label="label", plan_name="my name"
-            )
 
 
 def create_beam(**kwargs) -> BeamBase:
@@ -287,11 +275,7 @@ class TestPlanGeneratorBeams(TestCase):
     """Test real workflow where beams are added"""
 
     def setUp(self) -> None:
-        self.pg = TrueBeamPlanGenerator.from_rt_plan_file(
-            RT_PLAN_FILE,
-            plan_label="label",
-            plan_name="my name",
-        )
+        self.pg = _get_generator_from_file(TB_PLAN_FILE)
 
     def test_add_beam_low_level(self):
         self.pg.add_beam(create_beam(plan_dataset=self.pg.as_dicom()))
@@ -308,7 +292,7 @@ class TestPlanGeneratorBeams(TestCase):
             1,
         )
         nominal_boundaries = (
-            RT_PLAN_DS.BeamSequence[0]
+            TB_PLAN_DS.BeamSequence[0]
             .BeamLimitingDeviceSequence[-1]
             .LeafPositionBoundaries
         )
@@ -344,14 +328,11 @@ class TestPlanGeneratorBeams(TestCase):
         procedures = self.pg.list_procedures()
         self.assertEqual(len(procedures), 8)
 
-        procedures = TrueBeamPlanGenerator.list_procedures()
-        self.assertEqual(len(procedures), 8)
-
 
 class TestPlanPrefabs(TestCase):
     def setUp(self) -> None:
-        self.pg = TrueBeamPlanGenerator.from_rt_plan_file(
-            RT_PLAN_FILE,
+        self.pg = PlanGenerator.from_rt_plan_file(
+            TB_PLAN_FILE,
             plan_label="label",
             plan_name="my name",
         )
@@ -489,7 +470,7 @@ class TestPlanPrefabs(TestCase):
             self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
 
     def test_create_picket_fence(self):
-        procedure = plan_generator_truebeam.PicketFence(
+        procedure = truebeam.PicketFence(
             y1=-10,
             y2=10,
             mu=123,
@@ -532,7 +513,7 @@ class TestPlanPrefabs(TestCase):
 
     def test_picket_fence_too_wide(self):
         with self.assertRaises(ValueError):
-            procedure = plan_generator_truebeam.PicketFence(
+            procedure = truebeam.PicketFence(
                 y1=-10,
                 y2=10,
                 mu=123,
@@ -745,14 +726,14 @@ HALCYON_MLC_INDEX = {
 
 class TestHalcyonPrefabs(TestCase):
     def setUp(self) -> None:
-        self.pg = HalcyonPlanGenerator.from_rt_plan_file(
-            HALCYON_PLAN_FILE,
+        self.pg = PlanGenerator.from_rt_plan_file(
+            HAL_PLAN_FILE,
             plan_label="label",
             plan_name="my name",
         )
 
     def test_create_picket_fence_proximal(self):
-        procedure = plan_generator_halcyon.PicketFence(
+        procedure = halcyon.PicketFence(
             stack=Stack.PROXIMAL,
             mu=123,
             beam_name="Picket Fence",
@@ -786,7 +767,7 @@ class TestHalcyonPrefabs(TestCase):
         self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
 
     def test_create_picket_fence_distal(self):
-        procedure = plan_generator_halcyon.PicketFence(
+        procedure = halcyon.PicketFence(
             stack=Stack.DISTAL,
             mu=123,
             beam_name="Picket Fence",
@@ -820,7 +801,7 @@ class TestHalcyonPrefabs(TestCase):
         self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
 
     def test_create_picket_fence_both(self):
-        procedure = plan_generator_halcyon.PicketFence(
+        procedure = halcyon.PicketFence(
             stack=Stack.BOTH,
             mu=123,
             beam_name="Picket Fence",

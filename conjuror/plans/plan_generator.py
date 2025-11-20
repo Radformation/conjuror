@@ -400,17 +400,18 @@ class QAProcedureBase(Generic[TMachine], ABC):
         pass
 
 
-class PlanGenerator(Generic[TMachine], ABC):
+class PlanGenerator(Generic[TMachine]):
     """A tool for generating new QA RTPlan files based on an initial, somewhat empty RTPlan file.
 
     Attributes
     ----------
     machine_name : str
         The name of the machine
+    machine: TMachine
+        The model of the machine
     """
 
     machine_name: str
-    machine_specs: MachineSpecs
     machine: TMachine
 
     def __init__(
@@ -418,9 +419,9 @@ class PlanGenerator(Generic[TMachine], ABC):
         ds: Dataset,
         plan_label: str,
         plan_name: str,
-        patient_name: str | None,
-        patient_id: str | None,
-        machine_specs: MachineSpecs,
+        patient_name: str | None = None,
+        patient_id: str | None = None,
+        machine_specs: MachineSpecs = None,
     ):
         """
         Parameters
@@ -440,7 +441,6 @@ class PlanGenerator(Generic[TMachine], ABC):
         """
         if ds.Modality != "RTPLAN":
             raise ValueError("File is not an RTPLAN file")
-        self.machine_specs = machine_specs
         patient_name = patient_name or getattr(ds, "PatientName", None)
         if not patient_name:
             raise ValueError(
@@ -457,13 +457,17 @@ class PlanGenerator(Generic[TMachine], ABC):
             raise ValueError(
                 "RTPLAN file must have at least one beam in the beam sequence"
             )
-        has_mlc_data: bool = any(
-            "MLC" in bld.RTBeamLimitingDeviceType
-            for bs in ds.BeamSequence
-            for bld in bs.BeamLimitingDeviceSequence
-        )
-        if not has_mlc_data:
+        try:
+            mlc = next(
+                bld
+                for bs in ds.BeamSequence
+                for bld in bs.BeamLimitingDeviceSequence
+                if "MLCX" in bld.RTBeamLimitingDeviceType
+            )
+        except StopIteration:
             raise ValueError("RTPLAN file must have MLC data")
+
+        self.machine = _get_machine_type_from_mlc(mlc, machine_specs)
 
         ######  Create a copy of the template plan
         # A shallow copy won’t work because beam data is cleared.
@@ -516,9 +520,6 @@ class PlanGenerator(Generic[TMachine], ABC):
         # Machine name
         self.machine_name = ds.BeamSequence[0].TreatmentMachineName
 
-        # Validate machine type
-        self._validate_machine_type(ds.BeamSequence)
-
     @classmethod
     def from_rt_plan_file(cls, rt_plan_file: str | Path, **kwargs) -> Self:
         """Load an existing RTPLAN file and create a new plan based on it.
@@ -532,10 +533,6 @@ class PlanGenerator(Generic[TMachine], ABC):
         """
         ds = pydicom.dcmread(rt_plan_file)
         return cls(ds, **kwargs)
-
-    @abstractmethod
-    def _validate_machine_type(self, beam_sequence: DicomSequence):
-        pass
 
     def add_beam(self, beam: BeamBase):
         """Add a beam to the plan using the Beam object. Although public,
@@ -627,9 +624,8 @@ class PlanGenerator(Generic[TMachine], ABC):
             image_ds.append(ds)
         return image_ds
 
-    @classmethod
-    def list_procedures(cls) -> list[str]:
-        module = sys.modules[cls.__module__]
+    def list_procedures(self) -> list[str]:
+        module = sys.modules[self.machine.__module__]
         procedures = [
             name
             for name, _cls in inspect.getmembers(module, inspect.isclass)
@@ -640,3 +636,30 @@ class PlanGenerator(Generic[TMachine], ABC):
 
 class OvertravelError(ValueError):
     pass
+
+
+def _get_machine_type_from_mlc(mlc: Dataset, machine_specs: MachineSpecs):
+    """This function acts as factory to build the machine from the mlc data set."""
+    # Local imports are used to avoid circular dependencies.
+    # When a new machine type is added, this factory must be updated accordingly.
+    # This is an intentional design choice: although a plugin/registry pattern could
+    # automate new additions, new machine types are expected to be added rarely,
+    # and maintaining explicit control in this method is preferred.
+
+    bld_type = mlc.RTBeamLimitingDeviceType
+
+    if bld_type == "MLCX":
+        mlc_is_hd = mlc.LeafPositionBoundaries[0] == -110
+        from .truebeam import TrueBeamMachine
+
+        machine = TrueBeamMachine(mlc_is_hd, machine_specs)
+
+    elif bld_type == "MLCX1" or bld_type == "MLCX2":
+        from .halcyon import HalcyonMachine
+
+        machine = HalcyonMachine(machine_specs)
+
+    else:
+        raise ValueError("MLC type not supported")
+
+    return machine
