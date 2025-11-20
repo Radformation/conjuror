@@ -14,7 +14,7 @@
 
 .. toctree::
    :hidden:
-   :caption: PlanGen
+   :caption: Plan Generator
 
    plans/overview
    plans/users_guide
