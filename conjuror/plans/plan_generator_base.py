@@ -74,7 +74,7 @@ class FluenceMode(Enum):
     SRS = "SRS"
 
 
-class BeamBase(ABC):
+class BeamBase(Generic[TMachine], ABC):
     """Represents a DICOM beam dataset. Has methods for creating the dataset and adding control points."""
 
     ROUNDING_DECIMALS = 6
@@ -385,7 +385,7 @@ class BeamBase(ABC):
 class QAProcedureBase(Generic[TMachine], ABC):
     """An abstract base class for generic QA procedures."""
 
-    beams: list[BeamBase] = field(default_factory=list, kw_only=True)
+    beams: list[BeamBase[TMachine]] = field(default_factory=list, kw_only=True)
     machine: TMachine = field(init=False)
 
     @classmethod
@@ -400,7 +400,7 @@ class QAProcedureBase(Generic[TMachine], ABC):
         pass
 
 
-class PlanGenerator(ABC):
+class PlanGenerator(Generic[TMachine], ABC):
     """A tool for generating new QA RTPlan files based on an initial, somewhat empty RTPlan file.
 
     Attributes
@@ -411,7 +411,7 @@ class PlanGenerator(ABC):
 
     machine_name: str
     machine_specs: MachineSpecs
-    machine: MachineBase
+    machine: TMachine
 
     def __init__(
         self,
@@ -633,7 +633,7 @@ class PlanGenerator(ABC):
         procedures = [
             name
             for name, _cls in inspect.getmembers(module, inspect.isclass)
-            if issubclass(_cls, QAProcedureBase) and _cls is not QAProcedureBase
+            if issubclass(_cls, QAProcedureBase) and not inspect.isabstract(_cls)
         ]
         return procedures
 

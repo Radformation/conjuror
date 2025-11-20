@@ -1,3 +1,4 @@
+from abc import ABC
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -40,7 +41,7 @@ class Stack(Enum):
     BOTH = "both"
 
 
-class Beam(BeamBase):
+class Beam(BeamBase[HalcyonMachine]):
     """A class that represents a Halcyon beam."""
 
     def __init__(
@@ -136,8 +137,12 @@ class Beam(BeamBase):
         return proximal_mlc, distal_mlc
 
 
+class QAProcedure(QAProcedureBase[HalcyonMachine], ABC):
+    pass
+
+
 @dataclass
-class PicketFence(QAProcedureBase):
+class PicketFence(QAProcedure):
     """Add a picket fence beam to the plan. The beam will be delivered with the MLCs stacked on top of each other.
 
     Parameters
@@ -221,11 +226,9 @@ class PicketFence(QAProcedureBase):
         self.beams.append(beam)
 
 
-class HalcyonPlanGenerator(PlanGenerator):
+class HalcyonPlanGenerator(PlanGenerator[HalcyonMachine]):
     """A class to generate a plan with two beams stacked on top of each other such as the Halcyon. This
     also assumes no jaws."""
-
-    machine: HalcyonMachine
 
     def __init__(
         self,

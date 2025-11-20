@@ -1,4 +1,5 @@
 import math
+from abc import ABC
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Literal
@@ -51,7 +52,7 @@ class TrueBeamMachine(MachineBase):
         return MLC_BOUNDARIES_TB_HD120 if self.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
 
 
-class Beam(BeamBase):
+class Beam(BeamBase[TrueBeamMachine]):
     """A class that represents a TrueBeam beam."""
 
     def __init__(
@@ -171,8 +172,12 @@ class Beam(BeamBase):
         )
 
 
+class QAProcedure(QAProcedureBase[TrueBeamMachine], ABC):
+    pass
+
+
 @dataclass
-class OpenField(QAProcedureBase):
+class OpenField(QAProcedure):
     """Create an open field beam.
 
     Parameters
@@ -275,7 +280,7 @@ class OpenField(QAProcedureBase):
 
 
 @dataclass
-class MLCTransmission(QAProcedureBase):
+class MLCTransmission(QAProcedure):
     """Add a single-image MLC transmission beam to the plan.
     The beam is delivered with the MLCs closed and moved to one side underneath the jaws.
 
@@ -379,7 +384,7 @@ class MLCTransmission(QAProcedureBase):
 
 
 @dataclass
-class PicketFence(QAProcedureBase):
+class PicketFence(QAProcedure):
     """Add a picket fence beam to the plan.
 
     Parameters
@@ -491,7 +496,7 @@ class PicketFence(QAProcedureBase):
 
 
 @dataclass
-class WinstonLutz(QAProcedureBase):
+class WinstonLutz(QAProcedure):
     """Add Winston-Lutz beams to the plan. Will create a beam for each set of axes positions.
     Field names are generated automatically based on the axes positions.
 
@@ -588,7 +593,7 @@ class WinstonLutz(QAProcedureBase):
 
 
 @dataclass
-class DoseRate(QAProcedureBase):
+class DoseRate(QAProcedure):
     """Create a single-image dose rate test. Multiple ROIs are generated. A reference beam is also
     created where all ROIs are delivered at the default dose rate for comparison.
     The field names are generated automatically based on the min and max dose rates tested.
@@ -776,7 +781,7 @@ class DoseRate(QAProcedureBase):
 
 
 @dataclass
-class MLCSpeed(QAProcedureBase):
+class MLCSpeed(QAProcedure):
     """Create a single-image MLC speed test. Multiple speeds are generated. A reference beam is also
     generated. The reference beam is delivered at the maximum MLC speed.
 
@@ -976,7 +981,7 @@ class MLCSpeed(QAProcedureBase):
 
 
 @dataclass
-class GantrySpeed(QAProcedureBase):
+class GantrySpeed(QAProcedure):
     """Create a single-image gantry speed test. Multiple speeds are generated. A reference beam is also
     generated. The reference beam is delivered without gantry movement.
 
@@ -1154,7 +1159,7 @@ class GantrySpeed(QAProcedureBase):
 
 
 @dataclass
-class VMATDRGS(QAProcedureBase):
+class VMATDRGS(QAProcedure):
     """Create beams like Clif Ling VMAT DRGS tests. The defaults use an optimized selection for a TrueBeam.
 
     Parameters
@@ -1543,9 +1548,7 @@ class VMATDRGS(QAProcedureBase):
         plt.show()
 
 
-class TrueBeamPlanGenerator(PlanGenerator):
-    machine: TrueBeamMachine
-
+class TrueBeamPlanGenerator(PlanGenerator[TrueBeamMachine]):
     def __init__(
         self,
         ds: Dataset,
