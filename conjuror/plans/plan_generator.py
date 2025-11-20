@@ -3,7 +3,6 @@ import inspect
 import sys
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
-from copy import deepcopy
 from dataclasses import dataclass, replace, field
 from enum import Enum
 from pathlib import Path
@@ -401,18 +400,7 @@ class QAProcedureBase(Generic[TMachine], ABC):
 
 
 class PlanGenerator(Generic[TMachine]):
-    """A tool for generating new QA RTPlan files based on an initial, somewhat empty RTPlan file.
-
-    Attributes
-    ----------
-    machine_name : str
-        The name of the machine
-    machine: TMachine
-        The model of the machine
-    """
-
-    machine_name: str
-    machine: TMachine
+    """A tool for generating new QA RTPlan files based on an initial, somewhat empty RTPlan file."""
 
     def __init__(
         self,
@@ -469,28 +457,23 @@ class PlanGenerator(Generic[TMachine]):
 
         self.machine = _get_machine_type_from_mlc(mlc, machine_specs)
 
-        ######  Create a copy of the template plan
-        # A shallow copy won’t work because beam data is cleared.
-        # The inherited classes require access to the original beam state to determine leaf boundaries
-        self.ds = deepcopy(ds)
-
         ######  Clear/initialize the metadata for the new plan
-        self.ds.PatientName = patient_name
-        self.ds.PatientID = patient_id
-        self.ds.RTPlanLabel = plan_label
-        self.ds.RTPlanName = plan_name
+        ds.PatientName = patient_name
+        ds.PatientID = patient_id
+        ds.RTPlanLabel = plan_label
+        ds.RTPlanName = plan_name
         date = datetime.datetime.now().strftime("%Y%m%d")
         time = datetime.datetime.now().strftime("%H%M%S")
 
-        self.ds.InstanceCreationDate = date
-        self.ds.InstanceCreationTime = time
-        self.ds.SOPInstanceUID = generate_uid()
+        ds.InstanceCreationDate = date
+        ds.InstanceCreationTime = time
+        ds.SOPInstanceUID = generate_uid()
 
         # Patient Setup Sequence
         patient_setup = Dataset()
         patient_setup.PatientPosition = "HFS"
         patient_setup.PatientSetupNumber = 0
-        self.ds.PatientSetupSequence = DicomSequence((patient_setup,))
+        ds.PatientSetupSequence = DicomSequence((patient_setup,))
 
         # Dose Reference Sequence
         dose_ref1 = Dataset()
@@ -502,7 +485,7 @@ class PlanGenerator(Generic[TMachine]):
         dose_ref1.DeliveryMaximumDose = 20.0
         dose_ref1.TargetPrescriptionDose = 40.0
         dose_ref1.TargetMaximumDose = 20.0
-        self.ds.DoseReferenceSequence = DicomSequence((dose_ref1,))
+        ds.DoseReferenceSequence = DicomSequence((dose_ref1,))
 
         # Fraction Group Sequence
         frxn_gp1 = Dataset()
@@ -511,14 +494,14 @@ class PlanGenerator(Generic[TMachine]):
         frxn_gp1.NumberOfBeams = 0
         frxn_gp1.NumberOfBrachyApplicationSetups = 0
         frxn_gp1.ReferencedBeamSequence = DicomSequence()
-        self.ds.FractionGroupSequence = DicomSequence((frxn_gp1,))
+        ds.FractionGroupSequence = DicomSequence((frxn_gp1,))
 
-        # Clear beam sequence
-        # This will be filled with the custom beams
-        self.ds.BeamSequence = DicomSequence()
-
-        # Machine name
+        # Store attributes
+        self.ds = ds
         self.machine_name = ds.BeamSequence[0].TreatmentMachineName
+
+        # Clear beam sequence, this will be filled with the custom beams
+        ds.BeamSequence = DicomSequence()
 
     @classmethod
     def from_rt_plan_file(cls, rt_plan_file: str | Path, **kwargs) -> Self:
