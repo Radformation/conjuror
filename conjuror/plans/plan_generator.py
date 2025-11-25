@@ -9,10 +9,8 @@ from pathlib import Path
 from typing import Self, TypeVar, Generic
 
 import numpy as np
+from plotly import graph_objects as go
 import pydicom
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 from pydicom.uid import generate_uid
@@ -20,7 +18,7 @@ from pydicom.uid import generate_uid
 from ..images.layers import ArrayLayer
 from ..images.simulators import Simulator, Imager
 from ..utils import wrap180
-from .fluence import generate_fluences, plot_fluences
+from .fluence import plot_fluences
 
 
 @dataclass(frozen=True)
@@ -130,7 +128,6 @@ class BeamBase(Generic[TMachine], ABC):
             raise ValueError("Beam name must be less than or equal to 16 characters")
 
         # Private attributes used for dicom creation only
-        self._beam_name = beam_name
         self._fluence_mode = fluence_mode
         self._energy = energy
         self._dose_rate = dose_rate
@@ -143,6 +140,7 @@ class BeamBase(Generic[TMachine], ABC):
         # Public attributes (used outside dicom scope, e.g. for plotting)
         # For easier manipulation all variable are stored as np.ndarray of size num_cp,
         # if the axis are static they are replicated to fit the array.
+        self.beam_name = beam_name
         self.beam_meterset = np.round(metersets[-1], self.ROUNDING_DECIMALS)
         self.number_of_control_points = len(metersets)
         self.beam_limiting_device_sequence = beam_limiting_device_sequence
@@ -155,6 +153,92 @@ class BeamBase(Generic[TMachine], ABC):
             rep = self.number_of_control_points if len(positions) == 1 else 1
             bld = np.array(rep * positions).T
             self.beam_limiting_device_positions[key] = bld
+
+    @classmethod
+    def from_dicom(cls, ds: Dataset, beam_idx: int):
+        """Load a beam from an RT plan dataset
+
+        Parameters
+        ----------
+        ds : Dataset
+            The dataset of the RT Plan.
+        beam_idx : int
+            The index of the beam to be loaded
+        """
+        mu = ds.FractionGroupSequence[0].ReferencedBeamSequence[beam_idx].BeamMeterset
+        beam = ds.BeamSequence[beam_idx]
+        bld = beam.BeamLimitingDeviceSequence
+        name = beam.BeamName
+        fms = beam.PrimaryFluenceModeSequence[0]
+        fluence_mode = FluenceMode.STANDARD
+        if fms.FluenceMode == "NON_STANDARD":
+            match fms.FluenceModeID:
+                case "FFF":
+                    fluence_mode = FluenceMode.FFF
+                case "SRS":
+                    fluence_mode = FluenceMode.SRS
+                case _:
+                    raise ValueError("FluenceModeID must be either FFF or SRS")
+
+        cp0 = beam.ControlPointSequence[0]
+        energy = cp0.NominalBeamEnergy
+        dose_rate = cp0.DoseRateSet
+        coll_angle = cp0.BeamLimitingDeviceAngle
+        couch_vrt = cp0.TableTopVerticalPosition
+        couch_lat = cp0.TableTopLateralPosition
+        couch_lng = cp0.TableTopLongitudinalPosition
+        couch_rot = cp0.TableTopEccentricAngle
+
+        # Initial control point
+        gantry_angles = [cp0.GantryAngle]
+        cmws = [cp0.CumulativeMetersetWeight]
+        bldp = {
+            bld.RTBeamLimitingDeviceType: [bld.LeafJawPositions]
+            for bld in cp0.BeamLimitingDevicePositionSequence
+        }
+
+        # for the next control points the concept is: append new if exists,
+        # otherwise append a copy of the previous control point
+        for idx in range(1, beam.NumberOfControlPoints):
+            cp = beam.ControlPointSequence[idx]
+
+            try:
+                gantry_angles.append(cp.GantryAngle)
+            except AttributeError:
+                gantry_angles.append(gantry_angles[-1])
+
+            try:
+                cmws.append(cp.CumulativeMetersetWeight)
+            except AttributeError:
+                cmws.append(cmws[-1])
+
+            bldps = getattr(cp, "BeamLimitingDevicePositionSequence", {})
+            for key in bldp.keys():
+                bld_types = [x.RTBeamLimitingDeviceType for x in bldps]
+                try:
+                    idx = bld_types.index(key)
+                    bldp[key].append(bldps[idx].LeafJawPositions)
+                except ValueError:
+                    bldp[key].append(bldp[key][-1])
+
+        beam_limiting_device_positions = bldp
+        metersets = mu * np.array(cmws)
+
+        return cls(
+            bld,
+            name,
+            energy,
+            fluence_mode,
+            dose_rate,
+            metersets,
+            gantry_angles,
+            coll_angle,
+            beam_limiting_device_positions,
+            couch_vrt,
+            couch_lat,
+            couch_lng,
+            couch_rot,
+        )
 
     def to_dicom(self) -> Dataset:
         """Return the beam as a DICOM dataset that represents a BeamSequence item."""
@@ -172,6 +256,7 @@ class BeamBase(Generic[TMachine], ABC):
         # as Eclipse/Machine, and we don't know which tolerance they use.
         # Here we assume that their tolerance is tighter than ROUNDING_DECIMALS
         metersets_weights = np.round(metersets_weights, self.ROUNDING_DECIMALS)
+        metersets_weights = np.array(metersets_weights)  # force array for lint
         gantry_angles = np.round(self.gantry_angles, self.ROUNDING_DECIMALS)
         bld_positions = {
             k: np.round(v, self.ROUNDING_DECIMALS)
@@ -204,7 +289,7 @@ class BeamBase(Generic[TMachine], ABC):
 
         # Create dataset with basic beam info
         dataset = self._create_basic_beam_info(
-            self._beam_name,
+            self.beam_name,
             beam_type,
             self._fluence_mode,
             beam_limiting_device_sequence=self.beam_limiting_device_sequence,
@@ -358,7 +443,7 @@ class BeamBase(Generic[TMachine], ABC):
         fluence = np.min(stack_fluences, axis=0)
         return fluence
 
-    def plot_fluence(self, imager: Imager, ax: Axes = None) -> None:
+    def plot_fluence(self, imager: Imager, show: bool = True) -> go.Figure:
         """Plot the fluence map from the RT Beam.
 
         Parameters
@@ -366,18 +451,23 @@ class BeamBase(Generic[TMachine], ABC):
         imager : Imager
             The imager to use to generate the images. This provides the
             size of the image and the pixel size.
-        ax : Axes, optional
-            The axes to use for plotting. If not provided, a new figure is created.
+        show : bool, optional
+            Whether to show the plots. Default is True.
         """
-        show = False
-        if ax is None:
-            fig, ax = plt.subplots()
-            show = True
         fluence = self.generate_fluence(imager)
-        ax.imshow(fluence)
-        ax.set_title(self._beam_name)
+        fig = go.Figure()
+        fig.add_heatmap(
+            z=fluence,
+            colorscale="Viridis",
+            colorbar=dict(title="Fluence (a.u.)"),
+            showscale=True,
+        )
+        fig.update_layout(
+            title=f"Fluence Map - {self.beam_name}",
+        )
         if show:
-            plt.show()
+            fig.show()
+        return fig
 
 
 @dataclass
@@ -560,19 +650,14 @@ class PlanGenerator(Generic[TMachine]):
         """Return the new DICOM dataset."""
         return self.ds
 
-    def plot_fluences(
-        self,
-        width_mm: float = 400,
-        resolution_mm: float = 0.5,
-        dtype: np.dtype = np.uint16,
-    ) -> list[Figure]:
+    def plot_fluences(self, imager: Imager) -> list[go.Figure]:
         """Plot the fluences of the beams generated
 
         See Also
         --------
         :func:`~pydicom_planar.PlanarImage.plot_fluences`
         """
-        return plot_fluences(self.as_dicom(), width_mm, resolution_mm, dtype, show=True)
+        return plot_fluences(self.as_dicom(), imager, show=True)
 
     def to_dicom_images(self, imager: Imager, invert: bool = True) -> list[Dataset]:
         """Generate simulated DICOM images of the plan. This provides a way to
@@ -589,13 +674,10 @@ class PlanGenerator(Generic[TMachine]):
             dose->lower pixel value.
         """
         image_ds = []
-        fluences = generate_fluences(
-            rt_plan=self.as_dicom(),
-            width_mm=imager.shape[1] * imager.pixel_size,
-            resolution_mm=imager.pixel_size,
-        )
-        for beam, fluence in zip(self.ds.BeamSequence, fluences):
-            beam_info = beam.ControlPointSequence[0]
+        for idx in range(len(self.ds.BeamSequence)):
+            beam = BeamBase.from_dicom(self.ds, idx)
+            beam_info = beam.to_dicom().ControlPointSequence[0]
+            fluence = beam.generate_fluence(imager)
             sim = Simulator(imager, sid=1000)
             sim.add_layer(ArrayLayer(fluence))
             ds = sim.as_dicom(
