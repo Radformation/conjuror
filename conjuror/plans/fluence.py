@@ -26,10 +26,11 @@ def plot_fluences(
     list[Figure]
         A list of plotly figures, one for each beam in the plan.
     """
-    figs = []
-    for idx in range(len(plan.BeamSequence)):
-        from conjuror.plans.plan_generator import BeamBase
+    from conjuror.plans.plan_generator import BeamBase
 
+    figs = []
+
+    for idx in range(len(plan.BeamSequence)):
         beam = BeamBase.from_dicom(plan, idx)
         fig = beam.plot_fluence(imager, show)
         figs.append(fig)
