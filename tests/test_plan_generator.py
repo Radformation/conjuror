@@ -19,6 +19,7 @@ from conjuror.plans.truebeam import (
     OpenField,
     Beam,
     MLCSpeed,
+    PicketFence,
 )
 from tests.utils import get_file_from_cloud_test_repo
 
@@ -343,6 +344,13 @@ class TestPlanGeneratorBeams(TestCase):
         figs = self.pg.plot_fluences(IMAGER_AS1200)
         self.assertIsInstance(figs, list)
         self.assertIsInstance(figs[0], Figure)
+
+    def test_animate_mlc(self):
+        procedure = PicketFence()
+        self.pg.add_procedure(procedure)
+        beam = BeamBase.from_dicom(self.pg.as_dicom(), 0)
+        beam.animate_mlc()
+        pass
 
     def test_list_procedure(self):
         procedures = self.pg.list_procedures()
