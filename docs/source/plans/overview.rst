@@ -25,7 +25,7 @@ The RT plans created by this tool follow the DICOM RT plan IOD:
 System Compatibility
 --------------------
 
-The generated RT plans adhere to system-specific DICOM tag structures and private data elements known to these Varian platforms.
+The generated RT plans adhere to system-specific DICOM tag structures known to these Varian platforms.
 
 * `ARIA <https://varian.widen.net/s/jdrkjxxqj8/varian_dicomworklist_v18.1_dicomconformancestatement>`__
 

@@ -212,13 +212,14 @@ class OpenField(QAProcedure):
         Whether the field edges are defined by the MLCs or the jaws.
     y_mode : OpenFieldMode
         Controls how the open field aligns with MLC leaf boundaries along the y-axis.
-        EXACT -- Both ``y1`` and ``y2`` must coincide with an MLC leaf boundary.
-        If either edge does not align exactly, an error is raised.
-        ROUND -- If ``y1`` or `y2`` falls between boundaries, the limits are rounded to the nearest boundary.
-        INWARD -- If ``y1`` or `y2`` falls between boundaries, the leaf band is treated as "outfield."
-        This results in a smaller field in the y-direction.
-        OUTWARD -- If ``y1`` or `y2`` falls between boundaries, the leaf band is treated as "infield."
-        This results in a larger field in the y-direction.
+
+        * EXACT -- Both ``y1`` and ``y2`` must coincide with an MLC leaf boundary.
+          If either edge does not align exactly, an error is raised.
+        * ROUND -- If ``y1`` or ``y2`` falls between boundaries, the limits are rounded to the nearest boundary.
+        * INWARD -- If ``y1`` or ``y2`` falls between boundaries, the leaf band is treated as "outfield."
+          This results in a smaller field in the y-direction.
+        * OUTWARD -- If ``y1`` or ``y2`` falls between boundaries, the leaf band is treated as "infield."
+          This results in a larger field in the y-direction.
     energy : float
         The energy of the beam.
     fluence_mode : FluenceMode
