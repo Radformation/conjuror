@@ -1393,7 +1393,7 @@ class VMATDRGS(QAProcedure):
         # Add static beams
         for gantry_angle in self.dynamic_delivery_at_static_gantry:
             beam = self._truebeam_beam(
-                f"VMAT-DRGS-Sta-{gantry_angle:03d}",
+                f"VMAT-DRGS-G{gantry_angle:03d}",
                 cumulative_mu,
                 [gantry_angle],
                 mlc_positions_a,

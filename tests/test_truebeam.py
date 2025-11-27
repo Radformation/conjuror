@@ -496,7 +496,7 @@ class TestOpenField(TestCase):
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
 
-class TestVmatT2(TestCase):
+class TestVmatDRGS(TestCase):
     def test_defaults(self):
         VMATDRGS().compute(DEFAULT_TRUEBEAM_HD120)
 
