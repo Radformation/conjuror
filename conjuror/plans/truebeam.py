@@ -1529,18 +1529,18 @@ class VMATDRGS(QAProcedure):
         plt.show()
         pass
 
-    def plot_fluence(self, imager: Imager) -> None:
+    def plot_fluence(self, imager: Imager, show: bool = True) -> None:
         """Plot the fluence for the reference and dynamic beams
 
         Parameters
         ----------
         imager : Imager
             The target imager.
+        show : bool, optional
+            Whether to show the plots. Default is True.
         """
-        fog, (ax1, ax2) = plt.subplots(1, 2)
-        self.reference_beam.plot_fluence(imager, ax1)
-        self.dynamic_beam.plot_fluence(imager, ax2)
-        plt.show()
+        self.reference_beam.plot_fluence(imager, show)
+        self.dynamic_beam.plot_fluence(imager, show)
 
     def plot_fluence_profile(self, imager: Imager, zoom: float = 10):
         """Plot the fluence profile for the dynamic beam

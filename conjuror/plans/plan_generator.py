@@ -459,7 +459,7 @@ class BeamBase(Generic[TMachine], ABC):
         fig.add_heatmap(
             z=fluence,
             colorscale="Viridis",
-            colorbar=dict(title="Fluence (a.u.)"),
+            colorbar=dict(title="MU"),
             showscale=True,
         )
         fig.update_layout(
