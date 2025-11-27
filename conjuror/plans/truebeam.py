@@ -50,9 +50,9 @@ class OpenFieldMode(Enum):
 
 
 class TrueBeamMachine(MachineBase):
-    def __init__(self, mlc_is_hd: bool, machine_specs: MachineSpecs | None = None):
+    def __init__(self, mlc_is_hd: bool, specs: MachineSpecs | None = None):
         self.mlc_is_hd = mlc_is_hd
-        self.machine_specs = machine_specs or DEFAULT_SPECS_TB
+        self.specs = specs or DEFAULT_SPECS_TB
 
     @property
     def mlc_boundaries(self) -> tuple[float, ...]:
@@ -170,8 +170,8 @@ class Beam(BeamBase[TrueBeamMachine]):
         """Utility to create MLC shaper instances."""
         return MLCShaper(
             machine.mlc_boundaries,
-            machine.machine_specs.max_mlc_position,
-            machine.machine_specs.max_mlc_overtravel,
+            machine.specs.max_mlc_position,
+            machine.specs.max_mlc_overtravel,
         )
 
     @staticmethod
@@ -183,8 +183,8 @@ class Beam(BeamBase[TrueBeamMachine]):
         """Utility to create MLC modulator instances."""
         return MLCModulator(
             leaf_y_positions=machine.mlc_boundaries,
-            max_mlc_position=machine.machine_specs.max_mlc_position,
-            max_overtravel_mm=machine.machine_specs.max_mlc_overtravel,
+            max_mlc_position=machine.specs.max_mlc_position,
+            max_overtravel_mm=machine.specs.max_mlc_overtravel,
             sacrifice_gap_mm=sacrifice_gap_mm,
             sacrifice_max_move_mm=sacrifice_max_move_mm,
         )
@@ -269,7 +269,7 @@ class OpenField(QAProcedure):
     beam_name: str = "Open"
     outside_strip_width_mm: float = 5
 
-    def compute(self):
+    def compute(self, machine: TrueBeamMachine) -> None:
         y_mode = self.y_mode.value
         if self.defined_by_mlcs:
             mlc_padding = 0
@@ -279,7 +279,7 @@ class OpenField(QAProcedure):
             jaw_padding = 0
             y_mode = OpenFieldMode.ROUND.value
 
-        shaper = Beam.create_shaper(self.machine)
+        shaper = Beam.create_shaper(machine)
         shape = Rectangle(
             x_min=self.x1 - mlc_padding,
             x_max=self.x2 + mlc_padding,
@@ -307,7 +307,7 @@ class OpenField(QAProcedure):
             mlc_positions=2 * [mlc],
             metersets=[0, self.mu],
             fluence_mode=self.fluence_mode,
-            mlc_is_hd=self.machine.mlc_is_hd,
+            mlc_is_hd=machine.mlc_is_hd,
         )
         self.beams.append(beam)
 
@@ -373,8 +373,8 @@ class MLCTransmission(QAProcedure):
     couch_rot: float = 0
     fluence_mode: FluenceMode = FluenceMode.STANDARD
 
-    def compute(self):
-        mlc = Beam.create_modulator(self.machine)
+    def compute(self, machine: TrueBeamMachine) -> None:
+        mlc = Beam.create_modulator(machine)
         if self.bank == "A":
             mlc_tips = self.x2 + self.overreach
         elif self.bank == "B":
@@ -382,13 +382,9 @@ class MLCTransmission(QAProcedure):
         else:
             raise ValueError("Bank must be 'A' or 'B'")
         # test for overtravel
-        if (
-            abs(self.x2 - self.x1) + self.overreach
-            > self.machine.machine_specs.max_mlc_overtravel
-        ):
-            raise OvertravelError(
-                "The MLC overtravel is too large for the given jaw positions and overreach. Reduce the x-jaw opening size and/or overreach value."
-            )
+        if abs(self.x2 - self.x1) + self.overreach > machine.specs.max_mlc_overtravel:
+            msg = "The MLC overtravel is too large for the given jaw positions and overreach. Reduce the x-jaw opening size and/or overreach value."
+            raise OvertravelError(msg)
         mlc.add_strip(
             position_mm=mlc_tips,
             strip_width_mm=1,
@@ -411,7 +407,7 @@ class MLCTransmission(QAProcedure):
             mlc_positions=mlc.as_control_points(),
             metersets=[self.mu * m for m in mlc.as_metersets()],
             fluence_mode=self.fluence_mode,
-            mlc_is_hd=self.machine.mlc_is_hd,
+            mlc_is_hd=machine.mlc_is_hd,
         )
         self.beams.append(beam)
 
@@ -478,19 +474,19 @@ class PicketFence(QAProcedure):
     beam_name: str = "PF"
     max_sacrificial_move_mm: float = 50
 
-    def compute(self):
+    def compute(self, machine: TrueBeamMachine) -> None:
         # check MLC overtravel; machine may prevent delivery if exposing leaf tail
         x1 = min(self.strip_positions_mm) - self.jaw_padding_mm
         x2 = max(self.strip_positions_mm) + self.jaw_padding_mm
         max_dist_to_jaw = max(
             max(abs(pos - x1), abs(pos + x2)) for pos in self.strip_positions_mm
         )
-        if max_dist_to_jaw > self.machine.machine_specs.max_mlc_overtravel:
+        if max_dist_to_jaw > machine.specs.max_mlc_overtravel:
             raise ValueError(
                 "Picket fence beam exceeds MLC overtravel limits. Lower padding, the number of pickets, or the picket spacing."
             )
         mlc = Beam.create_modulator(
-            self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
+            machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
         )
         # create initial starting point; start under the jaws
         mlc.add_strip(
@@ -523,7 +519,7 @@ class PicketFence(QAProcedure):
             mlc_positions=mlc.as_control_points(),
             metersets=[self.mu * m for m in mlc.as_metersets()],
             fluence_mode=self.fluence_mode,
-            mlc_is_hd=self.machine.mlc_is_hd,
+            mlc_is_hd=machine.mlc_is_hd,
         )
         self.beams.append(beam)
 
@@ -581,7 +577,7 @@ class WinstonLutz(QAProcedure):
     mu: int = 10
     padding_mm: float = 5
 
-    def compute(self):
+    def compute(self, machine: TrueBeamMachine) -> None:
         for axes in self.axes_positions:
             if self.defined_by_mlcs:
                 mlc_padding = 0
@@ -589,7 +585,7 @@ class WinstonLutz(QAProcedure):
             else:
                 mlc_padding = self.padding_mm
                 jaw_padding = 0
-            mlc = Beam.create_modulator(self.machine)
+            mlc = Beam.create_modulator(machine)
             mlc.add_rectangle(
                 left_position=self.x1 - mlc_padding,
                 right_position=self.x2 + mlc_padding,
@@ -620,7 +616,7 @@ class WinstonLutz(QAProcedure):
                 mlc_positions=mlc.as_control_points(),
                 metersets=[self.mu * m for m in mlc.as_metersets()],
                 fluence_mode=self.fluence_mode,
-                mlc_is_hd=self.machine.mlc_is_hd,
+                mlc_is_hd=machine.mlc_is_hd,
             )
             self.beams.append(beam)
 
@@ -688,18 +684,13 @@ class DoseRate(QAProcedure):
     y2: float = 100
     max_sacrificial_move_mm: float = 50
 
-    def compute(self):
-        if (
-            self.roi_size_mm * len(self.dose_rates)
-            > self.machine.machine_specs.max_mlc_overtravel
-        ):
+    def compute(self, machine: TrueBeamMachine) -> None:
+        if self.roi_size_mm * len(self.dose_rates) > machine.specs.max_mlc_overtravel:
             raise ValueError(
                 "The ROI size * number of dose rates must be less than the overall MLC allowable width"
             )
         # calculate MU
-        mlc_transition_time = (
-            self.roi_size_mm / self.machine.machine_specs.max_mlc_speed
-        )
+        mlc_transition_time = self.roi_size_mm / machine.specs.max_mlc_speed
         min_mu = mlc_transition_time * max(self.dose_rates) * len(self.dose_rates) / 60
         mu = max(self.desired_mu, math.ceil(min_mu))
 
@@ -709,13 +700,13 @@ class DoseRate(QAProcedure):
             for dose_rate in self.dose_rates
         ]
         sacrificial_movements = [
-            tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition
+            tt * machine.specs.max_mlc_speed for tt in times_to_transition
         ]
 
         mlc = Beam.create_modulator(
-            self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
+            machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
         )
-        ref_mlc = Beam.create_modulator(self.machine)
+        ref_mlc = Beam.create_modulator(machine)
 
         roi_centers = np.linspace(
             -self.roi_size_mm * len(self.dose_rates) / 2 + self.roi_size_mm / 2,
@@ -739,8 +730,8 @@ class DoseRate(QAProcedure):
                 left_position=center - self.roi_size_mm / 2,
                 right_position=center + self.roi_size_mm / 2,
                 x_outfield_position=-200,
-                top_position=max(self.machine.mlc_boundaries),
-                bottom_position=min(self.machine.mlc_boundaries),
+                top_position=max(machine.mlc_boundaries),
+                bottom_position=min(machine.mlc_boundaries),
                 outer_strip_width=5,
                 meterset_at_target=0,
                 meterset_transition=0.5 / len(self.dose_rates),
@@ -757,8 +748,8 @@ class DoseRate(QAProcedure):
                 left_position=center - self.roi_size_mm / 2,
                 right_position=center + self.roi_size_mm / 2,
                 x_outfield_position=-200,  # not used
-                top_position=max(self.machine.mlc_boundaries),
-                bottom_position=min(self.machine.mlc_boundaries),
+                top_position=max(machine.mlc_boundaries),
+                bottom_position=min(machine.mlc_boundaries),
                 outer_strip_width=5,  # not used
                 meterset_at_target=0,
                 meterset_transition=0.5 / len(self.dose_rates),
@@ -788,7 +779,7 @@ class DoseRate(QAProcedure):
             fluence_mode=self.fluence_mode,
             mlc_positions=ref_mlc.as_control_points(),
             metersets=[mu * m for m in ref_mlc.as_metersets()],
-            mlc_is_hd=self.machine.mlc_is_hd,
+            mlc_is_hd=machine.mlc_is_hd,
         )
         self.beams.append(ref_beam)
         beam = Beam(
@@ -808,7 +799,7 @@ class DoseRate(QAProcedure):
             fluence_mode=self.fluence_mode,
             mlc_positions=mlc.as_control_points(),
             metersets=[mu * m for m in mlc.as_metersets()],
-            mlc_is_hd=self.machine.mlc_is_hd,
+            mlc_is_hd=machine.mlc_is_hd,
         )
         self.beams.append(beam)
 
@@ -892,30 +883,27 @@ class MLCSpeed(QAProcedure):
     beam_name: str = "MLC Speed"
     max_sacrificial_move_mm: float = 50
 
-    def compute(self) -> None:
-        if max(self.speeds) > self.machine.machine_specs.max_mlc_speed:
+    def compute(self, machine: TrueBeamMachine) -> None:
+        if max(self.speeds) > machine.specs.max_mlc_speed:
             raise ValueError(
-                f"Maximum speed given {max(self.speeds)} is greater than the maximum MLC speed {self.machine.machine_specs.max_mlc_speed}"
+                f"Maximum speed given {max(self.speeds)} is greater than the maximum MLC speed {machine.specs.max_mlc_speed}"
             )
         if min(self.speeds) <= 0:
             raise ValueError("Speeds must be greater than 0")
-        if (
-            self.roi_size_mm * len(self.speeds)
-            > self.machine.machine_specs.max_mlc_overtravel
-        ):
+        if self.roi_size_mm * len(self.speeds) > machine.specs.max_mlc_overtravel:
             raise ValueError(
                 "The ROI size * number of speeds must be less than the overall MLC allowable width"
             )
         # create MLC positions
         times_to_transition = [self.roi_size_mm / speed for speed in self.speeds]
         sacrificial_movements = [
-            tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition
+            tt * machine.specs.max_mlc_speed for tt in times_to_transition
         ]
 
         mlc = Beam.create_modulator(
-            self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
+            machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
         )
-        ref_mlc = Beam.create_modulator(self.machine)
+        ref_mlc = Beam.create_modulator(machine)
 
         roi_centers = np.linspace(
             -self.roi_size_mm * len(self.speeds) / 2 + self.roi_size_mm / 2,
@@ -939,8 +927,8 @@ class MLCSpeed(QAProcedure):
                 left_position=center - self.roi_size_mm / 2,
                 right_position=center + self.roi_size_mm / 2,
                 x_outfield_position=-200,  # not relevant
-                top_position=max(self.machine.mlc_boundaries),
-                bottom_position=min(self.machine.mlc_boundaries),
+                top_position=max(machine.mlc_boundaries),
+                bottom_position=min(machine.mlc_boundaries),
                 outer_strip_width=5,  # not relevant
                 meterset_at_target=0,
                 meterset_transition=0.5 / len(self.speeds),
@@ -957,8 +945,8 @@ class MLCSpeed(QAProcedure):
                 left_position=center - self.roi_size_mm / 2,
                 right_position=center + self.roi_size_mm / 2,
                 x_outfield_position=-200,  # not used
-                top_position=max(self.machine.mlc_boundaries),
-                bottom_position=min(self.machine.mlc_boundaries),
+                top_position=max(machine.mlc_boundaries),
+                bottom_position=min(machine.mlc_boundaries),
                 outer_strip_width=5,  # not used
                 meterset_at_target=0,
                 meterset_transition=0.5 / len(self.speeds),
@@ -988,7 +976,7 @@ class MLCSpeed(QAProcedure):
             fluence_mode=self.fluence_mode,
             mlc_positions=ref_mlc.as_control_points(),
             metersets=[self.mu * m for m in ref_mlc.as_metersets()],
-            mlc_is_hd=self.machine.mlc_is_hd,
+            mlc_is_hd=machine.mlc_is_hd,
         )
         self.beams.append(ref_beam)
         beam = Beam(
@@ -1008,7 +996,7 @@ class MLCSpeed(QAProcedure):
             fluence_mode=self.fluence_mode,
             mlc_positions=mlc.as_control_points(),
             metersets=[self.mu * m for m in mlc.as_metersets()],
-            mlc_is_hd=self.machine.mlc_is_hd,
+            mlc_is_hd=machine.mlc_is_hd,
         )
         self.beams.append(beam)
 
@@ -1089,15 +1077,12 @@ class GantrySpeed(QAProcedure):
     y2: float = 100
     mu: int = 120
 
-    def compute(self):
-        if max(self.speeds) > self.machine.machine_specs.max_gantry_speed:
+    def compute(self, machine: TrueBeamMachine) -> None:
+        if max(self.speeds) > machine.specs.max_gantry_speed:
             raise ValueError(
-                f"Maximum speed given {max(self.speeds)} is greater than the maximum gantry speed {self.machine.machine_specs.max_gantry_speed}"
+                f"Maximum speed given {max(self.speeds)} is greater than the maximum gantry speed {machine.specs.max_gantry_speed}"
             )
-        if (
-            self.roi_size_mm * len(self.speeds)
-            > self.machine.machine_specs.max_mlc_overtravel
-        ):
+        if self.roi_size_mm * len(self.speeds) > machine.specs.max_mlc_overtravel:
             raise ValueError(
                 "The ROI size * number of speeds must be less than the overall MLC allowable width"
             )
@@ -1116,8 +1101,8 @@ class GantrySpeed(QAProcedure):
                 "Gantry travel is >360 degrees. Lower the beam MU, use fewer speeds, or decrease the desired gantry speeds"
             )
 
-        mlc = Beam.create_modulator(self.machine)
-        ref_mlc = Beam.create_modulator(self.machine)
+        mlc = Beam.create_modulator(machine)
+        ref_mlc = Beam.create_modulator(machine)
 
         roi_centers = np.linspace(
             -self.roi_size_mm * len(self.speeds) / 2 + self.roi_size_mm / 2,
@@ -1166,7 +1151,7 @@ class GantrySpeed(QAProcedure):
             fluence_mode=self.fluence_mode,
             mlc_positions=mlc.as_control_points(),
             metersets=[self.mu * m for m in mlc.as_metersets()],
-            mlc_is_hd=self.machine.mlc_is_hd,
+            mlc_is_hd=machine.mlc_is_hd,
         )
         self.beams.append(beam)
         ref_beam = Beam(
@@ -1186,7 +1171,7 @@ class GantrySpeed(QAProcedure):
             fluence_mode=self.fluence_mode,
             mlc_positions=ref_mlc.as_control_points(),
             metersets=[self.mu * m for m in ref_mlc.as_metersets()],
-            mlc_is_hd=self.machine.mlc_is_hd,
+            mlc_is_hd=machine.mlc_is_hd,
         )
         self.beams.append(ref_beam)
 
@@ -1275,6 +1260,7 @@ class VMATDRGS(QAProcedure):
     _x2: float = field(init=False)
     _y1: float = field(init=False)
     _y2: float = field(init=False)
+    machine: TrueBeamMachine = field(init=False)
 
     @property
     def reference_beam(self) -> BeamBase:
@@ -1284,17 +1270,16 @@ class VMATDRGS(QAProcedure):
     def dynamic_beam(self) -> BeamBase:
         return self.beams[self.dynamic_beam_idx]
 
-    def compute(self):
+    def compute(self, machine: TrueBeamMachine) -> None:
         # store parameters common to all beams
         mlc_boundaries = (
-            MLC_BOUNDARIES_TB_HD120
-            if self.machine.mlc_is_hd
-            else MLC_BOUNDARIES_TB_MIL120
+            MLC_BOUNDARIES_TB_HD120 if machine.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
         )
         self._y1 = mlc_boundaries[0]
         self._y2 = mlc_boundaries[-1]
         self._x1 = -(self.mlc_span / 2 + self.jaw_padding)
         self._x2 = self.mlc_span / 2 + self.jaw_padding
+        self.machine = machine
 
         # convert/cast variables
         gantry_speeds = np.array(self.gantry_speeds)
@@ -1305,13 +1290,10 @@ class VMATDRGS(QAProcedure):
         if len(gantry_speeds) != len(dose_rates):
             raise ValueError("gantry_speeds and dose_rates must have the same length")
         if self.initial_gantry_offset < self.MIN_GANTRY_OFFSET:
-            raise ValueError(
-                f"The initial gantry offset cannot be smaller than {self.MIN_GANTRY_OFFSET} deg. Using 180 deg can cause ambiguity in the rotation direction."
-            )
+            msg = f"The initial gantry offset cannot be smaller than {self.MIN_GANTRY_OFFSET} deg. Using 180 deg can cause ambiguity in the rotation direction."
+            raise ValueError(msg)
 
-        gantry_speeds_normalized = (
-            gantry_speeds / self.machine.machine_specs.max_gantry_speed
-        )
+        gantry_speeds_normalized = gantry_speeds / machine.specs.max_gantry_speed
         dose_rates_normalized = dose_rates / self.max_dose_rate
         # Verify that there are no requested speeds above limit
         if np.any(gantry_speeds_normalized > 1):
@@ -1319,9 +1301,8 @@ class VMATDRGS(QAProcedure):
         if np.any(dose_rates_normalized > 1):
             raise ValueError("Requested dose_rates cannot exceed max_dose_rate")
         # Verify that at least one axis is maxed out for all control points
-        if not np.all(
-            np.max((gantry_speeds_normalized, dose_rates_normalized), axis=0) == 1
-        ):
+        norm_max = np.max((gantry_speeds_normalized, dose_rates_normalized), axis=0)
+        if not np.all(norm_max == 1):
             raise ValueError("At least one axis must be maxed out")
 
         # calculate unmodulated variables
@@ -1349,9 +1330,8 @@ class VMATDRGS(QAProcedure):
         )
         dose_motion = np.append([0, self.mu_per_transition], dose_motion)
         if self.correct_fluence:
-            dose_motion[[1, -1]] = self.mu_per_transition * (
-                1 - self.mlc_gap / segment_width
-            )
+            dm = self.mu_per_transition * (1 - self.mlc_gap / segment_width)
+            dose_motion[[1, -1]] = dm
 
         mlc_motion_ini = [0, segment_width - self.mlc_gap]
         mlc_motion_mid = np.tile([0, segment_width], num_segments - 1)
@@ -1381,7 +1361,7 @@ class VMATDRGS(QAProcedure):
 
         # Create dynamic beam
         dynamic_beam = self._truebeam_beam(
-            "VMAT-T2-Dyn",
+            "VMAT-DRGS-Dyn",
             cumulative_mu,
             gantry_angles,
             mlc_positions_a,
@@ -1396,7 +1376,7 @@ class VMATDRGS(QAProcedure):
         reference_mlc_positions_a = 2 * [float(mlc_positions_a[0])]
         reference_mlc_positions_b = 2 * [float(mlc_positions_b[-1])]
         reference_beam = self._truebeam_beam(
-            "VMAT-T2-Ref",
+            "VMAT-DRGS-Ref",
             reference_meterset,
             reference_gantry_angle,
             reference_mlc_positions_a,
@@ -1413,7 +1393,7 @@ class VMATDRGS(QAProcedure):
         # Add static beams
         for gantry_angle in self.dynamic_delivery_at_static_gantry:
             beam = self._truebeam_beam(
-                f"VMAT-T2-Sta-{gantry_angle:03d}",
+                f"VMAT-DRGS-Sta-{gantry_angle:03d}",
                 cumulative_mu,
                 [gantry_angle],
                 mlc_positions_a,
@@ -1474,7 +1454,7 @@ class VMATDRGS(QAProcedure):
         # Axis labeling could be improved
 
         max_dose_rate = (max_dose_rate or self.max_dose_rate) / 60
-        specs = specs or self.machine.machine_specs
+        specs = specs or self.machine.specs
 
         beam = self.dynamic_beam
         cumulative_meterset = beam.metersets
