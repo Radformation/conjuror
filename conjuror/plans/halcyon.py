@@ -179,8 +179,8 @@ class PicketFence(QAProcedure):
     mu: int = 200
     beam_name: str = "PF"
 
-    def compute(self):
-        prox_mlc, dist_mlc = Beam.create_mlc(self.machine)
+    def compute(self, machine: HalcyonMachine) -> None:
+        prox_mlc, dist_mlc = Beam.create_mlc(machine)
 
         # we prepend the positions with an initial starting position 2mm from the first strip
         # that way, each picket is the same cadence where the leaves move into position dynamically.
