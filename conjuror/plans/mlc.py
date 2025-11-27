@@ -56,9 +56,9 @@ class Strip(MLCShape):
     Parameters
     ----------
     x_min : float
-        The x_min edge of the rectangle.
+        The x_min edge of the strip.
     x_max : float
-        The x_max edge of the rectangle.
+        The x_max edge of the strip.
     """
 
     x_min: float
@@ -89,11 +89,10 @@ class Rectangle(MLCShape):
         Controls how the rectangle aligns with MLC leaf boundaries along the y-axis.
         EXACT -- Both y_min and y_max must coincide with an MLC leaf boundary.
         If either edge does not align exactly, an error is raised.
-        ROUND -- If y_min or y_max falls between boundaries the leaf band the limits
-        are rounded to the nearest boundary.
-        INWARD -- If y_min or y_max falls between boundaries the leaf band is treated as "outfield."
+        ROUND -- If y_min or y_max falls between boundaries, the limits are rounded to the nearest boundary.
+        INWARD -- If y_min or y_max falls between boundaries, the leaf band is treated as "outfield."
         This results in a smaller rectangle in the y-direction.
-        OUTWARD -- If y_min or y_max falls between boundaries the leaf band is treated as "infield."
+        OUTWARD -- If y_min or y_max falls between boundaries, the leaf band is treated as "infield."
         This results in a larger rectangle in the y-direction.
     x_outfield_position
         The position the MLCs should have when they are on the "outfield" area.
@@ -121,9 +120,8 @@ class Rectangle(MLCShape):
         match self.y_mode:
             case RectangleMode.EXACT:
                 if not (y_min_actual in b and y_max_actual in b):
-                    raise ValueError(
-                        "The rectangle y-size cannot be exactly achieved with the mlc boundaries."
-                    )
+                    msg = "The rectangle y-size cannot be exactly achieved with the mlc boundaries."
+                    raise ValueError(msg)
             case RectangleMode.ROUND:
                 y_min_actual = min(b, key=lambda x: abs(x - self.y_min))
                 y_max_actual = min(b, key=lambda x: abs(x - self.y_max))
