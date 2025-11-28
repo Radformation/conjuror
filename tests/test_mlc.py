@@ -31,16 +31,14 @@ class TestShapes(TestCase):
         self.assertTrue(all(s == -self.shaper.max_mlc_position for s in shape[:60]))
         self.assertTrue(all(s == self.shaper.max_mlc_position for s in shape[60:]))
 
-    @parameterized.expand([(-1, 1), (-1, -1), (0, 0), (1, 1)])
-    def test_strip(self, x_min, x_max):
-        shape = Strip(x_min=x_min, x_max=x_max)
+    @parameterized.expand([(-1, 2), (0, 2), (1, 2), (0, 0)])
+    def test_strip(self, position, width):
+        x_min = position - width / 2
+        x_max = position + width / 2
+        shape = Strip(position=position, width=width)
         mlc = self.shaper.get_shape(shape)
         self.assertTrue(all(m == x_min for m in mlc[:60]))
         self.assertTrue(all(m == x_max for m in mlc[60:]))
-
-    def test_strip_error_if_min_larger_than_max(self):
-        with self.assertRaises(ValueError):
-            Strip(x_min=0, x_max=-1)
 
     RECTANGLE_TEST_PARAM = [
         (-5, 5, RectangleMode.EXACT),

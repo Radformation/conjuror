@@ -51,24 +51,23 @@ class Park(MLCShape):
 
 @dataclass
 class Strip(MLCShape):
-    """Create a strip shape using the MLCs.
+    """Create a vertical strip using the MLCs.
 
     Parameters
     ----------
-    x_min : float
-        The x_min edge of the strip.
-    x_max : float
-        The x_max edge of the strip.
+    position : float
+        The position of the strip in the x-axis in mm.
+    width : float
+        The width of the strip in mm
     """
 
-    x_min: float
-    x_max: float
-
-    def __post_init__(self):
-        validate_range("x", self.x_min, self.x_max)
+    position: float
+    width: float
 
     def get_shape(self) -> list[float]:
-        return np.repeat([self.x_min, self.x_max], self.num_leaf_pairs).tolist()
+        x_min = self.position - self.width / 2
+        x_max = self.position + self.width / 2
+        return np.repeat([x_min, x_max], self.num_leaf_pairs).tolist()
 
 
 @dataclass
