@@ -329,8 +329,10 @@ class MLCTransmission(QAProcedure):
         * BANK_A -- adds a beam for bank A only
         * BANK_B -- adds a beam for bank B only
         * BOTH -- adds one beam for bank A and one beam for bank B
-    mu : int
-        The monitor units to deliver.
+    mu_per_bank : int
+        The monitor units to deliver for each bank transmission test.
+    mu_per_ref : int
+        The monitor units to deliver for the reference open field.
     overreach : float
         The amount to tuck the MLCs under the jaws in mm.
     beam_names : list[str]
@@ -361,7 +363,8 @@ class MLCTransmission(QAProcedure):
     """
 
     bank: MLCTransmissionMode = MLCTransmissionMode.BOTH_BANKS
-    mu: int = 1000
+    mu_per_bank: int = 1000
+    mu_per_ref: int = 100
     overreach: float = 10
     beam_names: list[str] = field(
         default_factory=lambda: ["MLC Tx - Ref", "MLC Tx - Bank-A", "MLC Tx - Bank-B"]
@@ -402,7 +405,7 @@ class MLCTransmission(QAProcedure):
             self._x2,
             self._y1,
             self._y2,
-            self.mu,
+            self.mu_per_ref,
             defined_by_mlcs=False,
             y_mode=OpenFieldMode.EXACT,
             energy=self.energy,
@@ -454,7 +457,7 @@ class MLCTransmission(QAProcedure):
             couch_lng=self.couch_lng,
             couch_rot=self.couch_rot,
             mlc_positions=[mlc],
-            metersets=[0, self.mu],
+            metersets=[0, self.mu_per_bank],
         )
 
 
