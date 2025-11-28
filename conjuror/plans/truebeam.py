@@ -1360,7 +1360,7 @@ class VMATDRGS(QAProcedure):
             gantry_angles = 360 - gantry_angles
 
         # Create dynamic beam
-        dynamic_beam = self._truebeam_beam(
+        dynamic_beam = self._beam(
             "VMAT-DRGS-Dyn",
             cumulative_mu,
             gantry_angles,
@@ -1375,7 +1375,7 @@ class VMATDRGS(QAProcedure):
         ]
         reference_mlc_positions_a = 2 * [float(mlc_positions_a[0])]
         reference_mlc_positions_b = 2 * [float(mlc_positions_b[-1])]
-        reference_beam = self._truebeam_beam(
+        reference_beam = self._beam(
             "VMAT-DRGS-Ref",
             reference_meterset,
             reference_gantry_angle,
@@ -1392,7 +1392,7 @@ class VMATDRGS(QAProcedure):
 
         # Add static beams
         for gantry_angle in self.dynamic_delivery_at_static_gantry:
-            beam = self._truebeam_beam(
+            beam = self._beam(
                 f"VMAT-DRGS-G{gantry_angle:03d}",
                 cumulative_mu,
                 [gantry_angle],
@@ -1403,14 +1403,14 @@ class VMATDRGS(QAProcedure):
 
         self.beams = beams
 
-    def _truebeam_beam(
+    def _beam(
         self,
         beam_name: str,
         metersets: Sequence[float],
         gantry_angles: Sequence[float],
         mlc_positions_a: Sequence[float],
         mlc_positions_b: Sequence[float],
-    ) -> BeamBase:
+    ) -> Beam:
         """Multiple similar beams are created for the VMAT test.
         Common parameters are stored as attributes, whereas the dynamic axes
         are passed as arguments to this method."""
