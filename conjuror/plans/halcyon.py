@@ -8,13 +8,12 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 
 from conjuror.plans.mlc import MLCShaper
-from conjuror.plans.plan_generator_base import (
+from conjuror.plans.plan_generator import (
     MachineSpecs,
     MachineBase,
     BeamBase,
     FluenceMode,
     QAProcedureBase,
-    PlanGenerator,
 )
 
 MLC_BOUNDARIES_HAL_DIST = tuple(np.arange(-140, 140 + 1, 10).astype(float))
@@ -28,11 +27,11 @@ DEFAULT_SPECS_HAL = MachineSpecs(
 )
 
 
-@dataclass
 class HalcyonMachine(MachineBase):
-    machine_specs: MachineSpecs = DEFAULT_SPECS_HAL
-    mlc_boundaries_dist = MLC_BOUNDARIES_HAL_DIST
-    mlc_boundaries_prox = MLC_BOUNDARIES_HAL_PROX
+    def __init__(self, machine_specs: MachineSpecs | None = None):
+        self.machine_specs = machine_specs or DEFAULT_SPECS_HAL
+        self.mlc_boundaries_dist = MLC_BOUNDARIES_HAL_DIST
+        self.mlc_boundaries_prox = MLC_BOUNDARIES_HAL_PROX
 
 
 class Stack(Enum):
@@ -224,33 +223,3 @@ class PicketFence(QAProcedure):
             metersets=[self.mu * m for m in prox_mlc.as_metersets()],
         )
         self.beams.append(beam)
-
-
-class HalcyonPlanGenerator(PlanGenerator[HalcyonMachine]):
-    """A class to generate a plan with two beams stacked on top of each other such as the Halcyon. This
-    also assumes no jaws."""
-
-    def __init__(
-        self,
-        ds: Dataset,
-        plan_label: str,
-        plan_name: str,
-        patient_name: str | None = None,
-        patient_id: str | None = None,
-        machine_specs: MachineSpecs = DEFAULT_SPECS_HAL,
-    ):
-        super().__init__(
-            ds, plan_label, plan_name, patient_name, patient_id, machine_specs
-        )
-        self.machine = HalcyonMachine(machine_specs=machine_specs)
-
-    def _validate_machine_type(self, beam_sequence: DicomSequence):
-        has_valid_mlc_data: bool = any(
-            bld.RTBeamLimitingDeviceType == "MLCX1"
-            for bs in beam_sequence
-            for bld in bs.BeamLimitingDeviceSequence
-        )
-        if not has_valid_mlc_data:
-            raise ValueError(
-                "The machine on the template plan does not seem to be a Halcyon machine."
-            )

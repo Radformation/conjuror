@@ -7,12 +7,12 @@ Typical use
 
 .. code-block:: python
 
-    from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator, OpenField
+    from conjuror.plans.plan_generator import PlanGenerator, OpenField
     import pydicom
 
     # create generator
     base_plan = pydicom.dcmread(r"C:\path\to\base_plan_truebeam_millennium_mlc.dcm")
-    generator = TrueBeamPlanGenerator(base_plan, plan_name="New QA Plan", plan_label="New QA")
+    generator = PlanGenerator(base_plan, plan_name="New QA Plan", plan_label="New QA")
 
     # add procedures
     procedure = OpenField(x1=-5, x2=5, y1=-10, y2=110, defined_by_mlcs=True, padding_mm=10)
@@ -32,16 +32,17 @@ While plans created with the Plan Generator can, in principle, be loaded directl
 .. code-block:: python
 
     import pydicom
+    from conjuror.plans.plan_generator import PlanGenerator
 
-    from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator
-    base_plan = pydicom.dcmread(r"C:\path\to\base_plan_truebeam_millennium_mlc.dcm")
-    generator = TrueBeamPlanGenerator(base_plan, plan_name="New QA Plan", plan_label="New QA")
+    # create generator from a RT plan dataset
+    base_plan_dataset = pydicom.dcmread(r"C:\path\to\base_plan_truebeam_millennium_mlc.dcm")
+    generator = PlanGenerator(base_plan_dataset, plan_name="New QA Plan", plan_label="New QA")
 
     # or
 
-    from conjuror.plans.plan_generator_halcyon import HalcyonPlanGenerator
-    base_plan = pydicom.dcmread(r"C:\path\to\base_plan_halcyon.dcm")
-    generator = HalcyonPlanGenerator(base_plan, plan_name="New QA Plan", plan_label="New QA")
+    # create generator from a RT plan file
+    base_plan_file = r"C:\path\to\base_plan_halcyon.dcm"
+    generator = PlanGenerator.from_rt_plan_file(base_plan_file, plan_name="New QA Plan", plan_label="New QA")
 
 .. _creating-a-base-plan:
 
@@ -128,7 +129,7 @@ Advanced features
 Customize machine parameters
 ############################
 
-The Plan Generator accounts for specific machine parameters — such as maximum gantry speed and maximum MLC speed — that define the physical limits of the target treatment machine. These parameters are immutable properties of the machine and are used when generating certain procedures, such as MLC speed tests.
+The Plan Generator accounts for specific machine parameters — such as maximum gantry speed and maximum MLC speed — that define the physical limits of the target treatment machine. These parameters are immutable properties of the machine and are used when creating certain procedures, such as MLC speed tests.
 
 By default, most machines use a set of standard parameter values. However, when necessary, it is possible to define custom machine specifications to reflect site-specific configurations or non-standard equipment. There are two supported methods for creating custom machine specifications:
 
@@ -136,37 +137,37 @@ By default, most machines use a set of standard parameter values. However, when 
 
 .. code-block:: python
 
-    from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator, DEFAULT_SPECS_TB
+    from conjuror.plans.plan_generator import PlanGenerator
+    from conjuror.plans.truebeam import DEFAULT_SPECS_TB
     specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=4.8, max_mlc_speed=20)
-    generator = TrueBeamPlanGenerator(..., machine_specs=specs)
+    generator = PlanGenerator(..., machine_specs=specs)
 
 
 * Create new machine specs via ``MachineSpecs``
 
 .. code-block:: python
 
-    from conjuror.plans.plan_generator_base import MachineSpecs
-    from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator
+    from conjuror.plans.plan_generator import PlanGenerator, MachineSpecs
     specs = MachineSpecs(
        max_gantry_speed=4.8,
        max_mlc_position=200,
        max_mlc_overtravel=100,
        max_mlc_speed = 20)
-    generator = TrueBeamPlanGenerator(..., machine_specs=specs)
+    generator = PlanGenerator(..., machine_specs=specs)
 
 
 Create custom procedures
 ########################
 
-Custom procedures can be created by extending the ``QAProcedureBase`` abstract class. When defining a custom procedure, a target machine must be specified — for example, when implementing a procedure to create a circle, the MLC leaf side boundaries need to be known. To simplify procedure creation without relying on a base plan, you can instantiate a ``Machine`` class and then generate the procedure using the ``.from_machine`` class method.
+Custom procedures can be created by extending the ``QAProcedure`` abstract class in the appropriate machine module. When defining a custom procedure, a target machine must be specified — for example, when implementing a procedure to create a circle, the MLC leaf side boundaries need to be known. To simplify procedure creation without relying on a base plan, you can instantiate a ``Machine`` class and then generate the procedure using the ``.from_machine`` class method.
 
 .. code-block:: python
 
-    from conjuror.plans.plan_generator_base import QAProcedureBase
-    from conjuror.plans.plan_generator_truebeam import TrueBeamPlanGenerator
+    from conjuror.plans.plan_generator import PlanGenerator
+    from conjuror.plans.truebeam import QAProcedure
 
     @dataclass
-    class CircleProcedure(QAProcedureBase):
+    class CircleProcedure(QAProcedure):
 
         # parameters
         radius: float
@@ -191,17 +192,17 @@ API
 Base classes
 ############
 
-.. autoclass:: conjuror.plans.plan_generator_base.PlanGenerator
-.. autoclass:: conjuror.plans.plan_generator_base.QAProcedureBase
-.. autoclass:: conjuror.plans.plan_generator_base.BeamBase
-.. autoclass:: conjuror.plans.plan_generator_base.MachineSpecs
+.. autoclass:: conjuror.plans.plan_generator.PlanGenerator
+.. autoclass:: conjuror.plans.plan_generator.QAProcedureBase
+.. autoclass:: conjuror.plans.plan_generator.BeamBase
+.. autoclass:: conjuror.plans.plan_generator.MachineSpecs
 
 Derived classes - TrueBeam
 ##########################
-.. autoclass:: conjuror.plans.plan_generator_truebeam.PlanGenerator
-.. autoclass:: conjuror.plans.plan_generator_truebeam.Beam
+.. autoclass:: conjuror.plans.truebeam.QAProcedure
+.. autoclass:: conjuror.plans.truebeam.Beam
 
 Derived classes - Halcyon
 ##########################
-.. autoclass:: conjuror.plans.plan_generator_halcyon.PlanGenerator
-.. autoclass:: conjuror.plans.plan_generator_halcyon.Beam
+.. autoclass:: conjuror.plans.halcyon.QAProcedure
+.. autoclass:: conjuror.plans.halcyon.Beam

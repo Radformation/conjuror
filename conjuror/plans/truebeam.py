@@ -11,13 +11,12 @@ from pydicom.sequence import Sequence as DicomSequence
 
 from conjuror.images.simulators import Imager
 from conjuror.plans.mlc import MLCShaper
-from conjuror.plans.plan_generator_base import (
+from conjuror.plans.plan_generator import (
     MachineSpecs,
     MachineBase,
     BeamBase,
     FluenceMode,
     QAProcedureBase,
-    PlanGenerator,
     OvertravelError,
     GantryDirection,
 )
@@ -42,10 +41,10 @@ DEFAULT_SPECS_TB = MachineSpecs(
 )
 
 
-@dataclass
 class TrueBeamMachine(MachineBase):
-    mlc_is_hd: bool
-    machine_specs: MachineSpecs = DEFAULT_SPECS_TB
+    def __init__(self, mlc_is_hd: bool, machine_specs: MachineSpecs | None = None):
+        self.mlc_is_hd = mlc_is_hd
+        self.machine_specs = machine_specs or DEFAULT_SPECS_TB
 
     @property
     def mlc_boundaries(self) -> tuple[float, ...]:
@@ -1546,37 +1545,3 @@ class VMATDRGS(QAProcedure):
         plt.plot(profile)
         plt.ylim((1 - zoom / 100) * profile_max, (1 + zoom / 100) * profile_max)
         plt.show()
-
-
-class TrueBeamPlanGenerator(PlanGenerator[TrueBeamMachine]):
-    def __init__(
-        self,
-        ds: Dataset,
-        plan_label: str,
-        plan_name: str,
-        patient_name: str | None = None,
-        patient_id: str | None = None,
-        machine_specs: MachineSpecs = DEFAULT_SPECS_TB,
-    ):
-        super().__init__(
-            ds, plan_label, plan_name, patient_name, patient_id, machine_specs
-        )
-
-        mlc_is_hd = any(
-            bld.LeafPositionBoundaries[0] == -110
-            for bs in ds.BeamSequence
-            for bld in bs.BeamLimitingDeviceSequence
-            if bld.RTBeamLimitingDeviceType == "MLCX"
-        )
-        self.machine = TrueBeamMachine(mlc_is_hd, machine_specs=machine_specs)
-
-    def _validate_machine_type(self, beam_sequence: DicomSequence):
-        has_valid_mlc_data: bool = any(
-            bld.RTBeamLimitingDeviceType == "MLCX"
-            for bs in beam_sequence
-            for bld in bs.BeamLimitingDeviceSequence
-        )
-        if not has_valid_mlc_data:
-            raise ValueError(
-                "The machine on the template plan does not seem to be a TrueBeam machine."
-            )
