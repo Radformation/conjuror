@@ -254,7 +254,7 @@ class OpenField(QAProcedure):
     y1: float
     y2: float
     defined_by_mlcs: bool = True
-    y_mode: OpenFieldMode = OpenFieldMode.ROUND
+    y_mode: OpenFieldMode = OpenFieldMode.OUTWARD
     energy: float = 6
     fluence_mode: FluenceMode = FluenceMode.STANDARD
     dose_rate: int = 600
