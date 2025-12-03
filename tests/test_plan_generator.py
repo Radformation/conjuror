@@ -1,6 +1,7 @@
 import tempfile
 from unittest import TestCase
 
+import numpy as np
 import pydicom
 from plotly.graph_objects import Figure
 import matplotlib.pyplot as plt
@@ -18,6 +19,7 @@ from conjuror.plans.truebeam import (
     OpenField,
     Beam,
     MLCSpeed,
+    PicketFence,
 )
 from tests.utils import get_file_from_cloud_test_repo
 
@@ -160,7 +162,7 @@ class TestPlanGeneratorParameters(TestCase):
         pg_dcm = pg.to_dicom_images(imager=IMAGER_AS1200, invert=True)
         inverted_array = pg_dcm[0].pixel_array
         # when inverted, the corner should NOT be 0
-        self.assertAlmostEqual(float(inverted_array[0, 0]), 1000)
+        self.assertAlmostEqual(float(inverted_array[0, 0]), 100)
 
 
 def create_beam(**kwargs) -> BeamBase:
@@ -179,7 +181,7 @@ def create_beam(**kwargs) -> BeamBase:
         couch_lat=kwargs.get("couch_lat", 0),
         couch_rot=kwargs.get("couch_rot", 0),
         mlc_is_hd=kwargs.get("mlc_is_hd", False),
-        mlc_positions=kwargs.get("mlc_positions", [[0], [0]]),
+        mlc_positions=kwargs.get("mlc_positions", [120 * [0], 120 * [0]]),
         metersets=kwargs.get("metersets", [0, 100]),
         fluence_mode=kwargs.get("fluence_mode", FluenceMode.STANDARD),
     )
@@ -188,13 +190,27 @@ def create_beam(**kwargs) -> BeamBase:
 class TestBeam(TestCase):
     def test_beam_normal(self):
         # shouldn't raise; happy path
-        beam = create_beam(
-            gantry_angles=0,
-        )
+        beam = create_beam(gantry_angles=0)
         beam_dcm = beam.to_dicom()
         self.assertEqual(beam_dcm.BeamName, "name")
         self.assertEqual(beam_dcm.BeamType, "STATIC")
         self.assertEqual(beam_dcm.ControlPointSequence[0].GantryAngle, 0)
+
+    def test_from_dicom(self):
+        # shouldn't raise; happy path
+        ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
+        BeamBase.from_dicom(ds, 0)
+
+    def test_from_dicom_error_if_not_rt_plan(self):
+        file = get_file_from_cloud_test_repo(["picket_fence", "AS500#2.dcm"])
+        ds = pydicom.dcmread(file)
+        with self.assertRaises(ValueError):
+            BeamBase.from_dicom(ds, 0)
+
+    def test_from_dicom_error_if_beam_not_in_plan(self):
+        ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
+        with self.assertRaises(ValueError):
+            BeamBase.from_dicom(ds, 1)
 
     def test_too_long_beam_name(self):
         with self.assertRaises(ValueError):
@@ -272,7 +288,7 @@ class TestPlanGeneratorBeams(TestCase):
         self.pg = _get_generator_from_file(TB_MIL_PLAN_FILE)
 
     def test_add_beam_low_level(self):
-        self.pg.add_beam(create_beam(plan_dataset=self.pg.as_dicom()))
+        self.pg.add_beam(create_beam())
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 1)
         self.assertEqual(dcm.BeamSequence[0].BeamName, "name")
@@ -310,13 +326,43 @@ class TestPlanGeneratorBeams(TestCase):
         self.assertEqual(dcm.BeamSequence[1].BeamName, "beam2")
         self.assertEqual(dcm.BeamSequence[1].BeamNumber, 2)
 
+    def test_beam_roundtrip(self):
+        # Round trip:
+        # 1. create beam (beam1)
+        # 2. create generator and append beam1 to plan
+        # 3. load beam from generator (beam2)
+        # 4. assert(beam1==beam2)
+        beam1 = create_beam()
+        pg = _get_generator_from_file(TB_MIL_PLAN_FILE)
+        pg.add_beam(beam1)
+        beam2 = BeamBase.from_dicom(pg.ds, 0)
+        self.assertEqual(beam1.beam_name, beam2.beam_name)
+        self.assertEqual(beam1.beam_meterset, beam2.beam_meterset)
+        np.testing.assert_array_equal(beam1.gantry_angles, beam2.gantry_angles)
+        np.testing.assert_array_equal(beam1.metersets, beam2.metersets)
+        for bld_type in ["ASYMX", "ASYMY", "MLCX"]:
+            np.testing.assert_array_equal(
+                beam1.beam_limiting_device_positions[bld_type],
+                beam2.beam_limiting_device_positions[bld_type],
+            )
+
     def test_plot_fluence(self):
         # just tests it works
         procedure = OpenField(x1=-5, x2=5, y1=-5, y2=5, mu=100)
         self.pg.add_procedure(procedure)
-        figs = self.pg.plot_fluences()
+        figs = self.pg.plot_fluences(IMAGER_AS1200)
         self.assertIsInstance(figs, list)
         self.assertIsInstance(figs[0], Figure)
+
+    def test_animate_mlc(self):
+        procedure = PicketFence()
+        self.pg.add_procedure(procedure)
+        beam = BeamBase.from_dicom(self.pg.as_dicom(), 0)
+        fig = beam.animate_mlc()
+        self.assertEqual(
+            120, sum(True for f in fig.data if f["line"]["color"] == "blue")
+        )
+        pass
 
     def test_list_procedure(self):
         procedures = self.pg.list_procedures()

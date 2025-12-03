@@ -10,7 +10,7 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 
 from conjuror.images.simulators import Imager
-from conjuror.plans.mlc import MLCShaper
+from conjuror.plans.mlc import MLCModulator
 from conjuror.plans.plan_generator import (
     MachineSpecs,
     MachineBase,
@@ -160,9 +160,9 @@ class Beam(BeamBase[TrueBeamMachine]):
         machine: TrueBeamMachine,
         sacrifice_gap_mm: float = None,
         sacrifice_max_move_mm: float = None,
-    ) -> MLCShaper:
-        """Utility to create MLC shaper instances."""
-        return MLCShaper(
+    ) -> MLCModulator:
+        """Utility to create MLC modulator instances."""
+        return MLCModulator(
             leaf_y_positions=machine.mlc_boundaries,
             max_mlc_position=machine.machine_specs.max_mlc_position,
             max_overtravel_mm=machine.machine_specs.max_mlc_overtravel,
