@@ -548,6 +548,7 @@ class BeamBase(Generic[TMachine], ABC):
         data = frames[0].data
         layout = go.Layout(
             showlegend=False,
+            title=f"Beam: {self.beam_name}",
             xaxis=dict(range=[-200, 200]),
             yaxis=dict(range=[-200, 200]),
             updatemenus=[

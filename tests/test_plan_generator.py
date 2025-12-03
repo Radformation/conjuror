@@ -151,7 +151,7 @@ class TestPlanGeneratorParameters(TestCase):
 
     def test_invert_array(self):
         pg = _get_generator_from_file(TB_MIL_PLAN_FILE)
-        procedure = OpenField(x1=100, x2=200, y1=100, y2=200, mu=100)
+        procedure = OpenField(x1=100, x2=200, y1=-100, y2=100, mu=100)
         pg.add_procedure(procedure)
         # test that non-inverted array is 0
         pg_dcm = pg.to_dicom_images(imager=IMAGER_AS1200, invert=False)
@@ -350,7 +350,10 @@ class TestPlanGeneratorBeams(TestCase):
         procedure = PicketFence()
         self.pg.add_procedure(procedure)
         beam = BeamBase.from_dicom(self.pg.as_dicom(), 0)
-        beam.animate_mlc()
+        fig = beam.animate_mlc()
+        self.assertEqual(
+            120, sum(True for f in fig.data if f["line"]["color"] == "blue")
+        )
         pass
 
     def test_list_procedure(self):
