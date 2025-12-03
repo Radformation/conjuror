@@ -2,6 +2,7 @@ import math
 from abc import ABC
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Literal
 
 import numpy as np
@@ -10,7 +11,7 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 
 from conjuror.images.simulators import Imager
-from conjuror.plans.mlc import MLCModulator
+from conjuror.plans.mlc import MLCModulator, MLCShaper, Rectangle, RectangleMode
 from conjuror.plans.plan_generator import (
     MachineSpecs,
     MachineBase,
@@ -39,6 +40,13 @@ MLC_BOUNDARIES_TB_HD120 = (
 DEFAULT_SPECS_TB = MachineSpecs(
     max_gantry_speed=6.0, max_mlc_position=200, max_mlc_overtravel=140, max_mlc_speed=25
 )
+
+
+class OpenFieldMode(Enum):
+    EXACT = RectangleMode.EXACT
+    ROUND = RectangleMode.ROUND
+    INWARD = RectangleMode.INWARD
+    OUTWARD = RectangleMode.OUTWARD
 
 
 class TrueBeamMachine(MachineBase):
@@ -156,7 +164,18 @@ class Beam(BeamBase[TrueBeamMachine]):
         )
 
     @staticmethod
-    def create_mlc(
+    def create_shaper(
+        machine: TrueBeamMachine,
+    ) -> MLCShaper:
+        """Utility to create MLC shaper instances."""
+        return MLCShaper(
+            machine.mlc_boundaries,
+            machine.machine_specs.max_mlc_position,
+            machine.machine_specs.max_mlc_overtravel,
+        )
+
+    @staticmethod
+    def create_modulator(
         machine: TrueBeamMachine,
         sacrifice_gap_mm: float = None,
         sacrifice_max_move_mm: float = None,
@@ -182,15 +201,25 @@ class OpenField(QAProcedure):
     Parameters
     ----------
     x1 : float
-        The left jaw position.
+        The left edge position.
     x2 : float
-        The right jaw position.
+        The right edge position.
     y1 : float
-        The bottom jaw position.
+        The bottom edge position.
     y2 : float
-        The top jaw position.
+        The top edge position.
     defined_by_mlcs : bool
         Whether the field edges are defined by the MLCs or the jaws.
+    y_mode : OpenFieldMode
+        Controls how the open field aligns with MLC leaf boundaries along the y-axis.
+
+        * EXACT -- Both ``y1`` and ``y2`` must coincide with an MLC leaf boundary.
+          If either edge does not align exactly, an error is raised.
+        * ROUND -- If ``y1`` or ``y2`` falls between boundaries, the limits are rounded to the nearest boundary.
+        * INWARD -- If ``y1`` or ``y2`` falls between boundaries, the leaf band is treated as "outfield."
+          This results in a smaller field in the y-direction.
+        * OUTWARD -- If ``y1`` or ``y2`` falls between boundaries, the leaf band is treated as "infield."
+          This results in a larger field in the y-direction.
     energy : float
         The energy of the beam.
     fluence_mode : FluenceMode
@@ -217,7 +246,7 @@ class OpenField(QAProcedure):
         The name of the beam.
     outside_strip_width_mm : float
         The width of the strip of MLCs outside the field. The MLCs will be placed to the
-        left, under the X1 jaw by ~2cm.
+        left, under the X1 jaw by 2cm.
     """
 
     x1: float
@@ -225,6 +254,7 @@ class OpenField(QAProcedure):
     y1: float
     y2: float
     defined_by_mlcs: bool = True
+    y_mode: OpenFieldMode = OpenFieldMode.OUTWARD
     energy: float = 6
     fluence_mode: FluenceMode = FluenceMode.STANDARD
     dose_rate: int = 600
@@ -240,22 +270,26 @@ class OpenField(QAProcedure):
     outside_strip_width_mm: float = 5
 
     def compute(self):
+        y_mode = self.y_mode.value
         if self.defined_by_mlcs:
             mlc_padding = 0
             jaw_padding = self.padding_mm
         else:
             mlc_padding = self.padding_mm
             jaw_padding = 0
-        mlc = Beam.create_mlc(self.machine)
-        mlc.add_rectangle(
-            left_position=self.x1 - mlc_padding,
-            right_position=self.x2 + mlc_padding,
-            top_position=self.y2 + mlc_padding,
-            bottom_position=self.y1 - mlc_padding,
+            y_mode = OpenFieldMode.ROUND.value
+
+        shaper = Beam.create_shaper(self.machine)
+        shape = Rectangle(
+            x_min=self.x1 - mlc_padding,
+            x_max=self.x2 + mlc_padding,
+            y_min=self.y1 - mlc_padding,
+            y_max=self.y2 + mlc_padding,
+            y_mode=y_mode,
             outer_strip_width=self.outside_strip_width_mm,
-            x_outfield_position=self.x1 - mlc_padding - jaw_padding - 20,
-            meterset_at_target=1.0,
+            x_outfield_position=self.x1 - jaw_padding - 20,
         )
+        mlc = shaper.get_shape(shape)
         beam = Beam(
             beam_name=self.beam_name,
             energy=self.energy,
@@ -270,8 +304,8 @@ class OpenField(QAProcedure):
             couch_lat=self.couch_lat,
             couch_lng=self.couch_lng,
             couch_rot=self.couch_rot,
-            mlc_positions=mlc.as_control_points(),
-            metersets=[self.mu * m for m in mlc.as_metersets()],
+            mlc_positions=2 * [mlc],
+            metersets=[0, self.mu],
             fluence_mode=self.fluence_mode,
             mlc_is_hd=self.machine.mlc_is_hd,
         )
@@ -340,7 +374,7 @@ class MLCTransmission(QAProcedure):
     fluence_mode: FluenceMode = FluenceMode.STANDARD
 
     def compute(self):
-        mlc = Beam.create_mlc(self.machine)
+        mlc = Beam.create_modulator(self.machine)
         if self.bank == "A":
             mlc_tips = self.x2 + self.overreach
         elif self.bank == "B":
@@ -455,7 +489,7 @@ class PicketFence(QAProcedure):
             raise ValueError(
                 "Picket fence beam exceeds MLC overtravel limits. Lower padding, the number of pickets, or the picket spacing."
             )
-        mlc = Beam.create_mlc(
+        mlc = Beam.create_modulator(
             self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
         )
         # create initial starting point; start under the jaws
@@ -555,7 +589,7 @@ class WinstonLutz(QAProcedure):
             else:
                 mlc_padding = self.padding_mm
                 jaw_padding = 0
-            mlc = Beam.create_mlc(self.machine)
+            mlc = Beam.create_modulator(self.machine)
             mlc.add_rectangle(
                 left_position=self.x1 - mlc_padding,
                 right_position=self.x2 + mlc_padding,
@@ -678,10 +712,10 @@ class DoseRate(QAProcedure):
             tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition
         ]
 
-        mlc = Beam.create_mlc(
+        mlc = Beam.create_modulator(
             self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
         )
-        ref_mlc = Beam.create_mlc(self.machine)
+        ref_mlc = Beam.create_modulator(self.machine)
 
         roi_centers = np.linspace(
             -self.roi_size_mm * len(self.dose_rates) / 2 + self.roi_size_mm / 2,
@@ -878,10 +912,10 @@ class MLCSpeed(QAProcedure):
             tt * self.machine.machine_specs.max_mlc_speed for tt in times_to_transition
         ]
 
-        mlc = Beam.create_mlc(
+        mlc = Beam.create_modulator(
             self.machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
         )
-        ref_mlc = Beam.create_mlc(self.machine)
+        ref_mlc = Beam.create_modulator(self.machine)
 
         roi_centers = np.linspace(
             -self.roi_size_mm * len(self.speeds) / 2 + self.roi_size_mm / 2,
@@ -1082,8 +1116,8 @@ class GantrySpeed(QAProcedure):
                 "Gantry travel is >360 degrees. Lower the beam MU, use fewer speeds, or decrease the desired gantry speeds"
             )
 
-        mlc = Beam.create_mlc(self.machine)
-        ref_mlc = Beam.create_mlc(self.machine)
+        mlc = Beam.create_modulator(self.machine)
+        ref_mlc = Beam.create_modulator(self.machine)
 
         roi_centers = np.linspace(
             -self.roi_size_mm * len(self.speeds) / 2 + self.roi_size_mm / 2,

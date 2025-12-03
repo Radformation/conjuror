@@ -18,6 +18,7 @@ from conjuror.plans.truebeam import (
     VMATDRGS,
     DEFAULT_SPECS_TB,
     TrueBeamMachine,
+    OpenFieldMode,
 )
 from tests.utils import get_file_from_cloud_test_repo
 
@@ -412,6 +413,115 @@ class TestProcedures(TestCase):
         self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         self.assertEqual(len(dcm.BeamSequence), 2)
+
+
+class TestOpenField(TestCase):
+    # An Open field is mostly a Rectangle, so some of these tests strategy mimics the Rectangle shape tests
+
+    OPENFIELD_MLC_PARAM = [
+        (-2.5, 2.5, OpenFieldMode.EXACT),
+        (-2.4, 2.6, OpenFieldMode.ROUND),
+        (-2.6, 2.6, OpenFieldMode.INWARD),
+        (-2.4, 2.4, OpenFieldMode.OUTWARD),
+    ]
+
+    @parameterized.expand(OPENFIELD_MLC_PARAM)
+    def test_defined_by_mlc(self, y1, y2, y_mode):
+        x1, x2 = -100, 100
+        procedure = OpenField.from_machine(
+            DEFAULT_TRUEBEAM_HD120,
+            x1=x1,
+            x2=x2,
+            y1=y1,
+            y2=y2,
+            y_mode=y_mode,
+        )
+
+        bld = procedure.beams[0].beam_limiting_device_positions
+
+        mlc = bld["MLCX"]
+        self.assertFalse(np.any(mlc[:, 0] - mlc[:, 1]))
+        mlc0 = mlc[:, 0]
+        self.assertTrue(all(x == -127.5 for x in mlc0[:29]))
+        self.assertTrue(all(x == x1 for x in mlc0[29:31]))
+        self.assertTrue(all(x == -127.5 for x in mlc0[31:60]))
+        self.assertTrue(all(x == -122.5 for x in mlc0[60 : 29 + 60]))
+        self.assertTrue(all(x == x2 for x in mlc0[29 + 60 : 31 + 60]))
+        self.assertTrue(all(x == -122.5 for x in mlc0[31 + 60 :]))
+
+        jaw_x = bld["ASYMX"]
+        self.assertFalse(np.any(jaw_x[:, 0] - jaw_x[:, 1]))
+        self.assertEqual(x1 - 5, jaw_x[0, 0])
+        self.assertEqual(x2 + 5, jaw_x[1, 0])
+
+        jaw_y = bld["ASYMY"]
+        self.assertFalse(np.any(jaw_y[:, 0] - jaw_y[:, 1]))
+        self.assertEqual(y1 - 5, jaw_y[0, 0])
+        self.assertEqual(y2 + 5, jaw_y[1, 0])
+
+    def test_defined_by_jaws(self):
+        x1, x2, y1, y2 = -100, 100, -200, 200
+        procedure = OpenField.from_machine(
+            DEFAULT_TRUEBEAM_HD120,
+            x1=x1,
+            x2=x2,
+            y1=y1,
+            y2=y2,
+            defined_by_mlcs=False,
+        )
+
+        bld = procedure.beams[0].beam_limiting_device_positions
+
+        mlc = bld["MLCX"]
+        self.assertFalse(np.any(mlc[:, 0] - mlc[:, 1]))
+        mlc0 = mlc[:, 0]
+        self.assertTrue(all(x == -105 for x in mlc0[:60]))
+        self.assertTrue(all(x == 105 for x in mlc0[60:]))
+
+        jaw_x = bld["ASYMX"]
+        self.assertFalse(np.any(jaw_x[:, 0] - jaw_x[:, 1]))
+        self.assertEqual(x1, jaw_x[0, 0])
+        self.assertEqual(x2, jaw_x[1, 0])
+
+        jaw_y = bld["ASYMY"]
+        self.assertFalse(np.any(jaw_y[:, 0] - jaw_y[:, 1]))
+        self.assertEqual(y1, jaw_y[0, 0])
+        self.assertEqual(y2, jaw_y[1, 0])
+
+    @parameterized.expand([(2, 1, 0, 1), (0, 1, 2, 1)])
+    def test_openfield_error_if_min_larger_than_max(self, x1, x2, y1, y2):
+        with self.assertRaises(ValueError):
+            OpenField.from_machine(
+                DEFAULT_TRUEBEAM_HD120,
+                x1=x1,
+                x2=x2,
+                y1=y1,
+                y2=y2,
+            )
+
+    @parameterized.expand([(-0.1, 0), (0, 0.1)])
+    def test_openfield_error_if_mlc_exact_and_not_possible(self, y1, y2):
+        with self.assertRaises(ValueError):
+            OpenField.from_machine(
+                DEFAULT_TRUEBEAM_HD120,
+                x1=0,
+                x2=1,
+                y1=y1,
+                y2=y2,
+                y_mode=OpenFieldMode.EXACT,
+            )
+
+    @parameterized.expand([(-0.1, 0), (0, 0.1)])
+    def test_openfield_exact_is_ignored_if_defined_by_jaws(self, y1, y2):
+        OpenField.from_machine(
+            DEFAULT_TRUEBEAM_HD120,
+            x1=0,
+            x2=1,
+            y1=y1,
+            y2=y2,
+            y_mode=OpenFieldMode.EXACT,
+            defined_by_mlcs=False,
+        )
 
 
 class TestVmatT2(TestCase):
