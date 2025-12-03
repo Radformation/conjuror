@@ -163,8 +163,15 @@ class BeamBase(Generic[TMachine], ABC):
         ds : Dataset
             The dataset of the RT Plan.
         beam_idx : int
-            The index of the beam to be loaded
+            The index of the beam to be loaded (zero indexed, i.e. beam #1 -> ind #0).
         """
+        if ds.Modality != "RTPLAN":
+            raise ValueError("File is not an RTPLAN file")
+
+        if beam_idx >= ds.FractionGroupSequence[0].NumberOfBeams:
+            msg = "beam_idx is largen that the number of beams in the plan (note: use zero indexing)."
+            raise ValueError(msg)
+
         mu = ds.FractionGroupSequence[0].ReferencedBeamSequence[beam_idx].BeamMeterset
         beam = ds.BeamSequence[beam_idx]
         bld = beam.BeamLimitingDeviceSequence
