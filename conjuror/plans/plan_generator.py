@@ -469,6 +469,138 @@ class BeamBase(Generic[TMachine], ABC):
             fig.show()
         return fig
 
+    def animate_mlc(self, show: bool = True) -> go.Figure:
+        """Plot the MLC positions as animation.
+
+        Parameters
+        ----------
+        show : bool, optional
+            Whether to show the plot. Default is True.
+        """
+        _leaf_length = 200
+        blds = {
+            bld.RTBeamLimitingDeviceType: bld
+            for bld in self.beam_limiting_device_sequence
+            if "MLC" in bld.RTBeamLimitingDeviceType
+        }
+
+        frames = []
+        for cp_idx in range(self.number_of_control_points):
+            shapes = []
+            for key, positions in self.beam_limiting_device_positions.items():
+                if key in ["X", "ASYMX"]:
+                    x1 = go.Scatter(
+                        x=2 * [positions[0, cp_idx]],
+                        y=[-1000, 1000],
+                        mode="lines",
+                        line=dict(width=2, color="orange"),
+                    )
+                    x2 = go.Scatter(
+                        x=2 * [positions[1, cp_idx]],
+                        y=[-1000, 1000],
+                        mode="lines",
+                        line=dict(width=2, color="orange"),
+                    )
+                    shapes.append(x1)
+                    shapes.append(x2)
+                if key in ["Y", "ASYMY"]:
+                    y1 = go.Scatter(
+                        x=[-1000, 1000],
+                        y=2 * [positions[0, cp_idx]],
+                        mode="lines",
+                        line=dict(width=2, color="orange"),
+                    )
+                    y2 = go.Scatter(
+                        x=[-1000, 1000],
+                        y=2 * [positions[1, cp_idx]],
+                        mode="lines",
+                        line=dict(width=2, color="orange"),
+                    )
+                    shapes.append(y1)
+                    shapes.append(y2)
+                if "MLC" not in key:
+                    continue
+
+                # MLC
+                num_leaf_pairs = blds[key].NumberOfLeafJawPairs
+                for leaf in range(num_leaf_pairs):
+                    y1 = blds[key].LeafPositionBoundaries[leaf]
+                    y2 = blds[key].LeafPositionBoundaries[leaf + 1]
+                    y = np.array([y1, y1, y2, y2, y1])
+
+                    pos_b = positions[leaf, cp_idx]
+                    x_b = pos_b + _leaf_length * np.array([-1, 0, 0, -1, -1])
+                    rect_b = go.Scatter(
+                        x=x_b, y=y, mode="lines", line=dict(width=2, color="blue")
+                    )
+
+                    pos_a = positions[leaf + num_leaf_pairs, cp_idx]
+                    x_a = pos_a + _leaf_length * np.array([0, 1, 1, 0, 0])
+                    rect_a = go.Scatter(
+                        x=x_a, y=y, mode="lines", line=dict(width=2, color="blue")
+                    )
+
+                    shapes.append(rect_b)
+                    shapes.append(rect_a)
+
+                frame = go.Frame(data=shapes, name=f"cp_{cp_idx}")
+                frames.append(frame)
+        data = frames[0].data
+        layout = go.Layout(
+            showlegend=False,
+            title=f"Beam: {self.beam_name}",
+            xaxis=dict(range=[-200, 200]),
+            yaxis=dict(range=[-200, 200]),
+            updatemenus=[
+                {
+                    "type": "buttons",
+                    "buttons": [
+                        {
+                            "label": "▶ Play",
+                            "method": "animate",
+                            "args": [
+                                None,
+                                {
+                                    # "frame": {"duration": 50},
+                                    # "transition": {"duration": 0},
+                                    "fromcurrent": True,
+                                },
+                            ],
+                        }
+                    ],
+                    "pad": {"r": 10, "t": 50},
+                    "x": 0,
+                    "y": 0,
+                }
+            ],
+            sliders=[
+                {
+                    "currentvalue": {"prefix": "Control point: "},
+                    "steps": [
+                        {
+                            "label": f"{i}",
+                            "method": "animate",
+                            "args": [
+                                [f"cp_{i}"],
+                                {
+                                    "mode": "immediate",
+                                    "transition": {"duration": 0},
+                                },
+                            ],
+                        }
+                        for i in range(len(frames))
+                    ],
+                    "pad": {"b": 10, "t": 50},
+                }
+            ],
+        )
+        fig = go.Figure(data=data, frames=frames, layout=layout)
+
+        if show:
+            fig.show()
+
+        return fig
+
 
 @dataclass
 class QAProcedureBase(Generic[TMachine], ABC):
