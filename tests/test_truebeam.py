@@ -321,9 +321,30 @@ class TestOpenField(TestCase):
         self.assertEqual(y1 - 5, jaw_y[0, 0])
         self.assertEqual(y2 + 5, jaw_y[1, 0])
 
+    OPEN_MLC_PARAM = [
+        OpenFieldMode.EXACT,
+        OpenFieldMode.ROUND,
+        OpenFieldMode.INWARD,
+        OpenFieldMode.OUTWARD,
+    ]
+
+    @parameterized.expand(OPEN_MLC_PARAM)
+    def test_open_mlc(self, y_mode):
+        x1, x2, y1, y2 = -100, 100, -110, 110
+        procedure = OpenField(x1, x2, y1, y2, y_mode=y_mode)
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+        bld = procedure.beams[0].beam_limiting_device_positions
+
+        mlc = bld["MLCX"]
+        self.assertFalse(np.any(mlc[:, 0] - mlc[:, 1]))
+        mlc0 = mlc[:, 0]
+        self.assertTrue(all(x == -100 for x in mlc0[:60]))
+        self.assertTrue(all(x == 100 for x in mlc0[60:]))
+
     def test_defined_by_jaws(self):
-        x1, x2, y1, y2 = -100, 100, -200, 200
-        procedure = OpenField(x1, x2, y1, y2, defined_by_mlcs=False)
+        x1, x2, y1, y2 = -100, 100, -110, 110
+        procedure = OpenField(x1, x2, y1, y2, defined_by_mlc=False)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
         bld = procedure.beams[0].beam_limiting_device_positions
@@ -359,7 +380,7 @@ class TestOpenField(TestCase):
     @parameterized.expand([(-0.1, 0), (0, 0.1)])
     def test_openfield_exact_is_ignored_if_defined_by_jaws(self, y1, y2):
         procedure = OpenField(
-            0, 1, y1, y2, y_mode=OpenFieldMode.EXACT, defined_by_mlcs=False
+            0, 1, y1, y2, y_mode=OpenFieldMode.EXACT, defined_by_mlc=False
         )
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
