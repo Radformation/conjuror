@@ -47,12 +47,6 @@ class OpenFieldMode(Enum):
     OUTWARD = RectangleMode.OUTWARD
 
 
-class MLCTransmissionMode(Enum):
-    BANK_A = "bank_a"
-    BANK_B = "bank_b"
-    BOTH_BANKS = "both_banks"
-
-
 class TrueBeamMachine(MachineBase):
     def __init__(self, mlc_is_hd: bool, specs: MachineSpecs | None = None):
         self.mlc_is_hd = mlc_is_hd
@@ -323,12 +317,6 @@ class MLCTransmission(QAProcedure):
 
     Parameters
     ----------
-    bank : MLCTransmissionMode
-        Specifies which MLC bank(s) to test.
-
-        * BANK_A -- adds a beam for bank A only
-        * BANK_B -- adds a beam for bank B only
-        * BOTH -- adds one beam for bank A and one beam for bank B
     mu_per_bank : int
         The monitor units to deliver for each bank transmission test.
     mu_per_ref : int
@@ -362,7 +350,6 @@ class MLCTransmission(QAProcedure):
         The couch rotation in degrees.
     """
 
-    bank: MLCTransmissionMode = MLCTransmissionMode.BOTH_BANKS
     mu_per_bank: int = 1000
     mu_per_ref: int = 100
     overreach: float = 10
@@ -407,7 +394,7 @@ class MLCTransmission(QAProcedure):
             self._y2,
             self.mu_per_ref,
             defined_by_mlcs=False,
-            y_mode=OpenFieldMode.EXACT,
+            y_mode=OpenFieldMode.OUTWARD,
             energy=self.energy,
             fluence_mode=self.fluence_mode,
             dose_rate=self.dose_rate,
@@ -425,19 +412,17 @@ class MLCTransmission(QAProcedure):
 
         # Transmission field A
         # Bank A is under X2, so the slit should be under X1
-        if self.bank in [MLCTransmissionMode.BANK_A, MLCTransmissionMode.BOTH_BANKS]:
-            shape = Strip(position=self._x1 - self.overreach, width=1)
-            mlc = shaper.get_shape(shape)
-            beam = self._beam(names["A"], mlc)
-            self.beams.append(beam)
+        shape = Strip(position=self._x1 - self.overreach, width=1)
+        mlc = shaper.get_shape(shape)
+        beam = self._beam(names["A"], mlc)
+        self.beams.append(beam)
 
         # Transmission field B
         # Bank B is under X1, so the slit should be under X2
-        if self.bank in [MLCTransmissionMode.BANK_B, MLCTransmissionMode.BOTH_BANKS]:
-            shape = Strip(position=self._x2 + self.overreach, width=1)
-            mlc = shaper.get_shape(shape)
-            beam = self._beam(names["B"], mlc)
-            self.beams.append(beam)
+        shape = Strip(position=self._x2 + self.overreach, width=1)
+        mlc = shaper.get_shape(shape)
+        beam = self._beam(names["B"], mlc)
+        self.beams.append(beam)
 
     def _beam(self, beam_name: str, mlc: list[float]) -> Beam:
         return Beam(

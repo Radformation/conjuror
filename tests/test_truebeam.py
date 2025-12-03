@@ -19,7 +19,6 @@ from conjuror.plans.truebeam import (
     DEFAULT_SPECS_TB,
     TrueBeamMachine,
     OpenFieldMode,
-    MLCTransmissionMode,
 )
 from tests.utils import get_file_from_cloud_test_repo
 
@@ -371,34 +370,19 @@ class TestMLCTransmission(TestCase):
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         self.assertEqual(3, len(procedure.beams))
 
-    MODES_PARAM = [
-        (MLCTransmissionMode.BANK_A, 2),
-        (MLCTransmissionMode.BANK_B, 2),
-        (MLCTransmissionMode.BOTH_BANKS, 3),
-    ]
-
-    @parameterized.expand(MODES_PARAM)
-    def test_modes(self, bank, num_beams):
-        procedure = MLCTransmission(bank=bank)
+    def test_banks(self):
+        procedure = MLCTransmission()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
-        self.assertEqual(num_beams, len(procedure.beams))
 
-    BANKS_PARAM = [
-        (MLCTransmissionMode.BANK_A, -1),
-        (MLCTransmissionMode.BANK_B, 1),
-    ]
+        for beam_idx in [1, 2]:
+            mult = -1 if beam_idx == 1 else 1
+            slit_pos = mult * (procedure.width / 2 + procedure.overreach)
+            mlc_nominal = 60 * [2 * [slit_pos - 0.5]] + 60 * [2 * [slit_pos + 0.5]]
 
-    @parameterized.expand(BANKS_PARAM)
-    def test_banks(self, bank, mult):
-        procedure = MLCTransmission(bank=bank)
-        procedure.compute(DEFAULT_TRUEBEAM_HD120)
-        slit_pos = mult * (procedure.width / 2 + procedure.overreach)
-        mlc_nominal = 60 * [2 * [slit_pos - 0.5]] + 60 * [2 * [slit_pos + 0.5]]
-
-        bld = procedure.beams[1].beam_limiting_device_positions
-        np.testing.assert_array_equal(mlc_nominal, bld["MLCX"])
-        np.testing.assert_array_equal([[-50, -50], [50, 50]], bld["ASYMX"])
-        np.testing.assert_array_equal([[-50, -50], [50, 50]], bld["ASYMY"])
+            bld = procedure.beams[beam_idx].beam_limiting_device_positions
+            np.testing.assert_array_equal(mlc_nominal, bld["MLCX"])
+            np.testing.assert_array_equal([[-50, -50], [50, 50]], bld["ASYMX"])
+            np.testing.assert_array_equal([[-50, -50], [50, 50]], bld["ASYMY"])
 
     def test_beam_names(self):
         beam_names = ["Ref", "A", "B"]
