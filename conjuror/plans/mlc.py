@@ -1,7 +1,163 @@
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
+
 import numpy as np
 
 
+class RectangleMode(Enum):
+    EXACT = "exact"
+    ROUND = "round"
+    INWARD = "inward"
+    OUTWARD = "outward"
+
+
+class MLCShape(ABC):
+    """Abstract class that represents a shape contoured by an MLC.
+
+    Attributes
+    ----------
+    mlc_boundaries : tuple[float, ...]
+        The MLC boundaries.
+    max_mlc_position : float
+        The max mlc position in mm
+    max_mlc_overtravel : float
+        The maximum distance in mm the MLC leaves can overtravel from each other as well as the jaw size (for tail exposure protection).
+    """
+
+    mlc_boundaries: tuple[float, ...]
+    max_mlc_position: float
+    max_mlc_overtravel: float
+
+    @abstractmethod
+    def get_shape(self) -> list[float]:
+        """Returns the mlc position that contour the shape."""
+        pass
+
+    @property
+    def num_leaf_pairs(self):
+        """Number of leaf pairs."""
+        return len(self.mlc_boundaries) - 1
+
+
+@dataclass
+class Park(MLCShape):
+    """Place all MLC is the max open position."""
+
+    def get_shape(self) -> list[float]:
+        p = self.max_mlc_position
+        return np.repeat([-p, p], self.num_leaf_pairs).tolist()
+
+
+@dataclass
+class Strip(MLCShape):
+    """Create a strip shape using the MLCs.
+
+    Parameters
+    ----------
+    x_min : float
+        The x_min edge of the strip.
+    x_max : float
+        The x_max edge of the strip.
+    """
+
+    x_min: float
+    x_max: float
+
+    def __post_init__(self):
+        validate_range("x", self.x_min, self.x_max)
+
+    def get_shape(self) -> list[float]:
+        return np.repeat([self.x_min, self.x_max], self.num_leaf_pairs).tolist()
+
+
+@dataclass
+class Rectangle(MLCShape):
+    """Create a rectangle using the MLCs.
+
+    Parameters
+    ----------
+    x_min : float
+        The x_min edge of the rectangle.
+    x_max : float
+        The x_max edge of the rectangle.
+    y_min : float
+        The y_min edge of the rectangle.
+    y_max : float
+        The y_min edge of the rectangle.
+    y_mode : RectangleMode
+        Controls how the rectangle aligns with MLC leaf boundaries along the y-axis.
+        EXACT -- Both y_min and y_max must coincide with an MLC leaf boundary.
+        If either edge does not align exactly, an error is raised.
+        ROUND -- If y_min or y_max falls between boundaries, the limits are rounded to the nearest boundary.
+        INWARD -- If y_min or y_max falls between boundaries, the leaf band is treated as "outfield."
+        This results in a smaller rectangle in the y-direction.
+        OUTWARD -- If y_min or y_max falls between boundaries, the leaf band is treated as "infield."
+        This results in a larger rectangle in the y-direction.
+    x_outfield_position
+        The position the MLCs should have when they are on the "outfield" area.
+        Typically, these are unused/outside leaves and just need to be put somewhere.
+    outer_strip_width
+        The separation width in mm of the leaves for the leaves outside the rectangle.
+    """
+
+    x_min: float
+    x_max: float
+    y_min: float
+    y_max: float
+    y_mode: RectangleMode
+    x_outfield_position: float
+    outer_strip_width: float
+
+    def __post_init__(self):
+        validate_range("x", self.x_min, self.x_max)
+        validate_range("y", self.y_min, self.y_max)
+
+    def get_shape(self) -> list[float]:
+        b = np.array(self.mlc_boundaries)
+        y_min_actual = self.y_min
+        y_max_actual = self.y_max
+        match self.y_mode:
+            case RectangleMode.EXACT:
+                if not (y_min_actual in b and y_max_actual in b):
+                    msg = "The rectangle y-size cannot be exactly achieved with the mlc boundaries."
+                    raise ValueError(msg)
+            case RectangleMode.ROUND:
+                y_min_actual = min(b, key=lambda x: abs(x - self.y_min))
+                y_max_actual = min(b, key=lambda x: abs(x - self.y_max))
+            case RectangleMode.INWARD:
+                y_min_actual = b[np.searchsorted(b, self.y_min, side="right")]
+                y_max_actual = b[np.searchsorted(b, self.y_max, side="left") - 1]
+            case RectangleMode.OUTWARD:
+                y_min_actual = b[np.searchsorted(b, self.y_min, side="left") - 1]
+                y_max_actual = b[np.searchsorted(b, self.y_max, side="right")]
+
+        b_outfield_position = self.x_outfield_position - self.outer_strip_width / 2
+        a_outfield_position = self.x_outfield_position + self.outer_strip_width / 2
+        pos_b = np.full((self.num_leaf_pairs,), b_outfield_position)
+        pos_a = np.full((self.num_leaf_pairs,), a_outfield_position)
+
+        idx_infield = (b[:-1] >= y_min_actual) & (b[1:] <= y_max_actual)
+        pos_b[idx_infield] = self.x_min
+        pos_a[idx_infield] = self.x_max
+
+        return pos_b.tolist() + pos_a.tolist()
+
+
+@dataclass
 class MLCShaper:
+    mlc_boundaries: tuple[float, ...]
+    max_mlc_position: float
+    max_mlc_overtravel: float
+
+    def get_shape(self, shape: MLCShape) -> list[float]:
+        shape.mlc_boundaries = self.mlc_boundaries
+        shape.max_mlc_position = self.max_mlc_position
+        shape.max_mlc_overtravel = self.max_mlc_overtravel
+        return shape.get_shape()
+
+
+class MLCModulator:
     """The MLC Shaper is a tool for generating MLC positions and sequences to create a given pattern.
     Meterset values can be given and set.
     It can also create 'sacrifices' of MLC leaves to set the MLC speed/dose rate to a certain value.
@@ -165,14 +321,14 @@ class MLCShaper:
             if sacrificial_distance > 0:
                 # split the sacrifices into chunks in case
                 # the distance is too large
-                sacrifice_chunks = split_sacrifice_travel(
+                sacrifice_chunks = MLCModulator._split_sacrifice_travel(
                     sacrificial_distance, self.sacrifice_max_move_mm
                 )
                 # calculate the number of interpolation points
                 interpolation_ratios = list(
                     np.cumsum([m / sum(sacrifice_chunks) for m in sacrifice_chunks])
                 )
-                interpolated_control_points = interpolate_control_points(
+                interpolated_control_points = MLCModulator._interpolate_control_points(
                     control_point_start=self.control_points[-1],
                     control_point_end=positions,
                     interpolation_ratios=interpolation_ratios,
@@ -261,132 +417,139 @@ class MLCShaper:
             initial_sacrificial_gap=initial_sacrificial_gap_mm,
         )
 
+    @staticmethod
+    def _next_sacrifice_shift(
+        current_position_mm: float,
+        travel_mm: float,
+        x_width_mm: float,
+        other_mlc_position: float,
+        max_overtravel_mm: float,
+    ) -> float:
+        """Calculate the next position of a sacrificial leaf.
+        This will calculate the next position, accounting for the MLC movement range. It
+        will try to oscillate the target position.
 
-def next_sacrifice_shift(
-    current_position_mm: float,
-    travel_mm: float,
-    x_width_mm: float,
-    other_mlc_position: float,
-    max_overtravel_mm: float,
-) -> float:
-    """Calculate the next position of a sacrificial leaf.
-    This will calculate the next position, accounting for the MLC movement range. It
-    will try to oscillate the target position.
+        Parameters
+        ----------
+        current_position_mm
+            The current position of the leaf.
+        travel_mm
+            The travel distance of the sacrificial leaves.
+        x_width_mm
+            The width of the MLCs in the x-direction.
+        other_mlc_position
+            The position of the other leaves. I.e. where are the rest of the leaves generally at.
+            This provides a target for the sacrifice to move toward so the leaves stay in generally
+            the same area and don't reach overtravel.
+        max_overtravel_mm
+            The max overtravel allowed by the MLCs.
+        """
+        largest_travel_allowed = max_overtravel_mm + abs(
+            other_mlc_position - current_position_mm
+        )
+        if travel_mm > largest_travel_allowed:
+            raise ValueError("Travel distance exceeds allowed range")
+        if x_width_mm < max_overtravel_mm:
+            raise ValueError("Max overtravel exceeds MLC width")
+        movement_direction = 1 if current_position_mm < other_mlc_position else -1
+        target_shift = movement_direction * travel_mm
+        # if we go beyond the MLC width limit, go the other way
+        if (target_shift + current_position_mm < -x_width_mm / 2) or (
+            target_shift + current_position_mm > x_width_mm / 2
+        ):
+            target_shift = -movement_direction * travel_mm
+        return target_shift
 
-    Parameters
-    ----------
-    current_position_mm
-        The current position of the leaf.
-    travel_mm
-        The travel distance of the sacrificial leaves.
-    x_width_mm
-        The width of the MLCs in the x-direction.
-    other_mlc_position
-        The position of the other leaves. I.e. where are the rest of the leaves generally at.
-        This provides a target for the sacrifice to move toward so the leaves stay in generally
-        the same area and don't reach overtravel.
-    max_overtravel_mm
-        The max overtravel allowed by the MLCs.
-    """
-    largest_travel_allowed = max_overtravel_mm + abs(
-        other_mlc_position - current_position_mm
-    )
-    if travel_mm > largest_travel_allowed:
-        raise ValueError("Travel distance exceeds allowed range")
-    if x_width_mm < max_overtravel_mm:
-        raise ValueError("Max overtravel exceeds MLC width")
-    movement_direction = 1 if current_position_mm < other_mlc_position else -1
-    target_shift = movement_direction * travel_mm
-    # if we go beyond the MLC width limit, go the other way
-    if (target_shift + current_position_mm < -x_width_mm / 2) or (
-        target_shift + current_position_mm > x_width_mm / 2
-    ):
-        target_shift = -movement_direction * travel_mm
-    return target_shift
+    @staticmethod
+    def _interpolate_control_points(
+        control_point_start: list[float],
+        control_point_end: list[float],
+        interpolation_ratios: list[float],
+        sacrifice_chunks: list[float],
+        max_overtravel: float,
+    ) -> list[list[float]]:
+        """Interpolate between two control points, including the sacrifices needed.
+        This interpolates the start and end positions of everything except the first and last pair.
+        For those, the sacrifices are injected into the control points per the length of the sacrifice chunks.
+
+        Parameters
+        ----------
+        control_point_start
+            The starting control point.
+        control_point_end
+            The ending control point.
+        interpolation_ratios
+            The ratios at which to interpolate between the two control points.
+        sacrifice_chunks
+            The distances to move the sacrificial leaves for each interpolation ratio.
+        max_overtravel
+            The maximum overtravel allowed by the MLCs in mm.
+        """
+        if len(control_point_start) != len(control_point_end):
+            raise ValueError("Control points must be the same length")
+        if any(
+            r < 0 or r > 1.001 for r in interpolation_ratios
+        ):  # 1.001 for floating point error
+            raise ValueError("Interpolation ratios must be between 0 and 1")
+        if len(interpolation_ratios) == 0:
+            raise ValueError("Interpolation ratios must be provided")
+        if len(interpolation_ratios) != len(sacrifice_chunks):
+            raise ValueError(
+                "Interpolation ratios must be the same length as the sacrifice chunks"
+            )
+        num_leaves = int(len(control_point_start) / 2)
+        all_cps = [control_point_start]
+        for idx, (ratio, sacrifice) in enumerate(
+            zip(interpolation_ratios, sacrifice_chunks)
+        ):
+            last_cp = all_cps[-1]
+            sacrificial_shift = MLCModulator._next_sacrifice_shift(
+                current_position_mm=last_cp[0],
+                travel_mm=sacrifice,
+                x_width_mm=400,
+                other_mlc_position=last_cp[1],
+                max_overtravel_mm=max_overtravel,
+            )
+            new_cp = [
+                start + (end - start) * ratio
+                for start, end in zip(control_point_start, control_point_end)
+            ]
+            # set the sacrifical leaf positions
+            new_cp[0] = last_cp[0] + sacrificial_shift
+            new_cp[num_leaves - 1] = last_cp[num_leaves - 1] + sacrificial_shift
+            new_cp[num_leaves] = last_cp[num_leaves] + sacrificial_shift
+            new_cp[-1] = last_cp[-1] + sacrificial_shift
+            all_cps.append(new_cp)
+        return all_cps[1:]
+
+    @staticmethod
+    def _split_sacrifice_travel(distance: float, max_travel: float) -> list[float]:
+        """
+        Split a number into a list of multiples of a max travel distance and a remainder. E.g. 66 => [50, 16].
+
+        Parameters
+        ----------
+        distance : float
+            The distance to split.
+        max_travel : float
+            The maximum travel distance allowed.
+
+        Returns
+        -------
+        list
+            A list containing multiples of the max travel and the remainder.
+        """
+        result = []
+        while distance >= max_travel:
+            result.append(max_travel)
+            distance -= max_travel
+        if distance > 0:
+            result.append(distance)
+        return result
 
 
-def interpolate_control_points(
-    control_point_start: list[float],
-    control_point_end: list[float],
-    interpolation_ratios: list[float],
-    sacrifice_chunks: list[float],
-    max_overtravel: float,
-) -> list[list[float]]:
-    """Interpolate between two control points, including the sacrifices needed.
-    This interpolates the start and end positions of everything except the first and last pair.
-    For those, the sacrifices are injected into the control points per the length of the sacrifice chunks.
-
-    Parameters
-    ----------
-    control_point_start
-        The starting control point.
-    control_point_end
-        The ending control point.
-    interpolation_ratios
-        The ratios at which to interpolate between the two control points.
-    sacrifice_chunks
-        The distances to move the sacrificial leaves for each interpolation ratio.
-    max_overtravel
-        The maximum overtravel allowed by the MLCs in mm.
-    """
-    if len(control_point_start) != len(control_point_end):
-        raise ValueError("Control points must be the same length")
-    if any(
-        r < 0 or r > 1.001 for r in interpolation_ratios
-    ):  # 1.001 for floating point error
-        raise ValueError("Interpolation ratios must be between 0 and 1")
-    if len(interpolation_ratios) == 0:
-        raise ValueError("Interpolation ratios must be provided")
-    if len(interpolation_ratios) != len(sacrifice_chunks):
+def validate_range(name: str, min_val: float, max_val: float) -> None:
+    if min_val > max_val:
         raise ValueError(
-            "Interpolation ratios must be the same length as the sacrifice chunks"
+            f"Invalid {name}: min ({min_val}) cannot be greater than max ({max_val})."
         )
-    num_leaves = int(len(control_point_start) / 2)
-    all_cps = [control_point_start]
-    for idx, (ratio, sacrifice) in enumerate(
-        zip(interpolation_ratios, sacrifice_chunks)
-    ):
-        last_cp = all_cps[-1]
-        sacrificial_shift = next_sacrifice_shift(
-            current_position_mm=last_cp[0],
-            travel_mm=sacrifice,
-            x_width_mm=400,
-            other_mlc_position=last_cp[1],
-            max_overtravel_mm=max_overtravel,
-        )
-        new_cp = [
-            start + (end - start) * ratio
-            for start, end in zip(control_point_start, control_point_end)
-        ]
-        # set the sacrifical leaf positions
-        new_cp[0] = last_cp[0] + sacrificial_shift
-        new_cp[num_leaves - 1] = last_cp[num_leaves - 1] + sacrificial_shift
-        new_cp[num_leaves] = last_cp[num_leaves] + sacrificial_shift
-        new_cp[-1] = last_cp[-1] + sacrificial_shift
-        all_cps.append(new_cp)
-    return all_cps[1:]
-
-
-def split_sacrifice_travel(distance: float, max_travel: float) -> list[float]:
-    """
-    Split a number into a list of multiples of a max travel distance and a remainder. E.g. 66 => [50, 16].
-
-    Parameters
-    ----------
-    distance : float
-        The distance to split.
-    max_travel : float
-        The maximum travel distance allowed.
-
-    Returns
-    -------
-    list
-        A list containing multiples of the max travel and the remainder.
-    """
-    result = []
-    while distance >= max_travel:
-        result.append(max_travel)
-        distance -= max_travel
-    if distance > 0:
-        result.append(distance)
-    return result
