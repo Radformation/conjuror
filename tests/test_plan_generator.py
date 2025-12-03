@@ -349,7 +349,10 @@ class TestPlanGeneratorBeams(TestCase):
         procedure = PicketFence()
         self.pg.add_procedure(procedure)
         beam = BeamBase.from_dicom(self.pg.as_dicom(), 0)
-        beam.animate_mlc()
+        fig = beam.animate_mlc()
+        self.assertEqual(
+            120, sum(True for f in fig.data if f["line"]["color"] == "blue")
+        )
         pass
 
     def test_list_procedure(self):
