@@ -21,8 +21,8 @@ class TestShapes(TestCase):
         machine = TrueBeamMachine(False)
         cls.shaper = MLCShaper(
             machine.mlc_boundaries,
-            machine.machine_specs.max_mlc_position,
-            machine.machine_specs.max_mlc_overtravel,
+            machine.specs.max_mlc_position,
+            machine.specs.max_mlc_overtravel,
         )
 
     def test_park(self):

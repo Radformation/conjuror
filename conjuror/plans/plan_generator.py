@@ -3,7 +3,7 @@ import inspect
 import sys
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, replace, field
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Self, TypeVar, Generic
@@ -48,7 +48,7 @@ class MachineSpecs:
 
 
 class MachineBase(ABC):
-    machine_specs: MachineSpecs
+    specs: MachineSpecs
 
 
 TMachine = TypeVar("TMachine", bound=MachineBase)
@@ -466,7 +466,7 @@ class BeamBase(Generic[TMachine], ABC):
         fig.add_heatmap(
             z=fluence,
             colorscale="Viridis",
-            colorbar=dict(title="Fluence (a.u.)"),
+            colorbar=dict(title="MU"),
             showscale=True,
         )
         fig.update_layout(
@@ -609,22 +609,16 @@ class BeamBase(Generic[TMachine], ABC):
         return fig
 
 
-@dataclass
 class QAProcedureBase(Generic[TMachine], ABC):
     """An abstract base class for generic QA procedures."""
 
-    beams: list[BeamBase[TMachine]] = field(default_factory=list, kw_only=True)
-    machine: TMachine = field(init=False)
+    beams: list[BeamBase[TMachine]]
 
-    @classmethod
-    def from_machine(cls, machine: TMachine, **kwargs) -> Self:
-        c = cls(**kwargs)
-        c.machine = machine
-        c.compute()
-        return c
+    def __post_init__(self):
+        self.beams = []
 
     @abstractmethod
-    def compute(self):
+    def compute(self, machine: TMachine):
         pass
 
 
@@ -776,8 +770,7 @@ class PlanGenerator(Generic[TMachine]):
         self.ds.FractionGroupSequence[0].ReferencedBeamSequence.append(referenced_beam)
 
     def add_procedure(self, procedure: QAProcedureBase) -> None:
-        procedure.machine = self.machine
-        procedure.compute()
+        procedure.compute(self.machine)
         for beam in procedure.beams:
             self.add_beam(beam)
 

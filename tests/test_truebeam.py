@@ -100,71 +100,72 @@ class TestProcedures(TestCase):
         )
         self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
 
-    @parameterized.expand(
-        [
-            ("valid A", "A", 39.5, -30, None),
-            ("valid B", "B", -40.5, -30, None),
-            ("Invalid Bank", "C", None, None, ValueError),
-            ("Overtravel", "A", None, -150, OvertravelError),
-        ]
-    )
-    def test_transmission_beam(self, _, bank, leaf_pos, x1_pos, expected_error):
-        if expected_error:
-            with self.assertRaises(expected_error):
-                procedure = MLCTransmission(
-                    bank=bank,
-                    x1=x1_pos,
-                    x2=30,
-                    y1=-110,
-                    y2=110,
-                    mu=44,
-                    beam_name="MLC Txx",
-                )
-                self.pg.add_procedure(procedure)
-        else:
-            procedure = MLCTransmission(
-                bank=bank,
-                x1=-30,
-                x2=30,
-                y1=-110,
-                y2=110,
-                mu=44,
-                beam_name="MLC Txx",
-            )
+    TXX_PARAM = [("valid A", "A", 39.5, -30), ("valid B", "B", -40.5, -30)]
+
+    @parameterized.expand(TXX_PARAM)
+    def test_transmission_beam(self, _, bank, leaf_pos, x1_pos):
+        procedure = MLCTransmission(
+            bank=bank,
+            x1=x1_pos,
+            x2=30,
+            y1=-110,
+            y2=110,
+            mu=44,
+            beam_name="MLC Txx",
+        )
+        self.pg.add_procedure(procedure)
+        dcm = self.pg.as_dicom()
+        self.assertEqual(len(dcm.BeamSequence), 1)
+        self.assertEqual(dcm.BeamSequence[0].BeamName, f"MLC Txx {bank}")
+        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
+        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 1)
+        self.assertEqual(
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 44
+        )
+        # check X jaws
+        self.assertEqual(
+            dcm.BeamSequence[0]
+            .ControlPointSequence[0]
+            .BeamLimitingDevicePositionSequence[0]
+            .LeafJawPositions,
+            [-30, 30],
+        )
+        # check Y jaws
+        self.assertEqual(
+            dcm.BeamSequence[0]
+            .ControlPointSequence[0]
+            .BeamLimitingDevicePositionSequence[1]
+            .LeafJawPositions,
+            [-110, 110],
+        )
+        # check first MLC position is tucked under the jaws
+        self.assertEqual(
+            dcm.BeamSequence[0]
+            .ControlPointSequence[0]
+            .BeamLimitingDevicePositionSequence[-1]
+            .LeafJawPositions[0],
+            leaf_pos,
+        )
+        self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
+
+    TXX_ERROR_PARAM = [
+        ("Invalid Bank", "C", None, ValueError),
+        ("Overtravel", "A", -150, OvertravelError),
+    ]
+
+    @parameterized.expand(TXX_ERROR_PARAM)
+    def test_transmission_beam_error(self, _, bank, x1_pos, expected_error):
+        procedure = MLCTransmission(
+            bank=bank,
+            x1=x1_pos,
+            x2=30,
+            y1=-110,
+            y2=110,
+            mu=44,
+            beam_name="MLC Txx",
+        )
+        with self.assertRaises(expected_error):
             self.pg.add_procedure(procedure)
-            dcm = self.pg.as_dicom()
-            self.assertEqual(len(dcm.BeamSequence), 1)
-            self.assertEqual(dcm.BeamSequence[0].BeamName, f"MLC Txx {bank}")
-            self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-            self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 1)
-            self.assertEqual(
-                dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 44
-            )
-            # check X jaws
-            self.assertEqual(
-                dcm.BeamSequence[0]
-                .ControlPointSequence[0]
-                .BeamLimitingDevicePositionSequence[0]
-                .LeafJawPositions,
-                [-30, 30],
-            )
-            # check Y jaws
-            self.assertEqual(
-                dcm.BeamSequence[0]
-                .ControlPointSequence[0]
-                .BeamLimitingDevicePositionSequence[1]
-                .LeafJawPositions,
-                [-110, 110],
-            )
-            # check first MLC position is tucked under the jaws
-            self.assertEqual(
-                dcm.BeamSequence[0]
-                .ControlPointSequence[0]
-                .BeamLimitingDevicePositionSequence[-1]
-                .LeafJawPositions[0],
-                leaf_pos,
-            )
-            self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
 
     def test_create_picket_fence(self):
         procedure = PicketFence(
@@ -209,14 +210,14 @@ class TestProcedures(TestCase):
         )
 
     def test_picket_fence_too_wide(self):
+        procedure = PicketFence(
+            y1=-10,
+            y2=10,
+            mu=123,
+            beam_name="Picket Fence",
+            strip_positions_mm=(-100, 100),
+        )
         with self.assertRaises(ValueError):
-            procedure = PicketFence(
-                y1=-10,
-                y2=10,
-                mu=123,
-                beam_name="Picket Fence",
-                strip_positions_mm=(-100, 100),
-            )
             self.pg.add_procedure(procedure)
 
     def test_winston_lutz_beams(self):
@@ -428,14 +429,8 @@ class TestOpenField(TestCase):
     @parameterized.expand(OPENFIELD_MLC_PARAM)
     def test_defined_by_mlc(self, y1, y2, y_mode):
         x1, x2 = -100, 100
-        procedure = OpenField.from_machine(
-            DEFAULT_TRUEBEAM_HD120,
-            x1=x1,
-            x2=x2,
-            y1=y1,
-            y2=y2,
-            y_mode=y_mode,
-        )
+        procedure = OpenField(x1, x2, y1, y2, y_mode=y_mode)
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
         bld = procedure.beams[0].beam_limiting_device_positions
 
@@ -461,14 +456,8 @@ class TestOpenField(TestCase):
 
     def test_defined_by_jaws(self):
         x1, x2, y1, y2 = -100, 100, -200, 200
-        procedure = OpenField.from_machine(
-            DEFAULT_TRUEBEAM_HD120,
-            x1=x1,
-            x2=x2,
-            y1=y1,
-            y2=y2,
-            defined_by_mlcs=False,
-        )
+        procedure = OpenField(x1, x2, y1, y2, defined_by_mlcs=False)
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
         bld = procedure.beams[0].beam_limiting_device_positions
 
@@ -490,55 +479,42 @@ class TestOpenField(TestCase):
 
     @parameterized.expand([(2, 1, 0, 1), (0, 1, 2, 1)])
     def test_openfield_error_if_min_larger_than_max(self, x1, x2, y1, y2):
+        procedure = OpenField(x1, x2, y1, y2)
         with self.assertRaises(ValueError):
-            OpenField.from_machine(
-                DEFAULT_TRUEBEAM_HD120,
-                x1=x1,
-                x2=x2,
-                y1=y1,
-                y2=y2,
-            )
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     @parameterized.expand([(-0.1, 0), (0, 0.1)])
     def test_openfield_error_if_mlc_exact_and_not_possible(self, y1, y2):
+        procedure = OpenField(0, 1, y1, y2, y_mode=OpenFieldMode.EXACT)
         with self.assertRaises(ValueError):
-            OpenField.from_machine(
-                DEFAULT_TRUEBEAM_HD120,
-                x1=0,
-                x2=1,
-                y1=y1,
-                y2=y2,
-                y_mode=OpenFieldMode.EXACT,
-            )
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     @parameterized.expand([(-0.1, 0), (0, 0.1)])
     def test_openfield_exact_is_ignored_if_defined_by_jaws(self, y1, y2):
-        OpenField.from_machine(
-            DEFAULT_TRUEBEAM_HD120,
-            x1=0,
-            x2=1,
-            y1=y1,
-            y2=y2,
-            y_mode=OpenFieldMode.EXACT,
-            defined_by_mlcs=False,
+        procedure = OpenField(
+            0, 1, y1, y2, y_mode=OpenFieldMode.EXACT, defined_by_mlcs=False
         )
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
 
-class TestVmatT2(TestCase):
+class TestVmatDRGS(TestCase):
     def test_defaults(self):
-        VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120)
+        VMATDRGS().compute(DEFAULT_TRUEBEAM_HD120)
 
     def test_plot_control_points(self):
-        test = VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120)
-        test.plot_control_points()
+        procedure = VMATDRGS()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        procedure.plot_control_points()
 
     def test_plot_fluence(self):
-        test = VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120)
-        test.plot_fluence(IMAGER_AS1200)
+        procedure = VMATDRGS()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        procedure.plot_fluence(IMAGER_AS1200)
 
     def test_plot_profile(self):
-        test = VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120)
-        test.plot_fluence_profile(IMAGER_AS1200)
+        procedure = VMATDRGS()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        procedure.plot_fluence_profile(IMAGER_AS1200)
 
     def test_replicate_original_test(self):
         original_file = get_file_from_cloud_test_repo(
@@ -603,10 +579,9 @@ class TestVmatT2(TestCase):
 
         # Run
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
-        test = VMATDRGS.from_machine(
-            TrueBeamMachine(False, specs),
-            dose_rates=tuple(dose_rates),
-            gantry_speeds=tuple(gantry_speeds),
+        procedure = VMATDRGS(
+            dose_rates=tuple(float(d) for d in dose_rates),
+            gantry_speeds=tuple(float(g) for g in gantry_speeds),
             mu_per_segment=mu_per_segment,
             mu_per_transition=mu_per_transition,
             correct_fluence=correct_fluence,
@@ -619,9 +594,10 @@ class TestVmatT2(TestCase):
             jaw_padding=jaw_padding,
             max_dose_rate=max_dose_rate,
         )
+        procedure.compute(TrueBeamMachine(False, specs))
 
         # Assert dynamic beam
-        cps = test.beams[0].to_dicom().ControlPointSequence
+        cps = procedure.beams[0].to_dicom().ControlPointSequence
         gantry_angle = [cp.GantryAngle for cp in cps]
         cumulative_meterset_weight = [cp.CumulativeMetersetWeight for cp in cps]
         mlc_position = np.array(
@@ -642,7 +618,7 @@ class TestVmatT2(TestCase):
         plan_mlc_position = (
             cps[0].BeamLimitingDevicePositionSequence[-1].LeafJawPositions
         )
-        cps = test.beams[1].to_dicom().ControlPointSequence
+        cps = procedure.beams[1].to_dicom().ControlPointSequence
         gantry_angle = cps[0].GantryAngle
         cumulative_meterset_weight = [cp.CumulativeMetersetWeight for cp in cps]
         mlc_position = cps[0].BeamLimitingDevicePositionSequence[-1].LeafJawPositions
@@ -654,35 +630,29 @@ class TestVmatT2(TestCase):
 
     def test_adding_static_beams(self):
         static_angles = (0, 90, 270, 180)
-        test = VMATDRGS.from_machine(
-            DEFAULT_TRUEBEAM_HD120, dynamic_delivery_at_static_gantry=static_angles
-        )
+        procedure = VMATDRGS(dynamic_delivery_at_static_gantry=static_angles)
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
         expected_number_of_beams = 6  # dynamic, reference, 4x static
-        actual_number_of_beams = len(test.beams)
+        actual_number_of_beams = len(procedure.beams)
         self.assertEqual(actual_number_of_beams, expected_number_of_beams)
 
         for idx, expected_angle in enumerate(static_angles):
-            actual_angle = (
-                test.beams[idx + 2].to_dicom().ControlPointSequence[0].GantryAngle
-            )
+            dcm = procedure.beams[idx + 2].to_dicom()
+            actual_angle = dcm.ControlPointSequence[0].GantryAngle
             self.assertEqual(actual_angle, expected_angle)
 
     def test_error_if_gantry_speeds_and_dose_rates_have_different_sizes(self):
         gantry_speeds = (1, 2, 3)
         dose_rates = (1, 2)
+        procedure = VMATDRGS(gantry_speeds=gantry_speeds, dose_rates=dose_rates)
         with self.assertRaises(ValueError):
-            VMATDRGS.from_machine(
-                DEFAULT_TRUEBEAM_HD120,
-                gantry_speeds=gantry_speeds,
-                dose_rates=dose_rates,
-            )
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     def test_error_if_initial_gantry_offset_less_than_min(self):
         initial_gantry_offset = 0
+        procedure = VMATDRGS(initial_gantry_offset=initial_gantry_offset)
         with self.assertRaises(ValueError):
-            VMATDRGS.from_machine(
-                DEFAULT_TRUEBEAM_HD120, initial_gantry_offset=initial_gantry_offset
-            )
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     def test_error_if_gantry_speeds_above_max(self):
         gantry_speeds = (1, 2, 5)
@@ -690,22 +660,21 @@ class TestVmatT2(TestCase):
         max_gantry_speed = 4
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
         machine = TrueBeamMachine(False, specs)
+        procedure = VMATDRGS(gantry_speeds=gantry_speeds, dose_rates=dose_rates)
         with self.assertRaises(ValueError):
-            VMATDRGS.from_machine(
-                machine, gantry_speeds=gantry_speeds, dose_rates=dose_rates
-            )
+            procedure.compute(machine)
 
     def test_error_if_dose_rates_above_max(self):
         gantry_speeds = (1, 2, 5)
         dose_rates = (1, 2, 300)
         max_dose_rate = 100
+        procedure = VMATDRGS(
+            gantry_speeds=gantry_speeds,
+            dose_rates=dose_rates,
+            max_dose_rate=max_dose_rate,
+        )
         with self.assertRaises(ValueError):
-            VMATDRGS.from_machine(
-                DEFAULT_TRUEBEAM_HD120,
-                gantry_speeds=gantry_speeds,
-                dose_rates=dose_rates,
-                max_dose_rate=max_dose_rate,
-            )
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     def test_error_if_axis_not_maxed_out(self):
         gantry_speeds = (5, 1, 1)
@@ -714,15 +683,16 @@ class TestVmatT2(TestCase):
         max_dose_rate = 300
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
         machine = TrueBeamMachine(False, specs)
+        procedure = VMATDRGS(
+            gantry_speeds=gantry_speeds,
+            dose_rates=dose_rates,
+            max_dose_rate=max_dose_rate,
+        )
         with self.assertRaises(ValueError):
-            VMATDRGS.from_machine(
-                machine,
-                gantry_speeds=gantry_speeds,
-                dose_rates=dose_rates,
-                max_dose_rate=max_dose_rate,
-            )
+            procedure.compute(machine)
 
     def test_error_if_rotation_larger_than_360(self):
         mu_per_segment = 100
+        procedure = VMATDRGS(mu_per_segment=mu_per_segment)
         with self.assertRaises(ValueError):
-            VMATDRGS.from_machine(DEFAULT_TRUEBEAM_HD120, mu_per_segment=mu_per_segment)
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)

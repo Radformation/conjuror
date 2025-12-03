@@ -268,7 +268,8 @@ class TestBeam(TestCase):
     def test_plot_fluence(self):
         # just tests it works
         machine = TrueBeamMachine(mlc_is_hd=True)
-        procedure = OpenField.from_machine(machine, x1=-5, x2=7, y1=-11, y2=13)
+        procedure = OpenField(x1=-5, x2=7, y1=-11, y2=13)
+        procedure.compute(machine)
         beam = procedure.beams[0]
 
         # new figure
