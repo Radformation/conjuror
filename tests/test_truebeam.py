@@ -100,71 +100,72 @@ class TestProcedures(TestCase):
         )
         self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
 
-    @parameterized.expand(
-        [
-            ("valid A", "A", 39.5, -30, None),
-            ("valid B", "B", -40.5, -30, None),
-            ("Invalid Bank", "C", None, None, ValueError),
-            ("Overtravel", "A", None, -150, OvertravelError),
-        ]
-    )
-    def test_transmission_beam(self, _, bank, leaf_pos, x1_pos, expected_error):
-        if expected_error:
-            with self.assertRaises(expected_error):
-                procedure = MLCTransmission(
-                    bank=bank,
-                    x1=x1_pos,
-                    x2=30,
-                    y1=-110,
-                    y2=110,
-                    mu=44,
-                    beam_name="MLC Txx",
-                )
-                self.pg.add_procedure(procedure)
-        else:
-            procedure = MLCTransmission(
-                bank=bank,
-                x1=-30,
-                x2=30,
-                y1=-110,
-                y2=110,
-                mu=44,
-                beam_name="MLC Txx",
-            )
+    TXX_PARAM = [("valid A", "A", 39.5, -30), ("valid B", "B", -40.5, -30)]
+
+    @parameterized.expand(TXX_PARAM)
+    def test_transmission_beam(self, _, bank, leaf_pos, x1_pos):
+        procedure = MLCTransmission(
+            bank=bank,
+            x1=x1_pos,
+            x2=30,
+            y1=-110,
+            y2=110,
+            mu=44,
+            beam_name="MLC Txx",
+        )
+        self.pg.add_procedure(procedure)
+        dcm = self.pg.as_dicom()
+        self.assertEqual(len(dcm.BeamSequence), 1)
+        self.assertEqual(dcm.BeamSequence[0].BeamName, f"MLC Txx {bank}")
+        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
+        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 1)
+        self.assertEqual(
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 44
+        )
+        # check X jaws
+        self.assertEqual(
+            dcm.BeamSequence[0]
+            .ControlPointSequence[0]
+            .BeamLimitingDevicePositionSequence[0]
+            .LeafJawPositions,
+            [-30, 30],
+        )
+        # check Y jaws
+        self.assertEqual(
+            dcm.BeamSequence[0]
+            .ControlPointSequence[0]
+            .BeamLimitingDevicePositionSequence[1]
+            .LeafJawPositions,
+            [-110, 110],
+        )
+        # check first MLC position is tucked under the jaws
+        self.assertEqual(
+            dcm.BeamSequence[0]
+            .ControlPointSequence[0]
+            .BeamLimitingDevicePositionSequence[-1]
+            .LeafJawPositions[0],
+            leaf_pos,
+        )
+        self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
+
+    TXX_ERROR_PARAM = [
+        ("Invalid Bank", "C", None, ValueError),
+        ("Overtravel", "A", -150, OvertravelError),
+    ]
+
+    @parameterized.expand(TXX_ERROR_PARAM)
+    def test_transmission_beam_error(self, _, bank, x1_pos, expected_error):
+        procedure = MLCTransmission(
+            bank=bank,
+            x1=x1_pos,
+            x2=30,
+            y1=-110,
+            y2=110,
+            mu=44,
+            beam_name="MLC Txx",
+        )
+        with self.assertRaises(expected_error):
             self.pg.add_procedure(procedure)
-            dcm = self.pg.as_dicom()
-            self.assertEqual(len(dcm.BeamSequence), 1)
-            self.assertEqual(dcm.BeamSequence[0].BeamName, f"MLC Txx {bank}")
-            self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-            self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 1)
-            self.assertEqual(
-                dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 44
-            )
-            # check X jaws
-            self.assertEqual(
-                dcm.BeamSequence[0]
-                .ControlPointSequence[0]
-                .BeamLimitingDevicePositionSequence[0]
-                .LeafJawPositions,
-                [-30, 30],
-            )
-            # check Y jaws
-            self.assertEqual(
-                dcm.BeamSequence[0]
-                .ControlPointSequence[0]
-                .BeamLimitingDevicePositionSequence[1]
-                .LeafJawPositions,
-                [-110, 110],
-            )
-            # check first MLC position is tucked under the jaws
-            self.assertEqual(
-                dcm.BeamSequence[0]
-                .ControlPointSequence[0]
-                .BeamLimitingDevicePositionSequence[-1]
-                .LeafJawPositions[0],
-                leaf_pos,
-            )
-            self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
 
     def test_create_picket_fence(self):
         procedure = PicketFence(
@@ -209,14 +210,14 @@ class TestProcedures(TestCase):
         )
 
     def test_picket_fence_too_wide(self):
+        procedure = PicketFence(
+            y1=-10,
+            y2=10,
+            mu=123,
+            beam_name="Picket Fence",
+            strip_positions_mm=(-100, 100),
+        )
         with self.assertRaises(ValueError):
-            procedure = PicketFence(
-                y1=-10,
-                y2=10,
-                mu=123,
-                beam_name="Picket Fence",
-                strip_positions_mm=(-100, 100),
-            )
             self.pg.add_procedure(procedure)
 
     def test_winston_lutz_beams(self):
