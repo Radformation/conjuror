@@ -190,9 +190,7 @@ def create_beam(**kwargs) -> BeamBase:
 class TestBeam(TestCase):
     def test_beam_normal(self):
         # shouldn't raise; happy path
-        beam = create_beam(
-            gantry_angles=0,
-        )
+        beam = create_beam(gantry_angles=0)
         beam_dcm = beam.to_dicom()
         self.assertEqual(beam_dcm.BeamName, "name")
         self.assertEqual(beam_dcm.BeamType, "STATIC")
@@ -202,6 +200,17 @@ class TestBeam(TestCase):
         # shouldn't raise; happy path
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
         BeamBase.from_dicom(ds, 0)
+
+    def test_from_dicom_error_if_not_rt_plan(self):
+        file = get_file_from_cloud_test_repo(["picket_fence", "AS500#2.dcm"])
+        ds = pydicom.dcmread(file)
+        with self.assertRaises(ValueError):
+            BeamBase.from_dicom(ds, 0)
+
+    def test_from_dicom_error_if_beam_not_in_plan(self):
+        ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
+        with self.assertRaises(ValueError):
+            BeamBase.from_dicom(ds, 1)
 
     def test_too_long_beam_name(self):
         with self.assertRaises(ValueError):
