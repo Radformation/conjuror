@@ -208,7 +208,7 @@ class OpenField(QAProcedure):
         The top edge position.
     mu : int
         The monitor units of the beam.
-    defined_by_mlcs : bool
+    defined_by_mlc : bool
         Whether the field edges are defined by the MLCs or the jaws.
     y_mode : OpenFieldMode
         Controls how the open field aligns with MLC leaf boundaries along the y-axis.
@@ -252,7 +252,7 @@ class OpenField(QAProcedure):
     y1: float
     y2: float
     mu: int = 100
-    defined_by_mlcs: bool = True
+    defined_by_mlc: bool = True
     y_mode: OpenFieldMode = OpenFieldMode.OUTWARD
     energy: float = 6
     fluence_mode: FluenceMode = FluenceMode.STANDARD
@@ -269,13 +269,13 @@ class OpenField(QAProcedure):
 
     def compute(self, machine: TrueBeamMachine) -> None:
         y_mode = self.y_mode.value
-        if self.defined_by_mlcs:
+        if self.defined_by_mlc:
             mlc_padding = 0
             jaw_padding = self.padding
         else:
             mlc_padding = self.padding
             jaw_padding = 0
-            y_mode = OpenFieldMode.ROUND.value
+            y_mode = OpenFieldMode.OUTWARD.value
 
         shaper = Beam.create_shaper(machine)
         shape = Rectangle(
@@ -393,7 +393,7 @@ class MLCTransmission(QAProcedure):
             self._y1,
             self._y2,
             self.mu_per_ref,
-            defined_by_mlcs=False,
+            defined_by_mlc=False,
             y_mode=OpenFieldMode.OUTWARD,
             energy=self.energy,
             fluence_mode=self.fluence_mode,

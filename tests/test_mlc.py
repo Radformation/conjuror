@@ -45,6 +45,9 @@ class TestShapes(TestCase):
         (-4.9, 5.1, RectangleMode.ROUND),
         (-5.1, 5.1, RectangleMode.INWARD),
         (-4.9, 4.9, RectangleMode.OUTWARD),
+        (-5, 5, RectangleMode.ROUND),
+        (-5, 5, RectangleMode.INWARD),
+        (-5, 5, RectangleMode.OUTWARD),
     ]
 
     @parameterized.expand(RECTANGLE_TEST_PARAM)
@@ -58,6 +61,21 @@ class TestShapes(TestCase):
         self.assertTrue(all(x == 0 for x in mlc[60 : 29 + 60]))
         self.assertTrue(all(x == x_max for x in mlc[29 + 60 : 31 + 60]))
         self.assertTrue(all(x == 0 for x in mlc[31 + 60 :]))
+
+    RECTANGLE_OPEN_TEST_PARAM = [
+        RectangleMode.EXACT,
+        RectangleMode.ROUND,
+        RectangleMode.INWARD,
+        RectangleMode.OUTWARD,
+    ]
+
+    @parameterized.expand(RECTANGLE_OPEN_TEST_PARAM)
+    def test_rectangle_open(self, mode):
+        x_min, x_max, y_min, y_max = -100, 100, -200, 200
+        shape = Rectangle(x_min, x_max, y_min, y_max, mode, 0, 0)
+        mlc = self.shaper.get_shape(shape)
+        self.assertTrue(all(x == -100 for x in mlc[:60]))
+        self.assertTrue(all(x == 100 for x in mlc[60:]))
 
     @parameterized.expand([(2, 1, 0, 1), (0, 1, 2, 1)])
     def test_rectangle_error_if_min_larger_than_max(self, x_min, x_max, y_min, y_max):

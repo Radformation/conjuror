@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 import numpy as np
 
 
-class RectangleMode(Enum):
+class RectangleMode(StrEnum):
     EXACT = "exact"
     ROUND = "round"
     INWARD = "inward"
@@ -125,11 +125,11 @@ class Rectangle(MLCShape):
                 y_min_actual = min(b, key=lambda x: abs(x - self.y_min))
                 y_max_actual = min(b, key=lambda x: abs(x - self.y_max))
             case RectangleMode.INWARD:
-                y_min_actual = b[np.searchsorted(b, self.y_min, side="right")]
-                y_max_actual = b[np.searchsorted(b, self.y_max, side="left") - 1]
+                y_min_actual = b[np.searchsorted(b[:-1], self.y_min, side="left")]
+                y_max_actual = b[np.searchsorted(b[1:], self.y_max, side="right")]
             case RectangleMode.OUTWARD:
-                y_min_actual = b[np.searchsorted(b, self.y_min, side="left") - 1]
-                y_max_actual = b[np.searchsorted(b, self.y_max, side="right")]
+                y_min_actual = b[np.searchsorted(b[1:], self.y_min, side="right")]
+                y_max_actual = b[np.searchsorted(b[:-1], self.y_max, side="left")]
 
         b_outfield_position = self.x_outfield_position - self.outer_strip_width / 2
         a_outfield_position = self.x_outfield_position + self.outer_strip_width / 2
