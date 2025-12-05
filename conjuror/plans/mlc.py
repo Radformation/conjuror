@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 import numpy as np
 
 
-class RectangleMode(Enum):
+class RectangleMode(StrEnum):
     EXACT = "exact"
     ROUND = "round"
     INWARD = "inward"
@@ -51,24 +51,23 @@ class Park(MLCShape):
 
 @dataclass
 class Strip(MLCShape):
-    """Create a strip shape using the MLCs.
+    """Create a vertical strip using the MLCs.
 
     Parameters
     ----------
-    x_min : float
-        The x_min edge of the strip.
-    x_max : float
-        The x_max edge of the strip.
+    position : float
+        The position of the strip in the x-axis in mm.
+    width : float
+        The width of the strip in mm
     """
 
-    x_min: float
-    x_max: float
-
-    def __post_init__(self):
-        validate_range("x", self.x_min, self.x_max)
+    position: float
+    width: float
 
     def get_shape(self) -> list[float]:
-        return np.repeat([self.x_min, self.x_max], self.num_leaf_pairs).tolist()
+        x_min = self.position - self.width / 2
+        x_max = self.position + self.width / 2
+        return np.repeat([x_min, x_max], self.num_leaf_pairs).tolist()
 
 
 @dataclass
@@ -126,11 +125,11 @@ class Rectangle(MLCShape):
                 y_min_actual = min(b, key=lambda x: abs(x - self.y_min))
                 y_max_actual = min(b, key=lambda x: abs(x - self.y_max))
             case RectangleMode.INWARD:
-                y_min_actual = b[np.searchsorted(b, self.y_min, side="right")]
-                y_max_actual = b[np.searchsorted(b, self.y_max, side="left") - 1]
+                y_min_actual = b[np.searchsorted(b[:-1], self.y_min, side="left")]
+                y_max_actual = b[np.searchsorted(b[1:], self.y_max, side="right")]
             case RectangleMode.OUTWARD:
-                y_min_actual = b[np.searchsorted(b, self.y_min, side="left") - 1]
-                y_max_actual = b[np.searchsorted(b, self.y_max, side="right")]
+                y_min_actual = b[np.searchsorted(b[1:], self.y_min, side="right")]
+                y_max_actual = b[np.searchsorted(b[:-1], self.y_max, side="left")]
 
         b_outfield_position = self.x_outfield_position - self.outer_strip_width / 2
         a_outfield_position = self.x_outfield_position + self.outer_strip_width / 2

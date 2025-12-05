@@ -6,7 +6,7 @@ import pydicom
 from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
-from conjuror.plans.plan_generator import PlanGenerator, OvertravelError
+from conjuror.plans.plan_generator import PlanGenerator
 from conjuror.plans.truebeam import (
     OpenField,
     MLCTransmission,
@@ -33,139 +33,6 @@ class TestProcedures(TestCase):
             plan_label="label",
             plan_name="my name",
         )
-
-    def test_create_open_field(self):
-        procedure = OpenField(
-            x1=-100,
-            x2=100,
-            y1=-110,
-            y2=110,
-            mu=123,
-            beam_name="Open Field",
-            defined_by_mlcs=True,
-            padding_mm=0,
-        )
-        self.pg.add_procedure(procedure)
-        dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 1)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "Open Field")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 1)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
-        )
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[0]
-            .LeafJawPositions,
-            [-100, 100],
-        )
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[1]
-            .LeafJawPositions,
-            [-110, 110],
-        )
-        self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
-
-    def test_open_field_jaws(self):
-        procedure = OpenField(
-            x1=-100,
-            x2=100,
-            y1=-110,
-            y2=110,
-            mu=123,
-            beam_name="Open Field",
-            defined_by_mlcs=False,
-            padding_mm=0,
-        )
-        self.pg.add_procedure(procedure)
-        dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 1)
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[0]
-            .LeafJawPositions,
-            [-100, 100],
-        )
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[1]
-            .LeafJawPositions,
-            [-110, 110],
-        )
-        self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
-
-    TXX_PARAM = [("valid A", "A", 39.5, -30), ("valid B", "B", -40.5, -30)]
-
-    @parameterized.expand(TXX_PARAM)
-    def test_transmission_beam(self, _, bank, leaf_pos, x1_pos):
-        procedure = MLCTransmission(
-            bank=bank,
-            x1=x1_pos,
-            x2=30,
-            y1=-110,
-            y2=110,
-            mu=44,
-            beam_name="MLC Txx",
-        )
-        self.pg.add_procedure(procedure)
-        dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 1)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, f"MLC Txx {bank}")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 1)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 44
-        )
-        # check X jaws
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[0]
-            .LeafJawPositions,
-            [-30, 30],
-        )
-        # check Y jaws
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[1]
-            .LeafJawPositions,
-            [-110, 110],
-        )
-        # check first MLC position is tucked under the jaws
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[-1]
-            .LeafJawPositions[0],
-            leaf_pos,
-        )
-        self.assertEqual(dcm.BeamSequence[0].BeamType, "STATIC")
-
-    TXX_ERROR_PARAM = [
-        ("Invalid Bank", "C", None, ValueError),
-        ("Overtravel", "A", -150, OvertravelError),
-    ]
-
-    @parameterized.expand(TXX_ERROR_PARAM)
-    def test_transmission_beam_error(self, _, bank, x1_pos, expected_error):
-        procedure = MLCTransmission(
-            bank=bank,
-            x1=x1_pos,
-            x2=30,
-            y1=-110,
-            y2=110,
-            mu=44,
-            beam_name="MLC Txx",
-        )
-        with self.assertRaises(expected_error):
-            self.pg.add_procedure(procedure)
 
     def test_create_picket_fence(self):
         procedure = PicketFence(
@@ -454,9 +321,30 @@ class TestOpenField(TestCase):
         self.assertEqual(y1 - 5, jaw_y[0, 0])
         self.assertEqual(y2 + 5, jaw_y[1, 0])
 
+    OPEN_MLC_PARAM = [
+        OpenFieldMode.EXACT,
+        OpenFieldMode.ROUND,
+        OpenFieldMode.INWARD,
+        OpenFieldMode.OUTWARD,
+    ]
+
+    @parameterized.expand(OPEN_MLC_PARAM)
+    def test_open_mlc(self, y_mode):
+        x1, x2, y1, y2 = -100, 100, -110, 110
+        procedure = OpenField(x1, x2, y1, y2, y_mode=y_mode)
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+        bld = procedure.beams[0].beam_limiting_device_positions
+
+        mlc = bld["MLCX"]
+        self.assertFalse(np.any(mlc[:, 0] - mlc[:, 1]))
+        mlc0 = mlc[:, 0]
+        self.assertTrue(all(x == -100 for x in mlc0[:60]))
+        self.assertTrue(all(x == 100 for x in mlc0[60:]))
+
     def test_defined_by_jaws(self):
-        x1, x2, y1, y2 = -100, 100, -200, 200
-        procedure = OpenField(x1, x2, y1, y2, defined_by_mlcs=False)
+        x1, x2, y1, y2 = -100, 100, -110, 110
+        procedure = OpenField(x1, x2, y1, y2, defined_by_mlc=False)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
         bld = procedure.beams[0].beam_limiting_device_positions
@@ -479,7 +367,7 @@ class TestOpenField(TestCase):
 
     @parameterized.expand([(2, 1, 0, 1), (0, 1, 2, 1)])
     def test_openfield_error_if_min_larger_than_max(self, x1, x2, y1, y2):
-        procedure = OpenField(x1, x2, y1, y2)
+        procedure = OpenField(x1, x2, y1, y2, 100)
         with self.assertRaises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
@@ -492,9 +380,37 @@ class TestOpenField(TestCase):
     @parameterized.expand([(-0.1, 0), (0, 0.1)])
     def test_openfield_exact_is_ignored_if_defined_by_jaws(self, y1, y2):
         procedure = OpenField(
-            0, 1, y1, y2, y_mode=OpenFieldMode.EXACT, defined_by_mlcs=False
+            0, 1, y1, y2, y_mode=OpenFieldMode.EXACT, defined_by_mlc=False
         )
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+
+class TestMLCTransmission(TestCase):
+    def test_defaults(self):
+        procedure = MLCTransmission()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        self.assertEqual(3, len(procedure.beams))
+
+    def test_banks(self):
+        procedure = MLCTransmission()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+        for beam_idx in [1, 2]:
+            mult = -1 if beam_idx == 1 else 1
+            slit_pos = mult * (procedure.width / 2 + procedure.overreach)
+            mlc_nominal = 60 * [2 * [slit_pos - 0.5]] + 60 * [2 * [slit_pos + 0.5]]
+
+            bld = procedure.beams[beam_idx].beam_limiting_device_positions
+            np.testing.assert_array_equal(mlc_nominal, bld["MLCX"])
+            np.testing.assert_array_equal([[-50, -50], [50, 50]], bld["ASYMX"])
+            np.testing.assert_array_equal([[-50, -50], [50, 50]], bld["ASYMY"])
+
+    def test_beam_names(self):
+        beam_names = ["Ref", "A", "B"]
+        procedure = MLCTransmission(beam_names=beam_names)
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        actual = [b.beam_name for b in procedure.beams]
+        self.assertEqual(beam_names, actual)
 
 
 class TestVmatDRGS(TestCase):

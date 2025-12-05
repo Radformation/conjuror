@@ -3,7 +3,6 @@ from abc import ABC
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -11,14 +10,13 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 
 from conjuror.images.simulators import Imager
-from conjuror.plans.mlc import MLCModulator, MLCShaper, Rectangle, RectangleMode
+from conjuror.plans.mlc import MLCModulator, MLCShaper, Rectangle, RectangleMode, Strip
 from conjuror.plans.plan_generator import (
     MachineSpecs,
     MachineBase,
     BeamBase,
     FluenceMode,
     QAProcedureBase,
-    OvertravelError,
     GantryDirection,
 )
 from conjuror.utils import wrap360
@@ -208,7 +206,9 @@ class OpenField(QAProcedure):
         The bottom edge position.
     y2 : float
         The top edge position.
-    defined_by_mlcs : bool
+    mu : int
+        The monitor units of the beam.
+    defined_by_mlc : bool
         Whether the field edges are defined by the MLCs or the jaws.
     y_mode : OpenFieldMode
         Controls how the open field aligns with MLC leaf boundaries along the y-axis.
@@ -238,22 +238,21 @@ class OpenField(QAProcedure):
         The couch lateral position.
     couch_rot : float
         The couch rotation.
-    mu : int
-        The monitor units of the beam.
-    padding_mm : float
+    padding : float
         The padding to add to the jaws or MLCs.
     beam_name : str
         The name of the beam.
-    outside_strip_width_mm : float
+    outside_strip_width : float
         The width of the strip of MLCs outside the field. The MLCs will be placed to the
-        left, under the X1 jaw by 2cm.
+        left, under the X1 jaw by 20mm.
     """
 
     x1: float
     x2: float
     y1: float
     y2: float
-    defined_by_mlcs: bool = True
+    mu: int = 100
+    defined_by_mlc: bool = True
     y_mode: OpenFieldMode = OpenFieldMode.OUTWARD
     energy: float = 6
     fluence_mode: FluenceMode = FluenceMode.STANDARD
@@ -264,20 +263,19 @@ class OpenField(QAProcedure):
     couch_lng: float = 1000
     couch_lat: float = 0
     couch_rot: float = 0
-    mu: int = 200
-    padding_mm: float = 5
+    padding: float = 5
     beam_name: str = "Open"
-    outside_strip_width_mm: float = 5
+    outside_strip_width: float = 5
 
     def compute(self, machine: TrueBeamMachine) -> None:
         y_mode = self.y_mode.value
-        if self.defined_by_mlcs:
+        if self.defined_by_mlc:
             mlc_padding = 0
-            jaw_padding = self.padding_mm
+            jaw_padding = self.padding
         else:
-            mlc_padding = self.padding_mm
+            mlc_padding = self.padding
             jaw_padding = 0
-            y_mode = OpenFieldMode.ROUND.value
+            y_mode = OpenFieldMode.OUTWARD.value
 
         shaper = Beam.create_shaper(machine)
         shape = Rectangle(
@@ -286,7 +284,7 @@ class OpenField(QAProcedure):
             y_min=self.y1 - mlc_padding,
             y_max=self.y2 + mlc_padding,
             y_mode=y_mode,
-            outer_strip_width=self.outside_strip_width_mm,
+            outer_strip_width=self.outside_strip_width,
             x_outfield_position=self.x1 - jaw_padding - 20,
         )
         mlc = shaper.get_shape(shape)
@@ -319,26 +317,25 @@ class MLCTransmission(QAProcedure):
 
     Parameters
     ----------
-    bank : str
-        The MLC bank to move. Either "A" or "B".
-    mu : int
-        The monitor units to deliver.
+    mu_per_bank : int
+        The monitor units to deliver for each bank transmission test.
+    mu_per_ref : int
+        The monitor units to deliver for the reference open field.
     overreach : float
         The amount to tuck the MLCs under the jaws in mm.
-    beam_name : str
-        The name of the beam.
+    beam_names : list[str]
+        A list containing the names of the beams to use in the following order:
+        reference beam, transmission beam bank A, transmission beam bank B
     energy : int
         The energy of the beam.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
     dose_rate : int
         The dose rate of the beam.
-    x1 : float
-        The left jaw position. Usually negative. More negative is left.
-    x2 : float
-        The right jaw position. Usually positive. More positive is right.
-    y1 : float
-        The bottom jaw position. Usually negative. More negative is lower.
-    y2 : float
-        The top jaw position. Usually positive. More positive is higher.
+    width : float
+        The width of the reference field in mm.
+    height : float
+        The height of the reference field in mm.
     gantry_angle : float
         The gantry angle of the beam in degrees.
     coll_angle : float
@@ -351,65 +348,102 @@ class MLCTransmission(QAProcedure):
         The couch longitudinal position.
     couch_rot : float
         The couch rotation in degrees.
-    fluence_mode : FluenceMode
-        The fluence mode of the beam.
     """
 
-    bank: Literal["A", "B"]
-    mu: int = 50
+    mu_per_bank: int = 1000
+    mu_per_ref: int = 100
     overreach: float = 10
-    beam_name: str = "MLC Tx"
+    beam_names: list[str] = field(
+        default_factory=lambda: ["MLC Tx - Ref", "MLC Tx - Bank-A", "MLC Tx - Bank-B"]
+    )
     energy: int = 6
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
     dose_rate: int = 600
-    x1: float = -50
-    x2: float = 50
-    y1: float = -100
-    y2: float = 100
+    width: float = 100
+    height: float = 100
     gantry_angle: float = 0
     coll_angle: float = 0
     couch_vrt: float = 0
     couch_lat: float = 0
     couch_lng: float = 1000
     couch_rot: float = 0
-    fluence_mode: FluenceMode = FluenceMode.STANDARD
+
+    # private attributes: common to all beams to facilitate creation
+    _x1: float = field(init=False)
+    _x2: float = field(init=False)
+    _y1: float = field(init=False)
+    _y2: float = field(init=False)
+    _mlc_is_hd: bool = field(init=False)
 
     def compute(self, machine: TrueBeamMachine) -> None:
-        mlc = Beam.create_modulator(machine)
-        if self.bank == "A":
-            mlc_tips = self.x2 + self.overreach
-        elif self.bank == "B":
-            mlc_tips = self.x1 - self.overreach
-        else:
-            raise ValueError("Bank must be 'A' or 'B'")
-        # test for overtravel
-        if abs(self.x2 - self.x1) + self.overreach > machine.specs.max_mlc_overtravel:
-            msg = "The MLC overtravel is too large for the given jaw positions and overreach. Reduce the x-jaw opening size and/or overreach value."
-            raise OvertravelError(msg)
-        mlc.add_strip(
-            position_mm=mlc_tips,
-            strip_width_mm=1,
-            meterset_at_target=1,
-        )
-        beam = Beam(
-            beam_name=f"{self.beam_name} {self.bank}",
+        self._x1 = -self.width / 2
+        self._x2 = self.width / 2
+        self._y1 = -self.height / 2
+        self._y2 = self.height / 2
+        self._mlc_is_hd = machine.mlc_is_hd
+
+        keys = ["Ref", "A", "B"]
+        names = dict(zip(keys, self.beam_names))
+        shaper = Beam.create_shaper(machine)
+
+        # Reference field
+        ref = OpenField(
+            self._x1,
+            self._x2,
+            self._y1,
+            self._y2,
+            self.mu_per_ref,
+            defined_by_mlc=False,
+            y_mode=OpenFieldMode.OUTWARD,
             energy=self.energy,
+            fluence_mode=self.fluence_mode,
             dose_rate=self.dose_rate,
-            x1=self.x1,
-            x2=self.x2,
-            y1=self.y1,
-            y2=self.y2,
+            gantry_angle=self.gantry_angle,
+            coll_angle=self.coll_angle,
+            couch_vrt=self.couch_vrt,
+            couch_lng=self.couch_lng,
+            couch_lat=self.couch_lat,
+            couch_rot=self.couch_rot,
+            padding=20,
+            beam_name=names["Ref"],
+        )
+        ref.compute(machine)
+        self.beams.append(ref.beams[0])
+
+        # Transmission field A
+        # Bank A is under X2, so the slit should be under X1
+        shape = Strip(position=self._x1 - self.overreach, width=1)
+        mlc = shaper.get_shape(shape)
+        beam = self._beam(names["A"], mlc)
+        self.beams.append(beam)
+
+        # Transmission field B
+        # Bank B is under X1, so the slit should be under X2
+        shape = Strip(position=self._x2 + self.overreach, width=1)
+        mlc = shaper.get_shape(shape)
+        beam = self._beam(names["B"], mlc)
+        self.beams.append(beam)
+
+    def _beam(self, beam_name: str, mlc: list[float]) -> Beam:
+        return Beam(
+            mlc_is_hd=self._mlc_is_hd,
+            beam_name=beam_name,
+            energy=self.energy,
+            fluence_mode=self.fluence_mode,
+            dose_rate=self.dose_rate,
+            x1=self._x1,
+            x2=self._x2,
+            y1=self._y1,
+            y2=self._y2,
             gantry_angles=self.gantry_angle,
             coll_angle=self.coll_angle,
             couch_vrt=self.couch_vrt,
             couch_lat=self.couch_lat,
             couch_lng=self.couch_lng,
             couch_rot=self.couch_rot,
-            mlc_positions=mlc.as_control_points(),
-            metersets=[self.mu * m for m in mlc.as_metersets()],
-            fluence_mode=self.fluence_mode,
-            mlc_is_hd=machine.mlc_is_hd,
+            mlc_positions=[mlc],
+            metersets=[0, self.mu_per_bank],
         )
-        self.beams.append(beam)
 
 
 @dataclass
