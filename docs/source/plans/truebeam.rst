@@ -16,3 +16,8 @@ Picket Fence
 ------------
 
 .. autoclass:: conjuror.plans.truebeam.PicketFence
+
+Winston-Lutz
+------------
+
+.. autoclass:: conjuror.plans.truebeam.WinstonLutz
