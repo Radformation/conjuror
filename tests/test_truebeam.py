@@ -400,7 +400,7 @@ class TestPicketFence(TestCase):
         # Note #2: jaws y1,y2 are different (cannot be replicated) since this procedure
         # doesn't hide any leafs, whereas in the Varian plan, the last top/bottom leaves were hidden
 
-    def test_picket_fence_too_wide(self):
+    def test_error_if_too_wide(self):
         procedure = PicketFence(picket_positions=(-100, 100))
         with self.assertRaises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
