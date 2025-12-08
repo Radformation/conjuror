@@ -36,7 +36,7 @@ MLC_BOUNDARIES_TB_HD120 = (
 )
 
 DEFAULT_SPECS_TB = MachineSpecs(
-    max_gantry_speed=6.0, max_mlc_position=200, max_mlc_overtravel=140, max_mlc_speed=25
+    max_gantry_speed=6.0, max_mlc_position=200, max_mlc_overtravel=200, max_mlc_speed=25
 )
 
 
@@ -312,7 +312,7 @@ class OpenField(QAProcedure):
 
 @dataclass
 class MLCTransmission(QAProcedure):
-    """Add a single-image MLC transmission beam to the plan.
+    """Add MLC transmission beams to the plan.
     The beam is delivered with the MLCs closed and moved to one side underneath the jaws.
 
     Parameters
@@ -452,20 +452,22 @@ class PicketFence(QAProcedure):
 
     Parameters
     ----------
-    strip_width_mm : float
-        The width of the strips in mm.
-    strip_positions_mm : tuple
-        The positions of the strips in mm relative to the center of the image.
-    y1 : float
-        The bottom jaw position. Usually negative. More negative is lower.
-    y2 : float
-        The top jaw position. Usually positive. More positive is higher.
+    picket_width : float
+        The width of the pickets in mm.
+    picket_positions : tuple
+        The positions of the pickets in mm relative to the center of the image.
+    mu_per_picket : int
+        The monitor units for each picket.
+    mu_per_transition : int
+        The monitor units for MLC transitions between pickets.
+    skip_first_picket: bool
+        Whether or not to skip the first picket.
+    energy : float
+        The energy of the beam.
     fluence_mode : FluenceMode
         The fluence mode of the beam.
     dose_rate : int
         The dose rate of the beam.
-    energy : float
-        The energy of the beam.
     gantry_angle : float
         The gantry angle of the beam.
     coll_angle : float
@@ -478,80 +480,74 @@ class PicketFence(QAProcedure):
         The couch lateral position.
     couch_rot : float
         The couch rotation.
-    mu : int
-        The monitor units of the beam.
-    jaw_padding_mm : float
+    jaw_padding : float
         The padding to add to the X jaws.
     beam_name : str
         The name of the beam.
-    max_sacrificial_move_mm : float
-        The maximum distance the sacrificial leaves can move in a given control point.
-        Smaller values generate more control points and more back-and-forth movement.
-        Too large of values may cause deliverability issues.
     """
 
-    strip_width_mm: float = 3
-    strip_positions_mm: tuple[float | int, ...] = (-45, -30, -15, 0, 15, 30, 45)
-    y1: float = -100
-    y2: float = 100
+    picket_width: float = 1
+    picket_positions: Sequence[float] = (-75, 60, -45, -30, -15, 0, 15, 30, 45, 60, 75)
+    mu_per_picket: float = 10
+    mu_per_transition: float = 2
+    skip_first_picket: bool = True
+    energy: float = 6
     fluence_mode: FluenceMode = FluenceMode.STANDARD
     dose_rate: int = 600
-    energy: float = 6
     gantry_angle: float = 0
     coll_angle: float = 0
     couch_vrt: float = 0
     couch_lng: float = 1000
     couch_lat: float = 0
     couch_rot: float = 0
-    mu: int = 200
-    jaw_padding_mm: float = 10
-    beam_name: str = "PF"
-    max_sacrificial_move_mm: float = 50
+    jaw_padding: float = 10
+    beam_name: str = "Picket fence"
 
     def compute(self, machine: TrueBeamMachine) -> None:
         # check MLC overtravel; machine may prevent delivery if exposing leaf tail
-        x1 = min(self.strip_positions_mm) - self.jaw_padding_mm
-        x2 = max(self.strip_positions_mm) + self.jaw_padding_mm
-        max_dist_to_jaw = max(
-            max(abs(pos - x1), abs(pos + x2)) for pos in self.strip_positions_mm
-        )
-        if max_dist_to_jaw > machine.specs.max_mlc_overtravel:
-            raise ValueError(
-                "Picket fence beam exceeds MLC overtravel limits. Lower padding, the number of pickets, or the picket spacing."
-            )
-        mlc = Beam.create_modulator(
-            machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
-        )
-        # create initial starting point; start under the jaws
-        mlc.add_strip(
-            position_mm=self.strip_positions_mm[0] - 2,
-            strip_width_mm=self.strip_width_mm,
-            meterset_at_target=0,
-        )
+        x1 = min(self.picket_positions) - self.jaw_padding
+        x2 = max(self.picket_positions) + self.jaw_padding
+        max_dist_to_jaw1 = max(abs(pos - x1) for pos in self.picket_positions)
+        max_dist_to_jaw2 = max(abs(pos - x2) for pos in self.picket_positions)
+        if max(max_dist_to_jaw1, max_dist_to_jaw2) > machine.specs.max_mlc_overtravel:
+            msg = "Picket fence beam exceeds MLC overtravel limits. Lower padding, the number of pickets, or the picket spacing."
+            raise ValueError(msg)
 
-        for strip in self.strip_positions_mm:
-            # starting control point
-            mlc.add_strip(
-                position_mm=strip,
-                strip_width_mm=self.strip_width_mm,
-                meterset_at_target=1 / len(self.strip_positions_mm),
-            )
+        # This is the picket fence sequence delivery motion scheme
+        # T is transition, D is Dose, MLC numbers are index of picket positions
+        # CP    0 (*) 1 2 3 4 5 6   (*) Add control point if skip_first_picket=False
+        # D     0 (D) T D T D T D   (D) Add Dose if skip_first_picket=False
+        # MLC   0 (0) 1 1 2 2 3 3   (0) Add MLC if skip_first_picket=False
+
+        mu, pos = [0], [self.picket_positions[0]]
+        if not self.skip_first_picket:
+            mu += [self.mu_per_picket]
+            pos += [self.picket_positions[0]]
+
+        for idx in range(1, len(self.picket_positions)):
+            mu += [self.mu_per_transition, self.mu_per_picket]
+            pos += 2 * [self.picket_positions[idx]]
+
+        shaper = Beam.create_shaper(machine)
+        mlc = [shaper.get_shape(Strip(p, self.picket_width)) for p in pos]
+        metersets = np.cumsum(mu)
+
         beam = Beam(
             beam_name=self.beam_name,
             energy=self.energy,
             dose_rate=self.dose_rate,
             x1=x1,
             x2=x2,
-            y1=self.y1,
-            y2=self.y2,
+            y1=machine.mlc_boundaries[0],
+            y2=machine.mlc_boundaries[-1],
             gantry_angles=self.gantry_angle,
             coll_angle=self.coll_angle,
             couch_vrt=self.couch_vrt,
             couch_lat=self.couch_lat,
             couch_lng=self.couch_lng,
             couch_rot=self.couch_rot,
-            mlc_positions=mlc.as_control_points(),
-            metersets=[self.mu * m for m in mlc.as_metersets()],
+            mlc_positions=mlc,
+            metersets=metersets,
             fluence_mode=self.fluence_mode,
             mlc_is_hd=machine.mlc_is_hd,
         )

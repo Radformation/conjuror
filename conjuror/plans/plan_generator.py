@@ -176,10 +176,10 @@ class BeamBase(Generic[TMachine], ABC):
         beam = ds.BeamSequence[beam_idx]
         bld = beam.BeamLimitingDeviceSequence
         name = beam.BeamName
-        fms = beam.PrimaryFluenceModeSequence[0]
         fluence_mode = FluenceMode.STANDARD
-        if fms.FluenceMode == "NON_STANDARD":
-            match fms.FluenceModeID:
+        pfms = beam.get("PrimaryFluenceModeSequence")
+        if pfms and pfms[0].get("FluenceMode") == "NON_STANDARD":
+            match pfms.FluenceModeID:
                 case "FFF":
                     fluence_mode = FluenceMode.FFF
                 case "SRS":
