@@ -136,23 +136,23 @@ class TestProcedures(TestCase):
         )
 
     def test_gantry_speed_too_fast(self):
-        # max speed is 4.8 by default
+        # max speed is 6.0 by default
+        procedure = GantrySpeed(
+            speeds=(1, 2, 3, 4, 6.5),
+            y1=-100,
+            y2=100,
+        )
         with self.assertRaises(ValueError):
-            procedure = GantrySpeed(
-                speeds=(1, 2, 3, 4, 5),
-                y1=-100,
-                y2=100,
-            )
             self.pg.add_procedure(procedure)
 
     def test_gantry_speed_too_wide(self):
+        procedure = GantrySpeed(
+            speeds=(1, 2, 3, 4),
+            roi_size_mm=100,
+            y1=-100,
+            y2=100,
+        )
         with self.assertRaises(ValueError):
-            procedure = GantrySpeed(
-                speeds=(1, 2, 3, 4),
-                roi_size_mm=50,
-                y1=-100,
-                y2=100,
-            )
             self.pg.add_procedure(procedure)
 
     def test_gantry_range_over_360(self):
