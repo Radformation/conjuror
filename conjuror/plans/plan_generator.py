@@ -131,11 +131,13 @@ class BeamBase(Generic[TMachine], ABC):
         self._fluence_mode = fluence_mode
         self._energy = energy
         self._dose_rate = dose_rate
-        self._coll_angle = coll_angle
         self._couch_vrt = couch_vrt
         self._couch_lat = couch_lat
         self._couch_lng = couch_lng
-        self._couch_rot = couch_rot
+
+        # Public attributes (storing only)
+        self.coll_angle = coll_angle
+        self.couch_rot = couch_rot
 
         # Public attributes (used outside dicom scope, e.g. for plotting)
         # For easier manipulation all variable are stored as np.ndarray of size num_cp,
@@ -317,9 +319,9 @@ class BeamBase(Generic[TMachine], ABC):
         cp0.BeamLimitingDevicePositionSequence = beam_limiting_device_position_sequence
         cp0.GantryAngle = gantry_angles[0]
         cp0.GantryRotationDirection = gantry_direction[0].value
-        cp0.BeamLimitingDeviceAngle = self._coll_angle
+        cp0.BeamLimitingDeviceAngle = self.coll_angle
         cp0.BeamLimitingDeviceRotationDirection = "NONE"
-        cp0.PatientSupportAngle = self._couch_rot
+        cp0.PatientSupportAngle = self.couch_rot
         cp0.PatientSupportRotationDirection = "NONE"
         cp0.TableTopEccentricAngle = 0.0
         cp0.TableTopEccentricRotationDirection = "NONE"

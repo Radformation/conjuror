@@ -9,16 +9,18 @@ from conjuror.images.simulators import IMAGER_AS1200
 from conjuror.plans.plan_generator import PlanGenerator, BeamBase
 from conjuror.plans.truebeam import (
     OpenField,
+    OpenFieldMLCMode,
     MLCTransmission,
     PicketFence,
     WinstonLutz,
+    WinstonLutzMLCMode,
+    WinstonLutzField,
     DoseRate,
     MLCSpeed,
     GantrySpeed,
     VMATDRGS,
     DEFAULT_SPECS_TB,
     TrueBeamMachine,
-    OpenFieldMode,
 )
 from tests.utils import get_file_from_cloud_test_repo
 
@@ -32,67 +34,6 @@ class TestProcedures(TestCase):
             TB_MIL_PLAN_FILE,
             plan_label="label",
             plan_name="my name",
-        )
-
-    def test_winston_lutz_beams(self):
-        procedure = WinstonLutz(
-            axes_positions=(
-                {"gantry": 0, "collimator": 0, "couch": 0},
-                {"gantry": 90, "collimator": 0, "couch": 0},
-                {"gantry": 180, "collimator": 0, "couch": 45},
-            ),
-            x1=-10,
-            x2=10,
-            y1=-10,
-            y2=10,
-            mu=123,
-        )
-        self.pg.add_procedure(procedure)
-        dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 3)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "G0C0P0")
-        self.assertEqual(dcm.BeamSequence[2].BeamName, "G180C0P45")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.BeamSequence[1].BeamNumber, 2)
-        self.assertEqual(dcm.BeamSequence[2].BeamNumber, 3)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 3)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
-        )
-        self.assertEqual(dcm.BeamSequence[0].ControlPointSequence[0].GantryAngle, 0)
-        self.assertEqual(dcm.BeamSequence[1].ControlPointSequence[0].GantryAngle, 90)
-        self.assertEqual(dcm.BeamSequence[2].ControlPointSequence[0].GantryAngle, 180)
-
-    def test_winston_lutz_jaw_defined(self):
-        procedure = WinstonLutz(
-            axes_positions=(
-                {"gantry": 0, "collimator": 0, "couch": 0},
-                {"gantry": 90, "collimator": 0, "couch": 0},
-                {"gantry": 180, "collimator": 0, "couch": 45},
-            ),
-            x1=-10,
-            x2=10,
-            y1=-10,
-            y2=10,
-            mu=123,
-            defined_by_mlcs=False,
-        )
-        self.pg.add_procedure(procedure)
-        dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 3)
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[0]
-            .LeafJawPositions,
-            [-10, 10],
-        )
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[1]
-            .LeafJawPositions,
-            [-10, 10],
         )
 
     def test_dose_rate_beams(self):
@@ -232,18 +173,19 @@ class TestProcedures(TestCase):
 
 class TestOpenField(TestCase):
     # An Open field is mostly a Rectangle, so some of these tests strategy mimics the Rectangle shape tests
+    # There is a significant portion of these tests that are copied in WinstonLutz.
 
     OPENFIELD_MLC_PARAM = [
-        (-2.5, 2.5, OpenFieldMode.EXACT),
-        (-2.4, 2.6, OpenFieldMode.ROUND),
-        (-2.6, 2.6, OpenFieldMode.INWARD),
-        (-2.4, 2.4, OpenFieldMode.OUTWARD),
+        (-2.5, 2.5, OpenFieldMLCMode.EXACT),
+        (-2.4, 2.6, OpenFieldMLCMode.ROUND),
+        (-2.6, 2.6, OpenFieldMLCMode.INWARD),
+        (-2.4, 2.4, OpenFieldMLCMode.OUTWARD),
     ]
 
     @parameterized.expand(OPENFIELD_MLC_PARAM)
-    def test_defined_by_mlc(self, y1, y2, y_mode):
+    def test_defined_by_mlc(self, y1, y2, mlc_mode):
         x1, x2 = -100, 100
-        procedure = OpenField(x1, x2, y1, y2, y_mode=y_mode)
+        procedure = OpenField(x1, x2, y1, y2, mlc_mode=mlc_mode)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
         bld = procedure.beams[0].beam_limiting_device_positions
@@ -269,16 +211,16 @@ class TestOpenField(TestCase):
         self.assertEqual(y2 + 5, jaw_y[1, 0])
 
     OPEN_MLC_PARAM = [
-        OpenFieldMode.EXACT,
-        OpenFieldMode.ROUND,
-        OpenFieldMode.INWARD,
-        OpenFieldMode.OUTWARD,
+        OpenFieldMLCMode.EXACT,
+        OpenFieldMLCMode.ROUND,
+        OpenFieldMLCMode.INWARD,
+        OpenFieldMLCMode.OUTWARD,
     ]
 
     @parameterized.expand(OPEN_MLC_PARAM)
-    def test_open_mlc(self, y_mode):
+    def test_open_mlc(self, mlc_mode):
         x1, x2, y1, y2 = -100, 100, -110, 110
-        procedure = OpenField(x1, x2, y1, y2, y_mode=y_mode)
+        procedure = OpenField(x1, x2, y1, y2, mlc_mode=mlc_mode)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
         bld = procedure.beams[0].beam_limiting_device_positions
@@ -313,21 +255,21 @@ class TestOpenField(TestCase):
         self.assertEqual(y2, jaw_y[1, 0])
 
     @parameterized.expand([(2, 1, 0, 1), (0, 1, 2, 1)])
-    def test_openfield_error_if_min_larger_than_max(self, x1, x2, y1, y2):
+    def test_error_if_min_larger_than_max(self, x1, x2, y1, y2):
         procedure = OpenField(x1, x2, y1, y2, 100)
         with self.assertRaises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     @parameterized.expand([(-0.1, 0), (0, 0.1)])
-    def test_openfield_error_if_mlc_exact_and_not_possible(self, y1, y2):
-        procedure = OpenField(0, 1, y1, y2, y_mode=OpenFieldMode.EXACT)
+    def test_error_if_mlc_exact_and_not_possible(self, y1, y2):
+        procedure = OpenField(0, 1, y1, y2, mlc_mode=OpenFieldMLCMode.EXACT)
         with self.assertRaises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     @parameterized.expand([(-0.1, 0), (0, 0.1)])
-    def test_openfield_exact_is_ignored_if_defined_by_jaws(self, y1, y2):
+    def test_exact_is_ignored_if_defined_by_jaws(self, y1, y2):
         procedure = OpenField(
-            0, 1, y1, y2, y_mode=OpenFieldMode.EXACT, defined_by_mlc=False
+            0, 1, y1, y2, mlc_mode=OpenFieldMLCMode.EXACT, defined_by_mlc=False
         )
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
@@ -404,6 +346,105 @@ class TestPicketFence(TestCase):
         procedure = PicketFence(picket_positions=(-100, 100))
         with self.assertRaises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+
+class TestWinstonLutz(TestCase):
+    # There is a significant portion of these tests that are copied from OpenField
+    def test_defaults(self):
+        procedure = WinstonLutz()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        self.assertEqual(1, len(procedure.beams))
+
+    def test_non_defaults(self):
+        fields = [WinstonLutzField(0, 0, 0, "name1"), WinstonLutzField(90.7, 0.7, 10.7)]
+        names_nominal = ["name1", "G091C001T011"]
+        procedure = WinstonLutz(fields=fields)
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        self.assertEqual(2, len(procedure.beams))
+        for f, b, n in zip(fields, procedure.beams, names_nominal):
+            self.assertEqual(f.gantry, b.gantry_angles[0])
+            self.assertEqual(f.collimator, b.coll_angle)
+            self.assertEqual(f.couch, b.couch_rot)
+            self.assertEqual(b.beam_name, n)
+            pass
+        pass
+
+    WL_MLC_PARAM = [
+        (-2.5, 2.5, WinstonLutzMLCMode.EXACT),
+        (-2.4, 2.6, WinstonLutzMLCMode.ROUND),
+        (-2.6, 2.6, WinstonLutzMLCMode.INWARD),
+        (-2.4, 2.4, WinstonLutzMLCMode.OUTWARD),
+    ]
+
+    @parameterized.expand(WL_MLC_PARAM)
+    def test_defined_by_mlc(self, y1, y2, mlc_mode):
+        x1, x2 = -100, 100
+        procedure = WinstonLutz(x1, x2, y1, y2, mlc_mode=mlc_mode)
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+        bld = procedure.beams[0].beam_limiting_device_positions
+
+        mlc = bld["MLCX"]
+        self.assertFalse(np.any(mlc[:, 0] - mlc[:, 1]))
+        mlc0 = mlc[:, 0]
+        self.assertTrue(all(x == -127.5 for x in mlc0[:29]))
+        self.assertTrue(all(x == x1 for x in mlc0[29:31]))
+        self.assertTrue(all(x == -127.5 for x in mlc0[31:60]))
+        self.assertTrue(all(x == -122.5 for x in mlc0[60 : 29 + 60]))
+        self.assertTrue(all(x == x2 for x in mlc0[29 + 60 : 31 + 60]))
+        self.assertTrue(all(x == -122.5 for x in mlc0[31 + 60 :]))
+
+        jaw_x = bld["ASYMX"]
+        self.assertFalse(np.any(jaw_x[:, 0] - jaw_x[:, 1]))
+        self.assertEqual(x1 - 5, jaw_x[0, 0])
+        self.assertEqual(x2 + 5, jaw_x[1, 0])
+
+        jaw_y = bld["ASYMY"]
+        self.assertFalse(np.any(jaw_y[:, 0] - jaw_y[:, 1]))
+        self.assertEqual(y1 - 5, jaw_y[0, 0])
+        self.assertEqual(y2 + 5, jaw_y[1, 0])
+
+    def test_defined_by_jaws(self):
+        x1, x2, y1, y2 = -100, 100, -110, 110
+        procedure = WinstonLutz(x1, x2, y1, y2, defined_by_mlc=False)
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+        bld = procedure.beams[0].beam_limiting_device_positions
+
+        mlc = bld["MLCX"]
+        self.assertFalse(np.any(mlc[:, 0] - mlc[:, 1]))
+        mlc0 = mlc[:, 0]
+        self.assertTrue(all(x == -105 for x in mlc0[:60]))
+        self.assertTrue(all(x == 105 for x in mlc0[60:]))
+
+        jaw_x = bld["ASYMX"]
+        self.assertFalse(np.any(jaw_x[:, 0] - jaw_x[:, 1]))
+        self.assertEqual(x1, jaw_x[0, 0])
+        self.assertEqual(x2, jaw_x[1, 0])
+
+        jaw_y = bld["ASYMY"]
+        self.assertFalse(np.any(jaw_y[:, 0] - jaw_y[:, 1]))
+        self.assertEqual(y1, jaw_y[0, 0])
+        self.assertEqual(y2, jaw_y[1, 0])
+
+    @parameterized.expand([(2, 1, 0, 1), (0, 1, 2, 1)])
+    def test_error_if_min_larger_than_max(self, x1, x2, y1, y2):
+        procedure = WinstonLutz(x1, x2, y1, y2, 100)
+        with self.assertRaises(ValueError):
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+    @parameterized.expand([(-0.1, 0), (0, 0.1)])
+    def test_error_if_mlc_exact_and_not_possible(self, y1, y2):
+        procedure = WinstonLutz(0, 1, y1, y2, mlc_mode=WinstonLutzMLCMode.EXACT)
+        with self.assertRaises(ValueError):
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+    @parameterized.expand([(-0.1, 0), (0, 0.1)])
+    def test_exact_is_ignored_if_defined_by_jaws(self, y1, y2):
+        procedure = WinstonLutz(
+            0, 1, y1, y2, mlc_mode=WinstonLutzMLCMode.EXACT, defined_by_mlc=False
+        )
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
 
 class TestVmatDRGS(TestCase):

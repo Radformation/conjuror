@@ -40,11 +40,26 @@ DEFAULT_SPECS_TB = MachineSpecs(
 )
 
 
-class OpenFieldMode(Enum):
+class OpenFieldMLCMode(Enum):
     EXACT = RectangleMode.EXACT
     ROUND = RectangleMode.ROUND
     INWARD = RectangleMode.INWARD
     OUTWARD = RectangleMode.OUTWARD
+
+
+class WinstonLutzMLCMode(Enum):
+    EXACT = RectangleMode.EXACT
+    ROUND = RectangleMode.ROUND
+    INWARD = RectangleMode.INWARD
+    OUTWARD = RectangleMode.OUTWARD
+
+
+@dataclass
+class WinstonLutzField:
+    gantry: float
+    collimator: float
+    couch: float
+    name: str | None = None
 
 
 class TrueBeamMachine(MachineBase):
@@ -210,7 +225,7 @@ class OpenField(QAProcedure):
         The monitor units of the beam.
     defined_by_mlc : bool
         Whether the field edges are defined by the MLCs or the jaws.
-    y_mode : OpenFieldMode
+    mlc_mode : OpenFieldMLCMode
         Controls how the open field aligns with MLC leaf boundaries along the y-axis.
 
         * EXACT -- Both ``y1`` and ``y2`` must coincide with an MLC leaf boundary.
@@ -253,7 +268,7 @@ class OpenField(QAProcedure):
     y2: float
     mu: int = 100
     defined_by_mlc: bool = True
-    y_mode: OpenFieldMode = OpenFieldMode.OUTWARD
+    mlc_mode: OpenFieldMLCMode = OpenFieldMLCMode.OUTWARD
     energy: float = 6
     fluence_mode: FluenceMode = FluenceMode.STANDARD
     dose_rate: int = 600
@@ -268,14 +283,14 @@ class OpenField(QAProcedure):
     outside_strip_width: float = 5
 
     def compute(self, machine: TrueBeamMachine) -> None:
-        y_mode = self.y_mode.value
+        y_mode = self.mlc_mode.value
         if self.defined_by_mlc:
             mlc_padding = 0
             jaw_padding = self.padding
         else:
             mlc_padding = self.padding
             jaw_padding = 0
-            y_mode = OpenFieldMode.OUTWARD.value
+            y_mode = OpenFieldMLCMode.OUTWARD.value
 
         shaper = Beam.create_shaper(machine)
         shape = Rectangle(
@@ -394,7 +409,7 @@ class MLCTransmission(QAProcedure):
             self._y2,
             self.mu_per_ref,
             defined_by_mlc=False,
-            y_mode=OpenFieldMode.OUTWARD,
+            mlc_mode=OpenFieldMLCMode.OUTWARD,
             energy=self.energy,
             fluence_mode=self.fluence_mode,
             dose_rate=self.dose_rate,
@@ -562,73 +577,86 @@ class WinstonLutz(QAProcedure):
     Parameters
     ----------
     x1 : float
-        The left jaw position.
+        The left edge position.
     x2 : float
-        The right jaw position.
+        The right edge position.
     y1 : float
-        The bottom jaw position.
+        The bottom edge position.
     y2 : float
-        The top jaw position.
-    defined_by_mlcs : bool
+        The top edge position.
+    mu : int
+        The monitor units of the beam.
+    defined_by_mlc : bool
         Whether the field edges are defined by the MLCs or the jaws.
+    mlc_mode : WinstonLutzMLCMode
+        Controls how the open field aligns with MLC leaf boundaries along the y-axis.
+
+        * EXACT -- Both ``y1`` and ``y2`` must coincide with an MLC leaf boundary.
+          If either edge does not align exactly, an error is raised.
+        * ROUND -- If ``y1`` or ``y2`` falls between boundaries, the limits are rounded to the nearest boundary.
+        * INWARD -- If ``y1`` or ``y2`` falls between boundaries, the leaf band is treated as "outfield."
+          This results in a smaller field in the y-direction.
+        * OUTWARD -- If ``y1`` or ``y2`` falls between boundaries, the leaf band is treated as "infield."
+          This results in a larger field in the y-direction.
+    fields : Iterable[WinstonLutzField]
+        The positions of the axes.
     energy : float
         The energy of the beam.
     fluence_mode : FluenceMode
         The fluence mode of the beam.
     dose_rate : int
         The dose rate of the beam.
-    axes_positions : Iterable[dict]
-        The positions of the axes. Each dict should have keys 'gantry', 'collimator', 'couch', and optionally 'name'.
     couch_vrt : float
         The couch vertical position.
     couch_lng : float
         The couch longitudinal position.
     couch_lat : float
         The couch lateral position.
-    mu : int
-        The monitor units of the beam.
-    padding_mm : float
-        The padding to add. If defined by the MLCs, this is the padding of the jaws. If defined by the jaws,
-        this is the padding of the MLCs.
+    padding : float
+        The padding to add to the jaws or MLCs.
     """
 
-    x1: float = -10
-    x2: float = 10
-    y1: float = -10
-    y2: float = 10
-    defined_by_mlcs: bool = True
+    x1: float = -10.0
+    x2: float = 10.0
+    y1: float = -10.0
+    y2: float = 10.0
+    mu: float = 10.0
+    defined_by_mlc: bool = True
+    mlc_mode: WinstonLutzMLCMode = WinstonLutzMLCMode.OUTWARD
+    fields: Iterable[WinstonLutzField] = (WinstonLutzField(0, 0, 0),)
     energy: float = 6
     fluence_mode: FluenceMode = FluenceMode.STANDARD
     dose_rate: int = 600
-    axes_positions: Iterable[dict] = ({"gantry": 0, "collimator": 0, "couch": 0},)
     couch_vrt: float = 0
     couch_lng: float = 1000
     couch_lat: float = 0
-    mu: int = 10
-    padding_mm: float = 5
+    padding: float = 5
 
     def compute(self, machine: TrueBeamMachine) -> None:
-        for axes in self.axes_positions:
-            if self.defined_by_mlcs:
-                mlc_padding = 0
-                jaw_padding = self.padding_mm
-            else:
-                mlc_padding = self.padding_mm
-                jaw_padding = 0
-            mlc = Beam.create_modulator(machine)
-            mlc.add_rectangle(
-                left_position=self.x1 - mlc_padding,
-                right_position=self.x2 + mlc_padding,
-                top_position=self.y2 + mlc_padding,
-                bottom_position=self.y1 - mlc_padding,
-                outer_strip_width=5,
-                meterset_at_target=1.0,
-                x_outfield_position=self.x1 - mlc_padding - jaw_padding - 20,
-            )
-            beam_name = (
-                axes.get("name")
-                or f"G{axes['gantry']:g}C{axes['collimator']:g}P{axes['couch']:g}"
-            )
+        y_mode = self.mlc_mode.value
+        if self.defined_by_mlc:
+            mlc_padding = 0
+            jaw_padding = self.padding
+        else:
+            mlc_padding = self.padding
+            jaw_padding = 0
+            y_mode = OpenFieldMLCMode.OUTWARD.value
+        shape = Rectangle(
+            x_min=self.x1 - mlc_padding,
+            x_max=self.x2 + mlc_padding,
+            y_min=self.y1 - mlc_padding,
+            y_max=self.y2 + mlc_padding,
+            y_mode=y_mode,
+            outer_strip_width=5,
+            x_outfield_position=self.x1 - jaw_padding - 20,
+        )
+        shaper = Beam.create_shaper(machine)
+        mlc = shaper.get_shape(shape)
+        for _field in self.fields:
+            g = round(_field.gantry)
+            c = round(_field.collimator)
+            t = round(_field.couch)
+            beam_name = _field.name or f"G{g:03d}C{c:03d}T{t:03d}"
             beam = Beam(
                 beam_name=beam_name,
                 energy=self.energy,
@@ -637,14 +665,14 @@ class WinstonLutz(QAProcedure):
                 x2=self.x2 + jaw_padding,
                 y1=self.y1 - jaw_padding,
                 y2=self.y2 + jaw_padding,
-                gantry_angles=axes["gantry"],
-                coll_angle=axes["collimator"],
+                gantry_angles=_field.gantry,
+                coll_angle=_field.collimator,
                 couch_vrt=self.couch_vrt,
                 couch_lat=self.couch_lat,
                 couch_lng=self.couch_lng,
-                couch_rot=0,
-                mlc_positions=mlc.as_control_points(),
-                metersets=[self.mu * m for m in mlc.as_metersets()],
+                couch_rot=_field.couch,
+                mlc_positions=2 * [mlc],
+                metersets=[0, self.mu],
                 fluence_mode=self.fluence_mode,
                 mlc_is_hd=machine.mlc_is_hd,
             )
