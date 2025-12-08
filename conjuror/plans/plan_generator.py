@@ -15,7 +15,7 @@ from .beam import Beam
 from .machine import MachineSpecs, TMachine
 from ..images.layers import ArrayLayer
 from ..images.simulators import Simulator, Imager
-from .plots import plot_fluences
+from .visualization import plot_fluences
 
 
 class QAProcedureBase(Generic[TMachine], ABC):

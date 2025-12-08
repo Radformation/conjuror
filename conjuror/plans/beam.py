@@ -10,7 +10,7 @@ from conjuror.plans.machine import TMachine, GantryDirection, FluenceMode
 from conjuror.utils import wrap180
 
 
-class BeamPlotMixin:
+class BeamVisualizationMixin:
     def generate_fluence(self: "Beam", imager: Imager) -> np.ndarray:
         """Generate the fluence map from the RT Plan.
 
@@ -221,7 +221,7 @@ class BeamPlotMixin:
         return fig
 
 
-class Beam(Generic[TMachine], BeamPlotMixin, ABC):
+class Beam(Generic[TMachine], BeamVisualizationMixin, ABC):
     """Represents a DICOM beam dataset. Has methods for creating the dataset and adding control points."""
 
     ROUNDING_DECIMALS = 6
