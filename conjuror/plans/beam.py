@@ -10,7 +10,218 @@ from conjuror.plans.machine import TMachine, GantryDirection, FluenceMode
 from conjuror.utils import wrap180
 
 
-class Beam(Generic[TMachine], ABC):
+class BeamPlotMixin:
+    def generate_fluence(self: "Beam", imager: Imager) -> np.ndarray:
+        """Generate the fluence map from the RT Plan.
+
+        Parameters
+        ----------
+        imager : Imager
+            The imager to use to generate the images. This provides the
+            size of the image and the pixel size.
+
+        Returns
+        -------
+        np.ndarray
+            The fluence map. Will be the same shape as the imager.
+        """
+        meterset_per_cp = np.diff(self.metersets, prepend=0)
+        x = imager.pixel_size * (np.arange(imager.shape[1]) - (imager.shape[1] - 1) / 2)
+        y = imager.pixel_size * (np.arange(imager.shape[0]) - (imager.shape[0] - 1) / 2)
+
+        stack_fluences = list()
+        for key, positions in self.beam_limiting_device_positions.items():
+            if "MLC" not in key:
+                continue
+            stack_fluence = np.zeros(imager.shape)
+            number_of_leaf_pairs = int(positions.shape[0] / 2)
+            leaves_b = positions[0:number_of_leaf_pairs, :]
+            leaves_a = positions[number_of_leaf_pairs:, :]
+
+            stack_fluence_compact = np.zeros((number_of_leaf_pairs, imager.shape[1]))
+            for cp_idx in range(1, self.number_of_control_points):
+                mu = meterset_per_cp[cp_idx]
+                mask = (x > leaves_b[:, cp_idx : cp_idx + 1]) & (
+                    x <= leaves_a[:, cp_idx : cp_idx + 1]
+                )
+                stack_fluence_compact[mask] += mu
+
+            boundaries = next(
+                bld
+                for bld in self.beam_limiting_device_sequence
+                if bld.RTBeamLimitingDeviceType == key
+            ).LeafPositionBoundaries
+            row_to_leaf_map = np.argmax(np.array([boundaries]).T - y > 0, axis=0) - 1
+            for row in range(len(y)):
+                leaf = row_to_leaf_map[row]
+                if leaf < 0:
+                    continue
+                stack_fluence[row, :] = stack_fluence_compact[leaf, :]
+            stack_fluences.append(stack_fluence)
+
+        fluence = np.min(stack_fluences, axis=0)
+        return fluence
+
+    def plot_fluence(self: "Beam", imager: Imager, show: bool = True) -> go.Figure:
+        """Plot the fluence map from the RT Beam.
+
+        Parameters
+        ----------
+        imager : Imager
+            The imager to use to generate the images. This provides the
+            size of the image and the pixel size.
+        show : bool, optional
+            Whether to show the plots. Default is True.
+        """
+        fluence = self.generate_fluence(imager)
+        fig = go.Figure()
+        fig.add_heatmap(
+            z=fluence,
+            colorscale="Viridis",
+            colorbar=dict(title="MU"),
+            showscale=True,
+        )
+        fig.update_layout(
+            title=f"Fluence Map - {self.beam_name}",
+        )
+        if show:
+            fig.show()
+        return fig
+
+    def animate_mlc(self: "Beam", show: bool = True) -> go.Figure:
+        """Plot the MLC positions as animation.
+
+        Parameters
+        ----------
+        show : bool, optional
+            Whether to show the plot. Default is True.
+        """
+        _leaf_length = 200
+        blds = {
+            bld.RTBeamLimitingDeviceType: bld
+            for bld in self.beam_limiting_device_sequence
+            if "MLC" in bld.RTBeamLimitingDeviceType
+        }
+
+        frames = []
+        for cp_idx in range(self.number_of_control_points):
+            shapes = []
+            for key, positions in self.beam_limiting_device_positions.items():
+                if key in ["X", "ASYMX"]:
+                    x1 = go.Scatter(
+                        x=2 * [positions[0, cp_idx]],
+                        y=[-1000, 1000],
+                        mode="lines",
+                        line=dict(width=2, color="orange"),
+                    )
+                    x2 = go.Scatter(
+                        x=2 * [positions[1, cp_idx]],
+                        y=[-1000, 1000],
+                        mode="lines",
+                        line=dict(width=2, color="orange"),
+                    )
+                    shapes.append(x1)
+                    shapes.append(x2)
+                if key in ["Y", "ASYMY"]:
+                    y1 = go.Scatter(
+                        x=[-1000, 1000],
+                        y=2 * [positions[0, cp_idx]],
+                        mode="lines",
+                        line=dict(width=2, color="orange"),
+                    )
+                    y2 = go.Scatter(
+                        x=[-1000, 1000],
+                        y=2 * [positions[1, cp_idx]],
+                        mode="lines",
+                        line=dict(width=2, color="orange"),
+                    )
+                    shapes.append(y1)
+                    shapes.append(y2)
+                if "MLC" not in key:
+                    continue
+
+                # MLC
+                num_leaf_pairs = blds[key].NumberOfLeafJawPairs
+                for leaf in range(num_leaf_pairs):
+                    y1 = blds[key].LeafPositionBoundaries[leaf]
+                    y2 = blds[key].LeafPositionBoundaries[leaf + 1]
+                    y = np.array([y1, y1, y2, y2, y1])
+
+                    pos_b = positions[leaf, cp_idx]
+                    x_b = pos_b + _leaf_length * np.array([-1, 0, 0, -1, -1])
+                    rect_b = go.Scatter(
+                        x=x_b, y=y, mode="lines", line=dict(width=2, color="blue")
+                    )
+
+                    pos_a = positions[leaf + num_leaf_pairs, cp_idx]
+                    x_a = pos_a + _leaf_length * np.array([0, 1, 1, 0, 0])
+                    rect_a = go.Scatter(
+                        x=x_a, y=y, mode="lines", line=dict(width=2, color="blue")
+                    )
+
+                    shapes.append(rect_b)
+                    shapes.append(rect_a)
+
+                frame = go.Frame(data=shapes, name=f"cp_{cp_idx}")
+                frames.append(frame)
+        data = frames[0].data
+        layout = go.Layout(
+            showlegend=False,
+            title=f"Beam: {self.beam_name}",
+            xaxis=dict(range=[-200, 200]),
+            yaxis=dict(range=[-200, 200]),
+            updatemenus=[
+                {
+                    "type": "buttons",
+                    "buttons": [
+                        {
+                            "label": "▶ Play",
+                            "method": "animate",
+                            "args": [
+                                None,
+                                {
+                                    # "frame": {"duration": 50},
+                                    # "transition": {"duration": 0},
+                                    "fromcurrent": True,
+                                },
+                            ],
+                        }
+                    ],
+                    "pad": {"r": 10, "t": 50},
+                    "x": 0,
+                    "y": 0,
+                }
+            ],
+            sliders=[
+                {
+                    "currentvalue": {"prefix": "Control point: "},
+                    "steps": [
+                        {
+                            "label": f"{i}",
+                            "method": "animate",
+                            "args": [
+                                [f"cp_{i}"],
+                                {
+                                    "mode": "immediate",
+                                    "transition": {"duration": 0},
+                                },
+                            ],
+                        }
+                        for i in range(len(frames))
+                    ],
+                    "pad": {"b": 10, "t": 50},
+                }
+            ],
+        )
+        fig = go.Figure(data=data, frames=frames, layout=layout)
+
+        if show:
+            fig.show()
+
+        return fig
+
+
+class Beam(Generic[TMachine], BeamPlotMixin, ABC):
     """Represents a DICOM beam dataset. Has methods for creating the dataset and adding control points."""
 
     ROUNDING_DECIMALS = 6
@@ -339,212 +550,3 @@ class Beam(Generic[TMachine], ABC):
         # Control Point Sequence
         beam.ControlPointSequence = DicomSequence()
         return beam
-
-    def generate_fluence(self, imager: Imager) -> np.ndarray:
-        """Generate the fluence map from the RT Plan.
-
-        Parameters
-        ----------
-        imager : Imager
-            The imager to use to generate the images. This provides the
-            size of the image and the pixel size.
-
-        Returns
-        -------
-        np.ndarray
-            The fluence map. Will be the same shape as the imager.
-        """
-        meterset_per_cp = np.diff(self.metersets, prepend=0)
-        x = imager.pixel_size * (np.arange(imager.shape[1]) - (imager.shape[1] - 1) / 2)
-        y = imager.pixel_size * (np.arange(imager.shape[0]) - (imager.shape[0] - 1) / 2)
-
-        stack_fluences = list()
-        for key, positions in self.beam_limiting_device_positions.items():
-            if "MLC" not in key:
-                continue
-            stack_fluence = np.zeros(imager.shape)
-            number_of_leaf_pairs = int(positions.shape[0] / 2)
-            leaves_b = positions[0:number_of_leaf_pairs, :]
-            leaves_a = positions[number_of_leaf_pairs:, :]
-
-            stack_fluence_compact = np.zeros((number_of_leaf_pairs, imager.shape[1]))
-            for cp_idx in range(1, self.number_of_control_points):
-                mu = meterset_per_cp[cp_idx]
-                mask = (x > leaves_b[:, cp_idx : cp_idx + 1]) & (
-                    x <= leaves_a[:, cp_idx : cp_idx + 1]
-                )
-                stack_fluence_compact[mask] += mu
-
-            boundaries = next(
-                bld
-                for bld in self.beam_limiting_device_sequence
-                if bld.RTBeamLimitingDeviceType == key
-            ).LeafPositionBoundaries
-            row_to_leaf_map = np.argmax(np.array([boundaries]).T - y > 0, axis=0) - 1
-            for row in range(len(y)):
-                leaf = row_to_leaf_map[row]
-                if leaf < 0:
-                    continue
-                stack_fluence[row, :] = stack_fluence_compact[leaf, :]
-            stack_fluences.append(stack_fluence)
-
-        fluence = np.min(stack_fluences, axis=0)
-        return fluence
-
-    def plot_fluence(self, imager: Imager, show: bool = True) -> go.Figure:
-        """Plot the fluence map from the RT Beam.
-
-        Parameters
-        ----------
-        imager : Imager
-            The imager to use to generate the images. This provides the
-            size of the image and the pixel size.
-        show : bool, optional
-            Whether to show the plots. Default is True.
-        """
-        fluence = self.generate_fluence(imager)
-        fig = go.Figure()
-        fig.add_heatmap(
-            z=fluence,
-            colorscale="Viridis",
-            colorbar=dict(title="MU"),
-            showscale=True,
-        )
-        fig.update_layout(
-            title=f"Fluence Map - {self.beam_name}",
-        )
-        if show:
-            fig.show()
-        return fig
-
-    def animate_mlc(self, show: bool = True) -> go.Figure:
-        """Plot the MLC positions as animation.
-
-        Parameters
-        ----------
-        show : bool, optional
-            Whether to show the plot. Default is True.
-        """
-        _leaf_length = 200
-        blds = {
-            bld.RTBeamLimitingDeviceType: bld
-            for bld in self.beam_limiting_device_sequence
-            if "MLC" in bld.RTBeamLimitingDeviceType
-        }
-
-        frames = []
-        for cp_idx in range(self.number_of_control_points):
-            shapes = []
-            for key, positions in self.beam_limiting_device_positions.items():
-                if key in ["X", "ASYMX"]:
-                    x1 = go.Scatter(
-                        x=2 * [positions[0, cp_idx]],
-                        y=[-1000, 1000],
-                        mode="lines",
-                        line=dict(width=2, color="orange"),
-                    )
-                    x2 = go.Scatter(
-                        x=2 * [positions[1, cp_idx]],
-                        y=[-1000, 1000],
-                        mode="lines",
-                        line=dict(width=2, color="orange"),
-                    )
-                    shapes.append(x1)
-                    shapes.append(x2)
-                if key in ["Y", "ASYMY"]:
-                    y1 = go.Scatter(
-                        x=[-1000, 1000],
-                        y=2 * [positions[0, cp_idx]],
-                        mode="lines",
-                        line=dict(width=2, color="orange"),
-                    )
-                    y2 = go.Scatter(
-                        x=[-1000, 1000],
-                        y=2 * [positions[1, cp_idx]],
-                        mode="lines",
-                        line=dict(width=2, color="orange"),
-                    )
-                    shapes.append(y1)
-                    shapes.append(y2)
-                if "MLC" not in key:
-                    continue
-
-                # MLC
-                num_leaf_pairs = blds[key].NumberOfLeafJawPairs
-                for leaf in range(num_leaf_pairs):
-                    y1 = blds[key].LeafPositionBoundaries[leaf]
-                    y2 = blds[key].LeafPositionBoundaries[leaf + 1]
-                    y = np.array([y1, y1, y2, y2, y1])
-
-                    pos_b = positions[leaf, cp_idx]
-                    x_b = pos_b + _leaf_length * np.array([-1, 0, 0, -1, -1])
-                    rect_b = go.Scatter(
-                        x=x_b, y=y, mode="lines", line=dict(width=2, color="blue")
-                    )
-
-                    pos_a = positions[leaf + num_leaf_pairs, cp_idx]
-                    x_a = pos_a + _leaf_length * np.array([0, 1, 1, 0, 0])
-                    rect_a = go.Scatter(
-                        x=x_a, y=y, mode="lines", line=dict(width=2, color="blue")
-                    )
-
-                    shapes.append(rect_b)
-                    shapes.append(rect_a)
-
-                frame = go.Frame(data=shapes, name=f"cp_{cp_idx}")
-                frames.append(frame)
-        data = frames[0].data
-        layout = go.Layout(
-            showlegend=False,
-            title=f"Beam: {self.beam_name}",
-            xaxis=dict(range=[-200, 200]),
-            yaxis=dict(range=[-200, 200]),
-            updatemenus=[
-                {
-                    "type": "buttons",
-                    "buttons": [
-                        {
-                            "label": "▶ Play",
-                            "method": "animate",
-                            "args": [
-                                None,
-                                {
-                                    # "frame": {"duration": 50},
-                                    # "transition": {"duration": 0},
-                                    "fromcurrent": True,
-                                },
-                            ],
-                        }
-                    ],
-                    "pad": {"r": 10, "t": 50},
-                    "x": 0,
-                    "y": 0,
-                }
-            ],
-            sliders=[
-                {
-                    "currentvalue": {"prefix": "Control point: "},
-                    "steps": [
-                        {
-                            "label": f"{i}",
-                            "method": "animate",
-                            "args": [
-                                [f"cp_{i}"],
-                                {
-                                    "mode": "immediate",
-                                    "transition": {"duration": 0},
-                                },
-                            ],
-                        }
-                        for i in range(len(frames))
-                    ],
-                    "pad": {"b": 10, "t": 50},
-                }
-            ],
-        )
-        fig = go.Figure(data=data, frames=frames, layout=layout)
-
-        if show:
-            fig.show()
-
-        return fig
