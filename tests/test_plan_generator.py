@@ -8,11 +8,9 @@ import matplotlib.pyplot as plt
 from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
-from conjuror.plans.plan_generator import (
-    BeamBase,
-    FluenceMode,
-    PlanGenerator,
-)
+from conjuror.plans.plan_generator import PlanGenerator
+from conjuror.plans.machine import FluenceMode
+from conjuror.plans.beam import Beam as BeamBase
 from conjuror.plans.halcyon import HalcyonMachine
 from conjuror.plans.truebeam import (
     TrueBeamMachine,
@@ -165,7 +163,7 @@ class TestPlanGeneratorParameters(TestCase):
         self.assertAlmostEqual(float(inverted_array[0, 0]), 100)
 
 
-def create_beam(**kwargs) -> BeamBase:
+def create_beam(**kwargs) -> Beam:
     return Beam(
         beam_name=kwargs.get("beam_name", "name"),
         energy=kwargs.get("energy", 6),
@@ -212,12 +210,12 @@ class TestBeam(TestCase):
         file = get_file_from_cloud_test_repo(["picket_fence", "AS500#2.dcm"])
         ds = pydicom.dcmread(file)
         with self.assertRaises(ValueError):
-            BeamBase.from_dicom(ds, 0)
+            Beam.from_dicom(ds, 0)
 
     def test_from_dicom_error_if_beam_not_in_plan(self):
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
         with self.assertRaises(ValueError):
-            BeamBase.from_dicom(ds, 1)
+            Beam.from_dicom(ds, 1)
 
     def test_too_long_beam_name(self):
         with self.assertRaises(ValueError):

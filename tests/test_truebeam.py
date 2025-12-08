@@ -6,7 +6,8 @@ import pydicom
 from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
-from conjuror.plans.plan_generator import PlanGenerator, BeamBase
+from conjuror.plans.plan_generator import PlanGenerator
+from conjuror.plans.beam import Beam
 from conjuror.plans.truebeam import (
     OpenField,
     OpenFieldMLCMode,
@@ -317,7 +318,7 @@ class TestPicketFence(TestCase):
         ]
         picket_fence_file = get_file_from_cloud_test_repo(path)
         ds = pydicom.dcmread(picket_fence_file)
-        beam_nominal = BeamBase.from_dicom(ds, 0)
+        beam_nominal = Beam.from_dicom(ds, 0)
 
         procedure = PicketFence(
             picket_width=1,
