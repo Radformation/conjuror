@@ -21,3 +21,23 @@ Winston-Lutz
 ------------
 
 .. autoclass:: conjuror.plans.truebeam.WinstonLutz
+
+Dose Rate
+---------
+
+.. autoclass:: conjuror.plans.truebeam.DoseRate
+
+MLC Speed
+---------
+
+.. autoclass:: conjuror.plans.truebeam.MLCSpeed
+
+Gantry Speed
+------------
+
+.. autoclass:: conjuror.plans.truebeam.GantrySpeed
+
+VMAT Dose Rate Vs Gantry Speed
+------------------------------
+
+.. autoclass:: conjuror.plans.truebeam.VMATDRGS
