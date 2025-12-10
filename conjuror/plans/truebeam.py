@@ -1499,11 +1499,7 @@ class VMATDRGS(QAProcedure):
             couch_rot=0,
         )
 
-    def plot_control_points(
-        self,
-        specs: MachineSpecs | None = None,
-        max_dose_rate: float | None = None,
-    ) -> None:
+    def plot_control_points(self, specs: MachineSpecs | None = None) -> None:
         """Plot the control points from dynamic beam
         Rows: Absolute position, relative motion, time to deliver, speed
         Cols: MU, Gantry, MLC
@@ -1511,81 +1507,58 @@ class VMATDRGS(QAProcedure):
         # This is used mostly for visual inspection during development
         # Axis labeling could be improved
 
-        max_dose_rate = (max_dose_rate or self.max_dose_rate) / 60
         specs = specs or self.machine.specs
 
         beam = self.dynamic_beam
-        cumulative_meterset = beam.metersets
-        gantry_angles = beam.gantry_angles
-        mlc_positions = beam.beam_limiting_device_positions["MLCX"]
+        beam.compute_dynamics(specs)
 
-        dose_motion = np.append(0, np.abs(np.diff(cumulative_meterset)))
-        gantry_angle_var = (180 - gantry_angles) % 360
-        gantry_motion = np.append(0, np.abs(np.diff(gantry_angle_var)))
-        mlc_zeros = np.zeros((mlc_positions.shape[0], 1))
-        mlc_motion = np.hstack((mlc_zeros, np.diff(mlc_positions, axis=1)))
+        def _plot_line(data, increment=True, title=None, y_label=None):
+            """helper function for line plot"""
+            if increment:
+                idx[0] += 1
+            plt.subplot(num_rows, num_cols, idx[0])
+            plt.plot(beam.metersets, data)
+            if title:
+                plt.title(title)
+            if y_label:
+                plt.ylabel(y_label)
 
-        # ttd = time to deliver
-        ttd_dose = dose_motion / max_dose_rate
-        ttd_gantry = gantry_motion / specs.max_gantry_speed
-        ttd_mlc = mlc_motion / specs.max_mlc_speed
-        times_to_deliver = np.vstack((ttd_dose, ttd_gantry, ttd_mlc))
-        time_to_deliver = np.max(np.abs(times_to_deliver), axis=0)
+        def _plot_step(data, increment=True, y_label=None):
+            """helper function for step plot"""
+            if increment:
+                idx[0] += 1
+            plt.subplot(num_rows, num_cols, idx[0])
+            plt.step(beam.metersets[:-1], data, where="post")
+            if y_label:
+                plt.ylabel(y_label)
 
-        dose_rate = dose_motion / time_to_deliver * 60
-        gantry_speed = gantry_motion / time_to_deliver
-        mlc_speed = mlc_motion / time_to_deliver
-
+        idx = [0]
         num_rows, num_cols = 4, 3
 
         # Positions
-        plot_delta = 0
-        plt.subplot(num_rows, num_cols, 1 + plot_delta)
-        plt.plot(cumulative_meterset, cumulative_meterset)
-        plt.title("MU")
-        plt.ylabel("Absolute")
-        plt.subplot(num_rows, num_cols, 2 + plot_delta)
-        plt.plot(cumulative_meterset, gantry_angles)
-        plt.title("Gantry")
-        plt.subplot(num_rows, num_cols, 3 + plot_delta)
-        plt.plot(cumulative_meterset, mlc_positions[0, :])
-        plt.plot(cumulative_meterset, mlc_positions[-1, :])
-        plt.title("MLC")
+        _plot_line(beam.metersets, title="MU", y_label="Absolute")
+        _plot_line(beam.gantry_angles, title="Gantry")
+        _plot_line(beam.beam_limiting_device_positions["MLCX"][0, :], title="MLC")
+        _plot_line(beam.beam_limiting_device_positions["MLCX"][-1, :], increment=False)
 
         # Motions
-        plot_delta += num_cols
-        plt.subplot(num_rows, num_cols, 1 + plot_delta)
-        plt.step(cumulative_meterset, dose_motion)
-        plt.ylabel("Motion")
-        plt.subplot(num_rows, num_cols, 2 + plot_delta)
-        plt.step(cumulative_meterset, gantry_motion)
-        plt.subplot(num_rows, num_cols, 3 + plot_delta)
-        plt.step(cumulative_meterset, mlc_motion[0, :])
-        plt.step(cumulative_meterset, mlc_motion[-1, :])
+        _plot_step(beam.dose_motions, y_label="Motion")
+        _plot_step(beam.gantry_motions)
+        _plot_step(beam.mlc_motions[0, :])
+        _plot_step(beam.mlc_motions[-1, :], increment=False)
 
         # Time to deliver
-        plot_delta += num_cols
-        plt.subplot(num_rows, num_cols, 1 + plot_delta)
-        plt.step(cumulative_meterset, time_to_deliver)
-        plt.ylabel("Delivery time")
-        plt.subplot(num_rows, num_cols, 2 + plot_delta)
-        plt.step(cumulative_meterset, time_to_deliver)
-        plt.subplot(num_rows, num_cols, 3 + plot_delta)
-        plt.step(cumulative_meterset, time_to_deliver)
+        _plot_step(beam.time_to_deliver, y_label="Delivery time")
+        _plot_step(beam.time_to_deliver)
+        _plot_step(beam.time_to_deliver)
 
         # Speeds
-        plot_delta += num_cols
-        plt.subplot(num_rows, num_cols, 1 + plot_delta)
-        plt.step(cumulative_meterset, dose_rate)
-        plt.ylabel("Speed")
-        plt.subplot(num_rows, num_cols, 2 + plot_delta)
-        plt.step(cumulative_meterset, gantry_speed)
-        plt.subplot(num_rows, num_cols, 3 + plot_delta)
-        plt.step(cumulative_meterset, mlc_speed[0, :])
-        plt.step(cumulative_meterset, mlc_speed[-1, :])
+        _plot_step(beam.dose_speeds * 60, y_label="Speed")
+        _plot_step(beam.gantry_speeds)
+        _plot_step(beam.mlc_speeds[0, :])
+        _plot_step(beam.mlc_speeds[-1, :], increment=False)
 
         plt.show()
-        pass
 
     def plot_fluence(self, imager: Imager, show: bool = True) -> None:
         """Plot the fluence for the reference and dynamic beams

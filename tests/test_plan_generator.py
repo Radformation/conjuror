@@ -13,11 +13,13 @@ from conjuror.plans.machine import FluenceMode
 from conjuror.plans.beam import Beam as BeamBase
 from conjuror.plans.halcyon import HalcyonMachine
 from conjuror.plans.truebeam import (
+    DEFAULT_SPECS_TB,
     TrueBeamMachine,
     OpenField,
     Beam,
     MLCSpeed,
     PicketFence,
+    VMATDRGS,
 )
 from tests.utils import get_file_from_cloud_test_repo
 
@@ -270,6 +272,15 @@ class TestBeam(TestCase):
             [-11, 13],
         )
 
+    def test_compute_dynamics(self):
+        attr = "gantry_speeds"
+        procedure = VMATDRGS()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        beam = procedure.dynamic_beam
+        self.assertFalse(hasattr(beam, attr))
+        beam.compute_dynamics(DEFAULT_SPECS_TB)
+        self.assertTrue(hasattr(beam, attr))
+
     def test_plot_fluence(self):
         # just tests it works
         machine = TrueBeamMachine(mlc_is_hd=True)
@@ -285,6 +296,15 @@ class TestBeam(TestCase):
         beam.plot_fluence(IMAGER_AS1200, ax1)
         beam.plot_fluence(IMAGER_AS1200, ax2)
         plt.show()
+
+    def test_animate_mlc(self):
+        procedure = PicketFence()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        beam = procedure.beams[0]
+        fig = beam.animate_mlc()
+        self.assertEqual(
+            120, sum(True for f in fig.data if f["line"]["color"] == "blue")
+        )
 
 
 class TestPlanGeneratorBeams(TestCase):
@@ -359,16 +379,6 @@ class TestPlanGeneratorBeams(TestCase):
         figs = self.pg.plot_fluences(IMAGER_AS1200)
         self.assertIsInstance(figs, list)
         self.assertIsInstance(figs[0], Figure)
-
-    def test_animate_mlc(self):
-        procedure = PicketFence()
-        self.pg.add_procedure(procedure)
-        beam = BeamBase.from_dicom(self.pg.as_dicom(), 0)
-        fig = beam.animate_mlc()
-        self.assertEqual(
-            120, sum(True for f in fig.data if f["line"]["color"] == "blue")
-        )
-        pass
 
     def test_list_procedure(self):
         procedures = self.pg.list_procedures()
