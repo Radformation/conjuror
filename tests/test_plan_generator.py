@@ -306,6 +306,13 @@ class TestBeam(TestCase):
             120, sum(True for f in fig.data if f["line"]["color"] == "blue")
         )
 
+    def test_plot_control_points(self):
+        procedure = VMATDRGS()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        beam = procedure.dynamic_beam
+        fig = beam.plot_control_points(DEFAULT_SPECS_TB)
+        self.assertEqual(12, len(fig.axes))
+
 
 class TestPlanGeneratorBeams(TestCase):
     """Test real workflow where beams are added"""

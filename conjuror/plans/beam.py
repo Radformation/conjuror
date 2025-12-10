@@ -1,6 +1,7 @@
 from abc import ABC
 from typing import Generic, Sequence, Iterable
 
+from matplotlib.figure import Figure
 from matplotlib import pyplot as plt
 import numpy as np
 from plotly import graph_objects as go
@@ -223,7 +224,9 @@ class BeamVisualizationMixin:
 
         return fig
 
-    def plot_control_points(self: "Beam", specs: MachineSpecs | None = None) -> None:
+    def plot_control_points(
+        self: "Beam", specs: MachineSpecs, show: bool = True
+    ) -> Figure:
         """Plot the control points from dynamic beam
         Rows: Absolute position, relative motion, time to deliver, speed
         Cols: Dose, Gantry, MLC
@@ -255,6 +258,7 @@ class BeamVisualizationMixin:
 
         idx = [0]
         num_rows, num_cols = 4, 3
+        fig, _ = plt.subplots(num_rows, num_cols)
 
         # Positions
         _plot_line(self.metersets, title="MU", y_label="Absolute")
@@ -279,7 +283,10 @@ class BeamVisualizationMixin:
         _plot_step(self.mlc_speeds[0, :])
         _plot_step(self.mlc_speeds[-1, :], increment=False)
 
-        plt.show()
+        if show:
+            plt.show()
+
+        return fig
 
 
 class BeamDynamicsMixin:
