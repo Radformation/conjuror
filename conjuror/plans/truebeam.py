@@ -487,7 +487,7 @@ class PicketFence(QAProcedure):
     """
 
     picket_width: float = 1
-    picket_positions: Sequence[float] = (-75, 60, -45, -30, -15, 0, 15, 30, 45, 60, 75)
+    picket_positions: Sequence[float] = (-75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75)
     mu_per_picket: float = 10
     mu_per_transition: float = 2
     skip_first_picket: bool = True
