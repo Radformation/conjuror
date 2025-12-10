@@ -1,6 +1,7 @@
 from abc import ABC
 from typing import Generic, Sequence, Iterable
 
+from matplotlib import pyplot as plt
 import numpy as np
 from plotly import graph_objects as go
 from pydicom import Sequence as DicomSequence, Dataset
@@ -221,6 +222,64 @@ class BeamVisualizationMixin:
             fig.show()
 
         return fig
+
+    def plot_control_points(self: "Beam", specs: MachineSpecs | None = None) -> None:
+        """Plot the control points from dynamic beam
+        Rows: Absolute position, relative motion, time to deliver, speed
+        Cols: Dose, Gantry, MLC
+        """
+        # This is used mostly for visual inspection during development
+        # Axis labeling could be improved
+
+        self.compute_dynamics(specs)
+
+        def _plot_line(data, increment=True, title=None, y_label=None):
+            """helper function for line plot"""
+            if increment:
+                idx[0] += 1
+            plt.subplot(num_rows, num_cols, idx[0])
+            plt.plot(self.metersets, data)
+            if title:
+                plt.title(title)
+            if y_label:
+                plt.ylabel(y_label)
+
+        def _plot_step(data, increment=True, y_label=None):
+            """helper function for step plot"""
+            if increment:
+                idx[0] += 1
+            plt.subplot(num_rows, num_cols, idx[0])
+            plt.step(self.metersets[:-1], data, where="post")
+            if y_label:
+                plt.ylabel(y_label)
+
+        idx = [0]
+        num_rows, num_cols = 4, 3
+
+        # Positions
+        _plot_line(self.metersets, title="MU", y_label="Absolute")
+        _plot_line(self.gantry_angles, title="Gantry")
+        _plot_line(self.beam_limiting_device_positions["MLCX"][0, :], title="MLC")
+        _plot_line(self.beam_limiting_device_positions["MLCX"][-1, :], increment=False)
+
+        # Motions
+        _plot_step(self.dose_motions, y_label="Motion")
+        _plot_step(self.gantry_motions)
+        _plot_step(self.mlc_motions[0, :])
+        _plot_step(self.mlc_motions[-1, :], increment=False)
+
+        # Time to deliver
+        _plot_step(self.time_to_deliver, y_label="Delivery time")
+        _plot_step(self.time_to_deliver)
+        _plot_step(self.time_to_deliver)
+
+        # Speeds
+        _plot_step(self.dose_speeds * 60, y_label="Speed")
+        _plot_step(self.gantry_speeds)
+        _plot_step(self.mlc_speeds[0, :])
+        _plot_step(self.mlc_speeds[-1, :], increment=False)
+
+        plt.show()
 
 
 class BeamDynamicsMixin:

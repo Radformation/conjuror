@@ -1501,64 +1501,15 @@ class VMATDRGS(QAProcedure):
 
     def plot_control_points(self, specs: MachineSpecs | None = None) -> None:
         """Plot the control points from dynamic beam
-        Rows: Absolute position, relative motion, time to deliver, speed
-        Cols: MU, Gantry, MLC
+
+        Parameters
+        ----------
+        specs : MachineSpecs | None
+            The machine specs used to compute speeds.
         """
-        # This is used mostly for visual inspection during development
-        # Axis labeling could be improved
-
         specs = specs or self.machine.specs
-
         beam = self.dynamic_beam
-        beam.compute_dynamics(specs)
-
-        def _plot_line(data, increment=True, title=None, y_label=None):
-            """helper function for line plot"""
-            if increment:
-                idx[0] += 1
-            plt.subplot(num_rows, num_cols, idx[0])
-            plt.plot(beam.metersets, data)
-            if title:
-                plt.title(title)
-            if y_label:
-                plt.ylabel(y_label)
-
-        def _plot_step(data, increment=True, y_label=None):
-            """helper function for step plot"""
-            if increment:
-                idx[0] += 1
-            plt.subplot(num_rows, num_cols, idx[0])
-            plt.step(beam.metersets[:-1], data, where="post")
-            if y_label:
-                plt.ylabel(y_label)
-
-        idx = [0]
-        num_rows, num_cols = 4, 3
-
-        # Positions
-        _plot_line(beam.metersets, title="MU", y_label="Absolute")
-        _plot_line(beam.gantry_angles, title="Gantry")
-        _plot_line(beam.beam_limiting_device_positions["MLCX"][0, :], title="MLC")
-        _plot_line(beam.beam_limiting_device_positions["MLCX"][-1, :], increment=False)
-
-        # Motions
-        _plot_step(beam.dose_motions, y_label="Motion")
-        _plot_step(beam.gantry_motions)
-        _plot_step(beam.mlc_motions[0, :])
-        _plot_step(beam.mlc_motions[-1, :], increment=False)
-
-        # Time to deliver
-        _plot_step(beam.time_to_deliver, y_label="Delivery time")
-        _plot_step(beam.time_to_deliver)
-        _plot_step(beam.time_to_deliver)
-
-        # Speeds
-        _plot_step(beam.dose_speeds * 60, y_label="Speed")
-        _plot_step(beam.gantry_speeds)
-        _plot_step(beam.mlc_speeds[0, :])
-        _plot_step(beam.mlc_speeds[-1, :], increment=False)
-
-        plt.show()
+        beam.plot_control_points(specs)
 
     def plot_fluence(self, imager: Imager, show: bool = True) -> None:
         """Plot the fluence for the reference and dynamic beams
