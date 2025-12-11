@@ -587,10 +587,9 @@ class TestVmatDRGS(TestCase):
         dose_rates = (1, 2, 3)
         max_gantry_speed = 4
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
-        machine = TrueBeamMachine(False, specs)
         procedure = VMATDRGS(gantry_speeds=gantry_speeds, dose_rates=dose_rates)
         with self.assertRaises(ValueError):
-            procedure.compute(machine)
+            procedure.compute(TrueBeamMachine(False, specs))
 
     def test_error_if_dose_rates_above_max(self):
         gantry_speeds = (1, 2, 5)
@@ -610,14 +609,13 @@ class TestVmatDRGS(TestCase):
         max_gantry_speed = 5
         max_dose_rate = 300
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
-        machine = TrueBeamMachine(False, specs)
         procedure = VMATDRGS(
             gantry_speeds=gantry_speeds,
             dose_rates=dose_rates,
             max_dose_rate=max_dose_rate,
         )
         with self.assertRaises(ValueError):
-            procedure.compute(machine)
+            procedure.compute(TrueBeamMachine(False, specs))
 
     def test_error_if_rotation_larger_than_360(self):
         mu_per_segment = 100
@@ -715,6 +713,42 @@ class TestVmatDRMLC(TestCase):
         self.assertTrue(np.allclose(cumulative_meterset_1, cumulative_meterset_2))
         self.assertTrue(np.allclose(gantry_angle_1, gantry_angle_2, atol=1e-3))
         self.assertTrue(np.allclose(mlc_position_1, mlc_position_2))
+
+    def test_error_if_initial_gantry_offset_less_than_min(self):
+        initial_gantry_offset = 0
+        procedure = VMATDRMLC(initial_gantry_offset=initial_gantry_offset)
+        with self.assertRaises(ValueError):
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+    def test_error_if_mlc_speeds_above_max(self):
+        mlc_speeds = (10.0, 60.0)
+        max_mlc_speed = 50.0
+        specs = DEFAULT_SPECS_TB.replace(max_mlc_speed=max_mlc_speed)
+        procedure = VMATDRMLC(mlc_speeds=mlc_speeds)
+        with self.assertRaises(ValueError):
+            procedure.compute(TrueBeamMachine(False, specs))
+
+    def test_error_if_gantry_speeds_above_max(self):
+        max_gantry_speed = 10.0
+        mlc_speeds = (10.0, 20.0)
+        gantry_speeds = (max_gantry_speed, max_gantry_speed + 1)
+        specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
+        procedure = VMATDRMLC(mlc_speeds=mlc_speeds, gantry_speeds=gantry_speeds)
+        with self.assertRaises(ValueError):
+            procedure.compute(TrueBeamMachine(False, specs))
+
+    def test_error_if_axis_not_maxed_out(self):
+        mlc_speeds = (10.0, 20.0)
+        gantry_speeds = (5.0, 6.0)
+        procedure = VMATDRMLC(mlc_speeds=mlc_speeds, gantry_speeds=gantry_speeds)
+        with self.assertRaises(ValueError):
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+    def test_error_if_rotation_larger_than_360(self):
+        mlc_speeds = (1.0, 20.0)
+        procedure = VMATDRMLC(mlc_speeds=mlc_speeds)
+        with self.assertRaises(ValueError):
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     def test_plot_control_points(self):
         procedure = VMATDRMLC()
