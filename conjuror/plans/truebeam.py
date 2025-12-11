@@ -1606,15 +1606,15 @@ class VMATDRMLC(QAProcedure):
     def compute(self, machine: TrueBeamMachine):
         # Nomenclature
         # rois: the regions to be irradiated (related to mlc_speeds)
-        # segment: each roi is made of 2 segments for each bank motion (related to control points)
-        # Since this is about creating control points, most variable use a _per_segment suffix unless specified.
+        # segment: each roi is made of 2 segments, one for each bank motion (related to control points)
+        # Since this is about creating control points, most variables use a (implicit) _per_segment suffix unless specified.
 
         # convert/cast variables
         num_roi = len(self.mlc_speeds)
-        gantry_speeds = self.gantry_speeds
-        if not gantry_speeds:
-            gantry_speeds = num_roi * [machine.specs.max_gantry_speed]
-        gantry_speeds = np.array(np.repeat(gantry_speeds, 2), dtype=float)
+        gantry_speed_per_roi = self.gantry_speeds
+        if not gantry_speed_per_roi:
+            gantry_speed_per_roi = num_roi * [machine.specs.max_gantry_speed]
+        gantry_speeds = np.array(np.repeat(gantry_speed_per_roi, 2), dtype=float)
         mlc_speeds = np.array(np.repeat(self.mlc_speeds, 2), dtype=float)
 
         # Verify inputs:
@@ -1646,10 +1646,9 @@ class VMATDRMLC(QAProcedure):
         time_to_deliver = self.segment_width / mlc_speeds
         mu_per_segment = mu_per_sec * time_to_deliver
         gantry_motion = gantry_speeds * time_to_deliver
-        gantry_motion = np.insert(gantry_motion, 0, 0)
 
         # Extra verifications on gantry rotation
-        gantry_angles_without_offset = np.cumsum(gantry_motion)
+        gantry_angles_without_offset = np.cumsum([0] + gantry_motion.tolist())
         if gantry_angles_without_offset[-1] > 360 - 2 * self.MIN_GANTRY_OFFSET:
             msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
             raise ValueError(msg)
@@ -1675,16 +1674,6 @@ class VMATDRMLC(QAProcedure):
         z = zip(mlc_a, mlc_b)
         mlc = [shaper.get_shape(Strip.from_minmax(b, a)) for (a, b) in z]
         cumulative_mu = np.cumsum([0] + mu_per_segment.tolist())
-
-        # Extra verifications on the computed variables
-        gantry_angles_without_offset = np.cumsum(gantry_motion)
-        if gantry_angles_without_offset[-1] > 360 - 2 * self.MIN_GANTRY_OFFSET:
-            msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
-            raise ValueError(msg)
-        gantry_angles_var = gantry_angles_without_offset + self.initial_gantry_offset
-        if gantry_angles_var[-1] > 360 - self.MIN_GANTRY_OFFSET:
-            msg = "The gantry rotation exceeds 360 degrees. Reduce the initial_gantry_offset"
-            raise ValueError(msg)
 
         # store parameters common to all beams
         mlc_boundaries = (
