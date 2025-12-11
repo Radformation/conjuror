@@ -389,4 +389,4 @@ class TestPlanGeneratorBeams(TestCase):
 
     def test_list_procedure(self):
         procedures = self.pg.list_procedures()
-        self.assertEqual(len(procedures), 8)
+        self.assertEqual(len(procedures), 9)
