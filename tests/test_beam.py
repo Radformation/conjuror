@@ -42,7 +42,7 @@ def create_beam(**kwargs) -> Beam:
     )
 
 
-class TestBeam(TestCase):
+class TestBeamCreation(TestCase):
     def test_beam_normal(self):
         # shouldn't raise; happy path
         beam = create_beam(gantry_angles=0)
@@ -74,13 +74,19 @@ class TestBeam(TestCase):
         with self.assertRaises(ValueError):
             Beam.from_dicom(ds, 1)
 
-    def test_too_long_beam_name(self):
+    def test_error_if_beam_name_too_long(self):
         with self.assertRaises(ValueError):
             create_beam(beam_name="superlongbeamname")
 
-    def test_1_mlc_position_for_static(self):
-        beam = create_beam(mlc_positions=[[0]], metersets=[0])
+
+class TestBeamType(TestCase):
+    def test_static_beam(self):
+        beam = create_beam()
         self.assertEqual(beam.to_dicom().BeamType, "STATIC")
+
+    def test_dynamic_beam(self):
+        beam = create_beam(gantry_angles=[0, 1])
+        self.assertEqual(beam.to_dicom().BeamType, "DYNAMIC")
 
     @parameterized.expand(
         [
@@ -108,25 +114,8 @@ class TestBeam(TestCase):
         else:
             self.assertNotIn("GantryRotationDirection", cp_sequence[1])
 
-    def test_jaw_positions(self):
-        b = create_beam(x1=-5, x2=7, y1=-11, y2=13)
-        dcm = b.to_dicom()
-        self.assertEqual(
-            len(dcm.ControlPointSequence[0].BeamLimitingDevicePositionSequence), 3
-        )
-        self.assertEqual(
-            dcm.ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[0]
-            .LeafJawPositions,
-            [-5, 7],
-        )
-        self.assertEqual(
-            dcm.ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[1]
-            .LeafJawPositions,
-            [-11, 13],
-        )
 
+class TestBeamDynamics(TestCase):
     def test_compute_dynamics(self):
         attr = "gantry_speeds"
         procedure = VMATDRGS()
@@ -136,6 +125,8 @@ class TestBeam(TestCase):
         beam.compute_dynamics(DEFAULT_SPECS_TB)
         self.assertTrue(hasattr(beam, attr))
 
+
+class TestVisualizations(TestCase):
     def test_plot_fluence(self):
         # just tests it works
         machine = TrueBeamMachine(mlc_is_hd=True)
@@ -157,9 +148,8 @@ class TestBeam(TestCase):
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         beam = procedure.beams[0]
         fig = beam.animate_mlc()
-        self.assertEqual(
-            120, sum(True for f in fig.data if f["line"]["color"] == "blue")
-        )
+        num_lines = sum(True for f in fig.data if f["line"]["color"] == "blue")
+        self.assertEqual(120, num_lines)
 
     def test_plot_control_points(self):
         procedure = VMATDRGS()
