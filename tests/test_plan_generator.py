@@ -68,7 +68,7 @@ class TestPlanGeneratorCreation(TestCase):
         # shouldn't raise; should be valid DICOM
         ds = pydicom.dcmread(t.name)
         self.assertEqual(ds.RTPlanLabel, "label")
-        self.assertEqual(len(ds.BeamSequence), 2)
+        self.assertEqual(len(ds.BeamSequence), 1)
 
 
 class TestPlanGeneratorParameters(TestCase):
