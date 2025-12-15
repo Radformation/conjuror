@@ -367,8 +367,6 @@ class TestWinstonLutz(TestCase):
             self.assertEqual(f.collimator, b.coll_angle)
             self.assertEqual(f.couch, b.couch_rot)
             self.assertEqual(b.beam_name, n)
-            pass
-        pass
 
     WL_MLC_PARAM = [
         (-2.5, 2.5, WinstonLutzMLCMode.EXACT),
@@ -446,6 +444,9 @@ class TestWinstonLutz(TestCase):
             0, 1, y1, y2, mlc_mode=WinstonLutzMLCMode.EXACT, defined_by_mlc=False
         )
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        jaw_y = procedure.beams[0].beam_limiting_device_positions["ASYMY"]
+        self.assertEqual(y1, jaw_y[0, 0])
+        self.assertEqual(y2, jaw_y[1, 0])
 
 
 class TestVmatDRGS(TestCase):
