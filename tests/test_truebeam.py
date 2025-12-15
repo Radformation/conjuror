@@ -6,7 +6,7 @@ import pydicom
 from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
-from conjuror.plans.plan_generator import PlanGenerator
+from conjuror.plans.plan_generator import PlanGenerator, BeamBase
 from conjuror.plans.truebeam import (
     OpenField,
     MLCTransmission,
@@ -33,59 +33,6 @@ class TestProcedures(TestCase):
             plan_label="label",
             plan_name="my name",
         )
-
-    def test_create_picket_fence(self):
-        procedure = PicketFence(
-            y1=-10,
-            y2=10,
-            mu=123,
-            beam_name="Picket Fence",
-            strip_positions_mm=(-50, -30, -10, 10, 30, 50),
-        )
-        self.pg.add_procedure(procedure)
-        dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 1)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "Picket Fence")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 1)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
-        )
-        # check X jaws
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[0]
-            .LeafJawPositions,
-            [-60, 60],
-        )
-        # check Y jaws
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[1]
-            .LeafJawPositions,
-            [-10, 10],
-        )
-        # check first MLC position is near the first strip
-        self.assertEqual(
-            dcm.BeamSequence[0]
-            .ControlPointSequence[0]
-            .BeamLimitingDevicePositionSequence[-1]
-            .LeafJawPositions[0],
-            -53.5,
-        )
-
-    def test_picket_fence_too_wide(self):
-        procedure = PicketFence(
-            y1=-10,
-            y2=10,
-            mu=123,
-            beam_name="Picket Fence",
-            strip_positions_mm=(-100, 100),
-        )
-        with self.assertRaises(ValueError):
-            self.pg.add_procedure(procedure)
 
     def test_winston_lutz_beams(self):
         procedure = WinstonLutz(
@@ -247,23 +194,23 @@ class TestProcedures(TestCase):
         )
 
     def test_gantry_speed_too_fast(self):
-        # max speed is 4.8 by default
+        # max speed is 6.0 by default
+        procedure = GantrySpeed(
+            speeds=(1, 2, 3, 4, 6.5),
+            y1=-100,
+            y2=100,
+        )
         with self.assertRaises(ValueError):
-            procedure = GantrySpeed(
-                speeds=(1, 2, 3, 4, 5),
-                y1=-100,
-                y2=100,
-            )
             self.pg.add_procedure(procedure)
 
     def test_gantry_speed_too_wide(self):
+        procedure = GantrySpeed(
+            speeds=(1, 2, 3, 4),
+            roi_size_mm=100,
+            y1=-100,
+            y2=100,
+        )
         with self.assertRaises(ValueError):
-            procedure = GantrySpeed(
-                speeds=(1, 2, 3, 4),
-                roi_size_mm=50,
-                y1=-100,
-                y2=100,
-            )
             self.pg.add_procedure(procedure)
 
     def test_gantry_range_over_360(self):
@@ -413,6 +360,52 @@ class TestMLCTransmission(TestCase):
         self.assertEqual(beam_names, actual)
 
 
+class TestPicketFence(TestCase):
+    def test_defaults(self):
+        procedure = PicketFence()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        self.assertEqual(1, len(procedure.beams))
+
+    def test_replicate_varian_plan(self):
+        path = [
+            "plan_generator",
+            "VMAT",
+            "Millennium",
+            "T0.2_PicketFenceStatic_M120_TB_Rev02.dcm",
+        ]
+        picket_fence_file = get_file_from_cloud_test_repo(path)
+        ds = pydicom.dcmread(picket_fence_file)
+        beam_nominal = BeamBase.from_dicom(ds, 0)
+
+        procedure = PicketFence(
+            picket_width=1,
+            picket_positions=np.arange(-74.5, 76, 15),
+            mu_per_picket=8.125,
+            mu_per_transition=1.875,
+            skip_first_picket=True,
+            jaw_padding=5.5,
+        )
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        beam_actual = procedure.beams[0]
+
+        mu_nominal, mu_actual = beam_nominal.metersets, beam_actual.metersets
+        np.testing.assert_array_almost_equal(mu_nominal, mu_actual, decimal=2)
+
+        bls_nominal = beam_nominal.beam_limiting_device_positions
+        bld_actual = beam_actual.beam_limiting_device_positions
+        np.testing.assert_array_equal(bls_nominal["MLCX"], bld_actual["MLCX"])
+        np.testing.assert_array_equal(bls_nominal["ASYMX"][0], bld_actual["ASYMX"][0])
+        # Note #1: jaw x2 is different (cannot be replicated) since the left padding
+        # is different than the right padding
+        # Note #2: jaws y1,y2 are different (cannot be replicated) since this procedure
+        # doesn't hide any leafs, whereas in the Varian plan, the last top/bottom leaves were hidden
+
+    def test_error_if_too_wide(self):
+        procedure = PicketFence(picket_positions=(-100, 100))
+        with self.assertRaises(ValueError):
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
+
 class TestVmatDRGS(TestCase):
     def test_defaults(self):
         VMATDRGS().compute(DEFAULT_TRUEBEAM_HD120)
@@ -432,7 +425,7 @@ class TestVmatDRGS(TestCase):
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_fluence_profile(IMAGER_AS1200)
 
-    def test_replicate_original_test(self):
+    def test_replicate_varian_plan(self):
         original_file = get_file_from_cloud_test_repo(
             [
                 "plan_generator",

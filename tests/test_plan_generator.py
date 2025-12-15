@@ -197,9 +197,16 @@ class TestBeam(TestCase):
         self.assertEqual(beam_dcm.ControlPointSequence[0].GantryAngle, 0)
 
     def test_from_dicom(self):
-        # shouldn't raise; happy path
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
-        BeamBase.from_dicom(ds, 0)
+        beam = BeamBase.from_dicom(ds, 0)
+        self.assertEqual(2, beam.number_of_control_points)
+
+    def test_from_dicom_without_primary_fluence_mode_sequence(self):
+        # E.g. the picket fence RT plan does not have PrimaryFluenceModeSequence
+        ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
+        ds.BeamSequence[0].pop("PrimaryFluenceModeSequence")
+        beam = BeamBase.from_dicom(ds, 0)
+        self.assertEqual(2, beam.number_of_control_points)
 
     def test_from_dicom_error_if_not_rt_plan(self):
         file = get_file_from_cloud_test_repo(["picket_fence", "AS500#2.dcm"])
