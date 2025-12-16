@@ -47,8 +47,8 @@ class BeamVisualizationMixin:
         for bldseq in self.beam_limiting_device_sequence:
             lpb = bldseq.get("LeafPositionBoundaries")
             r2lm = np.argmax(np.array([lpb]).T - y > 0, axis=0) - 1 if lpb else None
-            specs = _BeamLimitingDeviceProps(bldseq.NumberOfLeafJawPairs, lpb, r2lm)
-            blds[bldseq.RTBeamLimitingDeviceType] = specs
+            props = _BeamLimitingDeviceProps(bldseq.NumberOfLeafJawPairs, lpb, r2lm)
+            blds[bldseq.RTBeamLimitingDeviceType] = props
 
         meterset_per_cp = np.diff(self.metersets, prepend=0)
         fluence = np.zeros(imager.shape)
