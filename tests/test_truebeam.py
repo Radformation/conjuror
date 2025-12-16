@@ -30,146 +30,22 @@ DEFAULT_TRUEBEAM_HD120 = TrueBeamMachine(mlc_is_hd=True)
 
 
 class TestProcedures(TestCase):
-    def setUp(self) -> None:
-        self.pg = PlanGenerator.from_rt_plan_file(
+    def test_adding_procedure(self):
+        pg = PlanGenerator.from_rt_plan_file(
             TB_MIL_PLAN_FILE,
             plan_label="label",
             plan_name="my name",
         )
-
-    def test_dose_rate_beams(self):
-        procedure = DoseRate(
-            dose_rates=(100, 400, 600),
-            y1=-10,
-            y2=10,
-            desired_mu=123,
-            default_dose_rate=600,
-        )
-        self.pg.add_procedure(procedure)
-        dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 2)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "DR Ref")
-        self.assertEqual(dcm.BeamSequence[1].BeamName, "DR100-600")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 2)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
-        )
-
-    def test_dose_rate_too_wide(self):
-        with self.assertRaises(ValueError):
-            procedure = DoseRate(
-                dose_rates=(100, 150, 200, 250, 300, 350, 400, 600),
-                roi_size_mm=30,
-                y1=-10,
-                y2=10,
-                desired_mu=123,
-                default_dose_rate=600,
-            )
-            self.pg.add_procedure(procedure)
-
-    def test_mlc_speed_beams(self):
-        procedure = MLCSpeed(
-            speeds=(0.5, 1, 1.5, 2),
-            y1=-100,
-            y2=100,
-            mu=123,
-        )
-        self.pg.add_procedure(procedure)
-        dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 2)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "MLC Speed Ref")
-        self.assertEqual(dcm.BeamSequence[1].BeamName, "MLC Speed")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 2)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
-        )
-        self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
-        self.assertEqual(dcm.BeamSequence[1].BeamType, "DYNAMIC")
-
-    def test_mlc_speed_too_fast(self):
-        with self.assertRaises(ValueError):
-            procedure = MLCSpeed(
-                speeds=(10, 20, 30, 40, 50),
-                y1=-100,
-                y2=100,
-            )
-            self.pg.add_procedure(procedure)
-
-    def test_mlc_speed_too_wide(self):
-        with self.assertRaises(ValueError):
-            procedure = MLCSpeed(
-                speeds=(0.5, 1, 1.5, 2),
-                roi_size_mm=50,
-                y1=-100,
-                y2=100,
-            )
-            self.pg.add_procedure(procedure)
-
-    def test_0_mlc_speed(self):
-        with self.assertRaises(ValueError):
-            procedure = MLCSpeed(
-                speeds=(0, 1, 2),
-                y1=-100,
-                y2=100,
-            )
-            self.pg.add_procedure(procedure)
-
-    def test_gantry_speed_beams(self):
-        # max speed is 2.5 by default
-        procedure = GantrySpeed(
-            speeds=(1, 2, 3, 4),
-            y1=-100,
-            y2=100,
-            mu=123,
-        )
-        self.pg.add_procedure(procedure)
-        dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 2)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "GS")
-        self.assertEqual(dcm.BeamSequence[1].BeamName, "GS Ref")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 2)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
-        )
-
-    def test_gantry_speed_too_fast(self):
-        # max speed is 6.0 by default
-        procedure = GantrySpeed(
-            speeds=(1, 2, 3, 4, 6.5),
-            y1=-100,
-            y2=100,
-        )
-        with self.assertRaises(ValueError):
-            self.pg.add_procedure(procedure)
-
-    def test_gantry_speed_too_wide(self):
-        procedure = GantrySpeed(
-            speeds=(1, 2, 3, 4),
-            roi_size_mm=100,
-            y1=-100,
-            y2=100,
-        )
-        with self.assertRaises(ValueError):
-            self.pg.add_procedure(procedure)
-
-    def test_gantry_range_over_360(self):
-        with self.assertRaises(ValueError):
-            procedure = GantrySpeed(
-                speeds=(4, 4, 4, 4),
-                y1=-100,
-                y2=100,
-                mu=250,
-            )
-            self.pg.add_procedure(procedure)
-
-    def test_vmat_drgs(self):
-        procedure = VMATDRGS()
-        self.pg.add_procedure(procedure)
-        dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 2)
+        pg.add_procedure(OpenField(-10, 10, -10, 10))  # 1
+        pg.add_procedure(MLCTransmission())  # 3
+        pg.add_procedure(PicketFence())  # 1
+        pg.add_procedure(WinstonLutz())  # 1
+        pg.add_procedure(DoseRate())  # 2
+        pg.add_procedure(MLCSpeed())  # 2
+        pg.add_procedure(GantrySpeed())  # 2
+        pg.add_procedure(VMATDRGS())  # 2
+        dcm = pg.as_dicom()
+        self.assertEqual(14, len(dcm.BeamSequence))
 
 
 class TestOpenField(TestCase):
@@ -447,6 +323,161 @@ class TestWinstonLutz(TestCase):
         jaw_y = procedure.beams[0].beam_limiting_device_positions["ASYMY"]
         self.assertEqual(y1, jaw_y[0, 0])
         self.assertEqual(y2, jaw_y[1, 0])
+
+
+class TestDoseRate(TestCase):
+    def setUp(self) -> None:
+        self.pg = PlanGenerator.from_rt_plan_file(
+            TB_MIL_PLAN_FILE,
+            plan_label="label",
+            plan_name="my name",
+        )
+
+    def test_dose_rate_beams(self):
+        procedure = DoseRate(
+            dose_rates=(100, 400, 600),
+            y1=-10,
+            y2=10,
+            desired_mu=123,
+            default_dose_rate=600,
+        )
+        self.pg.add_procedure(procedure)
+        dcm = self.pg.as_dicom()
+        self.assertEqual(len(dcm.BeamSequence), 2)
+        self.assertEqual(dcm.BeamSequence[0].BeamName, "DR Ref")
+        self.assertEqual(dcm.BeamSequence[1].BeamName, "DR100-600")
+        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
+        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 2)
+        self.assertEqual(
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
+        )
+
+    def test_dose_rate_too_wide(self):
+        with self.assertRaises(ValueError):
+            procedure = DoseRate(
+                dose_rates=(100, 150, 200, 250, 300, 350, 400, 600),
+                roi_size_mm=30,
+                y1=-10,
+                y2=10,
+                desired_mu=123,
+                default_dose_rate=600,
+            )
+            self.pg.add_procedure(procedure)
+
+
+class TestMlcSpeed(TestCase):
+    def setUp(self) -> None:
+        self.pg = PlanGenerator.from_rt_plan_file(
+            TB_MIL_PLAN_FILE,
+            plan_label="label",
+            plan_name="my name",
+        )
+
+    def test_mlc_speed_beams(self):
+        procedure = MLCSpeed(
+            speeds=(0.5, 1, 1.5, 2),
+            y1=-100,
+            y2=100,
+            mu=123,
+        )
+        self.pg.add_procedure(procedure)
+        dcm = self.pg.as_dicom()
+        self.assertEqual(len(dcm.BeamSequence), 2)
+        self.assertEqual(dcm.BeamSequence[0].BeamName, "MLC Speed Ref")
+        self.assertEqual(dcm.BeamSequence[1].BeamName, "MLC Speed")
+        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
+        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 2)
+        self.assertEqual(
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
+        )
+        self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
+        self.assertEqual(dcm.BeamSequence[1].BeamType, "DYNAMIC")
+
+    def test_mlc_speed_too_fast(self):
+        with self.assertRaises(ValueError):
+            procedure = MLCSpeed(
+                speeds=(10, 20, 30, 40, 50),
+                y1=-100,
+                y2=100,
+            )
+            self.pg.add_procedure(procedure)
+
+    def test_mlc_speed_too_wide(self):
+        with self.assertRaises(ValueError):
+            procedure = MLCSpeed(
+                speeds=(0.5, 1, 1.5, 2),
+                roi_size_mm=50,
+                y1=-100,
+                y2=100,
+            )
+            self.pg.add_procedure(procedure)
+
+    def test_0_mlc_speed(self):
+        with self.assertRaises(ValueError):
+            procedure = MLCSpeed(
+                speeds=(0, 1, 2),
+                y1=-100,
+                y2=100,
+            )
+            self.pg.add_procedure(procedure)
+
+
+class TestGantrySpeed(TestCase):
+    def setUp(self) -> None:
+        self.pg = PlanGenerator.from_rt_plan_file(
+            TB_MIL_PLAN_FILE,
+            plan_label="label",
+            plan_name="my name",
+        )
+
+    def test_gantry_speed_beams(self):
+        # max speed is 2.5 by default
+        procedure = GantrySpeed(
+            speeds=(1, 2, 3, 4),
+            y1=-100,
+            y2=100,
+            mu=123,
+        )
+        self.pg.add_procedure(procedure)
+        dcm = self.pg.as_dicom()
+        self.assertEqual(len(dcm.BeamSequence), 2)
+        self.assertEqual(dcm.BeamSequence[0].BeamName, "GS")
+        self.assertEqual(dcm.BeamSequence[1].BeamName, "GS Ref")
+        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
+        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 2)
+        self.assertEqual(
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
+        )
+
+    def test_gantry_speed_too_fast(self):
+        # max speed is 6.0 by default
+        procedure = GantrySpeed(
+            speeds=(1, 2, 3, 4, 6.5),
+            y1=-100,
+            y2=100,
+        )
+        with self.assertRaises(ValueError):
+            self.pg.add_procedure(procedure)
+
+    def test_gantry_speed_too_wide(self):
+        procedure = GantrySpeed(
+            speeds=(1, 2, 3, 4),
+            roi_size_mm=100,
+            y1=-100,
+            y2=100,
+        )
+        with self.assertRaises(ValueError):
+            self.pg.add_procedure(procedure)
+
+    def test_gantry_range_over_360(self):
+        with self.assertRaises(ValueError):
+            procedure = GantrySpeed(
+                speeds=(4, 4, 4, 4),
+                y1=-100,
+                y2=100,
+                mu=250,
+            )
+            self.pg.add_procedure(procedure)
 
 
 class TestVmatDRGS(TestCase):
