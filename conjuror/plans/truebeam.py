@@ -11,14 +11,14 @@ from pydicom.sequence import Sequence as DicomSequence
 
 from conjuror.images.simulators import Imager
 from conjuror.plans.mlc import MLCModulator, MLCShaper, Rectangle, RectangleMode, Strip
-from conjuror.plans.plan_generator import (
+from conjuror.plans.plan_generator import QAProcedureBase
+from conjuror.plans.machine import (
     MachineSpecs,
     MachineBase,
-    BeamBase,
-    FluenceMode,
-    QAProcedureBase,
     GantryDirection,
+    FluenceMode,
 )
+from conjuror.plans.beam import Beam as BeamBase
 from conjuror.utils import wrap360
 
 
@@ -1321,11 +1321,11 @@ class VMATDRGS(QAProcedure):
     machine: TrueBeamMachine = field(init=False)
 
     @property
-    def reference_beam(self) -> BeamBase:
+    def reference_beam(self) -> Beam:
         return self.beams[self.reference_beam_idx]
 
     @property
-    def dynamic_beam(self) -> BeamBase:
+    def dynamic_beam(self) -> Beam:
         return self.beams[self.dynamic_beam_idx]
 
     def compute(self, machine: TrueBeamMachine) -> None:
@@ -1442,7 +1442,7 @@ class VMATDRGS(QAProcedure):
         )
 
         # Append the dynamic and reference beams according to the order defined in init
-        beams: list[BeamBase | None] = 2 * [None]
+        beams: list[Beam | None] = 2 * [None]
         self.dynamic_beam_idx = 1 if self.reference_beam_add_before else 0
         self.reference_beam_idx = 0 if self.reference_beam_add_before else 1
         beams[self.dynamic_beam_idx] = dynamic_beam

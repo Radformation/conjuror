@@ -8,13 +8,9 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 
 from conjuror.plans.mlc import MLCModulator
-from conjuror.plans.plan_generator import (
-    MachineSpecs,
-    MachineBase,
-    BeamBase,
-    FluenceMode,
-    QAProcedureBase,
-)
+from conjuror.plans.plan_generator import QAProcedureBase
+from conjuror.plans.machine import MachineSpecs, MachineBase, FluenceMode
+from conjuror.plans.beam import Beam as BeamBase
 
 MLC_BOUNDARIES_HAL_DIST = tuple(np.arange(-140, 140 + 1, 10).astype(float))
 MLC_BOUNDARIES_HAL_PROX = tuple(np.arange(-145, 145 + 1, 10).astype(float))

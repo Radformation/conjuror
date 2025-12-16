@@ -159,7 +159,7 @@ By default, most machines use a set of standard parameter values. However, when 
 Create custom procedures
 ########################
 
-Custom procedures can be created by extending the ``QAProcedure`` abstract class in the appropriate machine module. When defining a custom procedure, a target machine must be specified — for example, when implementing a procedure to create a circle, the MLC leaf side boundaries need to be known. To simplify procedure creation without relying on a base plan, you can instantiate a ``Machine`` class and then generate the procedure using the ``.from_machine`` class method.
+Custom procedures can be created by extending the ``QAProcedure`` abstract class in the appropriate machine module. When computing a custom procedure, a target machine must be specified — for example, when implementing a procedure to create a circle, the MLC leaf side boundaries need to be known. To simplify procedure creation without relying on a base plan, you can instantiate a ``Machine`` class and then pass it to the ``compute`` method as an argument.
 
 .. code-block:: python
 
@@ -182,7 +182,8 @@ Custom procedures can be created by extending the ``QAProcedure`` abstract class
 
     def test_circle():
         machine = TrueBeamMachine(mlc_is_hd=False)
-        circle = CircleProcedure.from_machine(machine, radius = 5.0)
+        circle = CircleProcedure(radius = 5.0)
+        circle.compute(machine) # This step is also done automatically in add_procedure
         circle.plot()
 
 
@@ -194,8 +195,8 @@ Base classes
 
 .. autoclass:: conjuror.plans.plan_generator.PlanGenerator
 .. autoclass:: conjuror.plans.plan_generator.QAProcedureBase
-.. autoclass:: conjuror.plans.plan_generator.BeamBase
-.. autoclass:: conjuror.plans.plan_generator.MachineSpecs
+.. autoclass:: conjuror.plans.beam.Beam
+.. autoclass:: conjuror.plans.machine.MachineSpecs
 
 Derived classes - TrueBeam
 ##########################
