@@ -1341,9 +1341,11 @@ class VMATDRGS(QAProcedure):
         self.machine = machine
 
         # convert/cast variables
-        gantry_speeds = np.array(self.gantry_speeds)
-        dose_rates = np.array(self.dose_rates)
-        mu_per_sec = dose_rates / 60
+        gantry_speeds = np.array(self.gantry_speeds, dtype=float)
+        dose_rates = np.array(self.dose_rates, dtype=float)
+        mu_per_strip = float(self.mu_per_segment)
+        mu_per_transition = float(self.mu_per_transition)
+        gantry_motion_per_transition = float(self.gantry_motion_per_transition)
 
         # Verify inputs:
         if len(gantry_speeds) != len(dose_rates):
@@ -1365,61 +1367,57 @@ class VMATDRGS(QAProcedure):
             raise ValueError("At least one axis must be maxed out")
 
         # calculate unmodulated variables
-        num_segments = len(gantry_speeds)
-        time_to_deliver_segments = self.mu_per_segment / mu_per_sec
-        gantry_motion_per_segment = gantry_speeds * time_to_deliver_segments
-        segment_width = (self.mlc_span + self.mlc_gap) / num_segments
+        num_strip = len(gantry_speeds)
+        mu_per_sec = dose_rates / 60.0
+        time_to_deliver_per_strip = mu_per_strip / mu_per_sec
+        gantry_motions_per_strip = gantry_speeds * time_to_deliver_per_strip
+        strip_spacing = float(self.mlc_span + self.mlc_gap) / num_strip
+        strip_width = strip_spacing - self.mlc_gap
 
         # This is the modulation computation
         # delivery motion scheme (T is transition, D is Dose, numbers are index of calculated values (1-based))
         # CP    0 1 2 3 4 5 6 7 8 9
         # G     0 T 1 T 2 T 3 T 4 T
         # D     0 * D T D T D T D *     , * On the 1st and last transition the dose needs to be scaled to the mlc motion to prevent overdosage
-        # MLC   0 * 0 T 0 T 0 T 0 0     , * The first transition is smaller by mlc_gap
+        # MLC   S 1 1 2 2 3 3 4 4 E     , S is start positon and E is end position
 
-        gantry_motion = np.insert(
-            gantry_motion_per_segment,
-            range(num_segments + 1),
-            self.gantry_motion_per_transition,
-        )
-        gantry_motion = np.append(0, gantry_motion)
-
-        dose_motion = 1.0 * np.tile(
-            [self.mu_per_segment, self.mu_per_transition], num_segments
-        )
-        dose_motion = np.append([0, self.mu_per_transition], dose_motion)
-        if self.correct_fluence:
-            dm = self.mu_per_transition * (1 - self.mlc_gap / segment_width)
-            dose_motion[[1, -1]] = dm
-
-        mlc_motion_ini = [0, segment_width - self.mlc_gap]
-        mlc_motion_mid = np.tile([0, segment_width], num_segments - 1)
-        mlc_motion_end = [0, 0]
-        mlc_motion = np.concatenate((mlc_motion_ini, mlc_motion_mid, mlc_motion_end))
-
-        # Extra verifications on gantry rotation
-        gantry_angles_without_offset = np.cumsum(gantry_motion)
-        if gantry_angles_without_offset[-1] > 360 - 2 * self.MIN_GANTRY_OFFSET:
-            msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
-            raise ValueError(msg)
-        gantry_angles_var = gantry_angles_without_offset + self.initial_gantry_offset
-        if gantry_angles_var[-1] > 360 - self.MIN_GANTRY_OFFSET:
-            msg = "The gantry rotation exceeds 360 degrees. Reduce the initial_gantry_offset"
-            raise ValueError(msg)
+        shaper = Beam.create_shaper(machine)
+        strip_pos = np.linspace(-1, 1, num_strip) * (num_strip - 1) / 2 * strip_spacing
+        k = -1 if self.mlc_motion_reverse else 1
+        if self.mlc_motion_reverse:
+            strip_pos = np.flip(strip_pos)
+        # Initial control point (gantry_motion, dose_motion, mlc_position)
+        gm, dm, mp = [0.0], [0.0], [shaper.get_shape(Strip(k * -self.mlc_span / 2, 0))]
+        # Dynamic sequence
+        for s in range(num_strip):
+            gm += [gantry_motion_per_transition, gantry_motions_per_strip[s]]
+            dm += [mu_per_transition, mu_per_strip]
+            mp += 2 * [shaper.get_shape(Strip(strip_pos[s], strip_width))]
+        # Final control point
+        gm += [gantry_motion_per_transition]
+        dm += [mu_per_transition]
+        mp += [shaper.get_shape(Strip(k * self.mlc_span / 2, 0))]
 
         # Finalize values
+        dose_motion = np.array(dm)
+        if self.correct_fluence:
+            correction_factor = 1 - self.mlc_gap / strip_spacing
+            dose_motion[[1, -1]] = mu_per_transition * correction_factor
         cumulative_mu = np.cumsum(dose_motion)
-        mlc_positions = np.cumsum(mlc_motion) - self.mlc_span / 2
-        if self.mlc_motion_reverse:
-            mlc_positions = -mlc_positions
-        mlc_b = mlc_positions
-        mlc_a = -np.flip(mlc_positions)
-        shaper = Beam.create_shaper(machine)
-        z = zip(mlc_a, mlc_b)
-        mlc = [shaper.get_shape(Strip.from_minmax(b, a)) for (a, b) in z]
+        gantry_angles_without_offset = np.cumsum(gm)
+        gantry_angles_var = gantry_angles_without_offset + self.initial_gantry_offset
         gantry_angles = (180 - gantry_angles_var) % 360
         if self.gantry_rotation_clockwise:
             gantry_angles = 360 - gantry_angles
+        mlc = mp
+
+        # Extra verifications on gantry rotation
+        if gantry_angles_without_offset[-1] > 360 - 2 * self.MIN_GANTRY_OFFSET:
+            msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
+            raise ValueError(msg)
+        if gantry_angles_var[-1] > 360 - self.MIN_GANTRY_OFFSET:
+            msg = "The gantry rotation exceeds 360 degrees. Reduce the initial_gantry_offset"
+            raise ValueError(msg)
 
         # Create dynamic beam
         dynamic_beam = self._beam("VMAT-DRGS-Dyn", cumulative_mu, gantry_angles, mlc)
@@ -1427,7 +1425,7 @@ class VMATDRGS(QAProcedure):
         # Create reference beam
         ref_meterset = [0, self.reference_beam_mu]
         ref_ga = 2 * [float(gantry_angles[0 if self.reference_beam_add_before else -1])]
-        ref_mlc = 2 * [shaper.get_shape(Strip.from_minmax(min(mlc_b), max(mlc_a)))]
+        ref_mlc = 2 * [shaper.get_shape(Strip(0, self.mlc_span))]
         reference_beam = self._beam("VMAT-DRGS-Ref", ref_meterset, ref_ga, ref_mlc)
 
         # Append the dynamic and reference beams according to the order defined in init

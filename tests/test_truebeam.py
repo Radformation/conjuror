@@ -1,4 +1,4 @@
-from unittest import TestCase
+from unittest import TestCase, skipIf
 
 import numpy as np
 import pydicom
@@ -28,6 +28,8 @@ from tests.utils import get_file_from_cloud_test_repo
 
 TB_MIL_PLAN_FILE = get_file_from_cloud_test_repo(["plan_generator", "Murray-plan.dcm"])
 DEFAULT_TRUEBEAM_HD120 = TrueBeamMachine(mlc_is_hd=True)
+
+RUN_PLOT_TESTS = True
 
 
 class TestProcedures(TestCase):
@@ -624,20 +626,29 @@ class TestVmatDRGS(TestCase):
         with self.assertRaises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
+    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
     def test_plot_control_points(self):
         procedure = VMATDRGS()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_control_points()
 
+    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
     def test_plot_fluence(self):
         procedure = VMATDRGS()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_fluence(IMAGER_AS1200)
 
+    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
     def test_plot_profile(self):
         procedure = VMATDRGS()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_fluence_profile(IMAGER_AS1200)
+
+    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
+    def test_animate_mlc(self):
+        procedure = VMATDRGS()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        procedure.dynamic_beam.animate_mlc()
 
 
 class TestVmatDRMLC(TestCase):
@@ -751,17 +762,26 @@ class TestVmatDRMLC(TestCase):
         with self.assertRaises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
+    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
     def test_plot_control_points(self):
         procedure = VMATDRMLC()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_control_points()
 
+    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
     def test_plot_fluence(self):
         procedure = VMATDRMLC()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_fluence(IMAGER_AS1200)
 
+    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
     def test_plot_profile(self):
         procedure = VMATDRMLC()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_fluence_profile(IMAGER_AS1200)
+
+    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
+    def test_animate_mlc(self):
+        procedure = VMATDRMLC()
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        procedure.dynamic_beam.animate_mlc()
