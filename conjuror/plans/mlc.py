@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Self
 
 import numpy as np
 
@@ -65,7 +66,7 @@ class Strip(MLCShape):
     width: float
 
     @classmethod
-    def from_minmax(cls, x_min: float, x_max: float) -> "Strip":
+    def from_minmax(cls, x_min: float, x_max: float) -> Self:
         if x_min > x_max:
             raise ValueError("x_min cannot be larger than x_max")
         position = (x_min + x_max) / 2.0
