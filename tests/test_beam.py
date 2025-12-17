@@ -137,7 +137,13 @@ class TestVisualizations(TestCase):
 
     def test_fluence_interpolation(self):
         image = Imager(pixel_size=1, shape=(1, 100))
-        beam = create_beam(mlc_positions=[120 * [-50], 60 * [-50] + 60 * [50]])
+        beam = create_beam(
+            mlc_positions=[120 * [-50], 60 * [-50] + 60 * [50]],
+            x1=-100,
+            x2=100,
+            y1=-100,
+            y2=100,
+        )
 
         fluence1 = beam.generate_fluence(image, interpolation_factor=1)
         nominal1 = np.array(100 * [100])[np.newaxis]
@@ -146,6 +152,22 @@ class TestVisualizations(TestCase):
         fluence2 = beam.generate_fluence(image, interpolation_factor=100)
         nominal2 = np.arange(100, 0, -1)[np.newaxis]
         np.testing.assert_array_almost_equal(fluence2, nominal2, decimal=14)
+
+    def test_jaws(self):
+        image = Imager(pixel_size=1, shape=(100, 100))
+        beam = create_beam(
+            mlc_positions=2 * [60 * [-20] + 60 * [20]],
+            x1=-13,
+            x2=16,
+            y1=-12,
+            y2=15,
+        )
+
+        fluence = beam.generate_fluence(image, include_jaws=True)
+        self.assertFalse(np.any(fluence[:, : 50 - 13]))
+        self.assertFalse(np.any(fluence[:, 50 + 16 :]))
+        self.assertFalse(np.any(fluence[: 50 - 12, :]))
+        self.assertFalse(np.any(fluence[50 + 15 :, :]))
 
     def test_animate_mlc(self):
         procedure = PicketFence()
