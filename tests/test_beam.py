@@ -135,7 +135,7 @@ class TestVisualizations(TestCase):
         fig = beam.plot_fluence(IMAGER_AS1200)
         self.assertTrue(fig is not None)
 
-    def test_plot_fluence_interpolation(self):
+    def test_fluence_interpolation(self):
         image = Imager(pixel_size=1, shape=(1, 100))
         beam = create_beam(mlc_positions=[120 * [-50], 60 * [-50] + 60 * [50]])
 
