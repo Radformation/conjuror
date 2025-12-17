@@ -163,7 +163,7 @@ class TestVisualizations(TestCase):
             y2=15,
         )
 
-        fluence = beam.generate_fluence(image, include_jaws=True)
+        fluence = beam.generate_fluence(image)
         self.assertFalse(np.any(fluence[:, : 50 - 13]))
         self.assertFalse(np.any(fluence[:, 50 + 16 :]))
         self.assertFalse(np.any(fluence[: 50 - 12, :]))
