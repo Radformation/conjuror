@@ -66,14 +66,14 @@ class BeamVisualizationMixin:
             )
 
         # Interpolate data
-        num_cp = self.number_of_control_points
-        num_cp_ = interpolation_factor * (num_cp - 1) + 1
-        t = range(num_cp)
-        t_ = np.linspace(0, num_cp - 1, num_cp_)
+        num_cp = self.number_of_control_points  # before interpolation
+        num_cp_ = interpolation_factor * (num_cp - 1) + 1  # after interpolation
+        t = range(num_cp)  # abscissas for interpolation (used t since x is imager axis)
+        t_ = np.linspace(0, num_cp - 1, num_cp_)  # evaluated abscissas
         metersets = make_interp_spline(t, self.metersets, k=1)(t_)
-        for key, value in blds.items():
-            value.leaves_a = make_interp_spline(t, value.leaves_a, k=1, axis=1)(t_)
-            value.leaves_b = make_interp_spline(t, value.leaves_b, k=1, axis=1)(t_)
+        for bld in blds.values():
+            bld.leaves_a = make_interp_spline(t, bld.leaves_a, k=1, axis=1)(t_)
+            bld.leaves_b = make_interp_spline(t, bld.leaves_b, k=1, axis=1)(t_)
 
         meterset_per_cp = np.diff(metersets, prepend=0)
         fluence = np.zeros(imager.shape)
