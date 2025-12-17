@@ -8,6 +8,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
+from scipy.interpolate import make_interp_spline
 
 from conjuror.images.simulators import Imager
 from conjuror.plans.mlc import MLCModulator, MLCShaper, Rectangle, RectangleMode, Strip
@@ -1396,7 +1397,7 @@ class VMATDRGS(QAProcedure):
         mlc_motion_end = [0, 0]
         mlc_motion = np.concatenate((mlc_motion_ini, mlc_motion_mid, mlc_motion_end))
 
-        # Extra verifications on the computed variables
+        # Extra verifications on gantry rotation
         gantry_angles_without_offset = np.cumsum(gantry_motion)
         if gantry_angles_without_offset[-1] > 360 - 2 * self.MIN_GANTRY_OFFSET:
             msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
@@ -1411,35 +1412,23 @@ class VMATDRGS(QAProcedure):
         mlc_positions = np.cumsum(mlc_motion) - self.mlc_span / 2
         if self.mlc_motion_reverse:
             mlc_positions = -mlc_positions
-        mlc_positions_b = mlc_positions
-        mlc_positions_a = -np.flip(mlc_positions)
+        mlc_b = mlc_positions
+        mlc_a = -np.flip(mlc_positions)
+        shaper = Beam.create_shaper(machine)
+        z = zip(mlc_a, mlc_b)
+        mlc = [shaper.get_shape(Strip.from_minmax(b, a)) for (a, b) in z]
         gantry_angles = (180 - gantry_angles_var) % 360
         if self.gantry_rotation_clockwise:
             gantry_angles = 360 - gantry_angles
 
         # Create dynamic beam
-        dynamic_beam = self._beam(
-            "VMAT-DRGS-Dyn",
-            cumulative_mu,
-            gantry_angles,
-            mlc_positions_a,
-            mlc_positions_b,
-        )
+        dynamic_beam = self._beam("VMAT-DRGS-Dyn", cumulative_mu, gantry_angles, mlc)
 
         # Create reference beam
-        reference_meterset = [0, self.reference_beam_mu]
-        reference_gantry_angle = [
-            float(gantry_angles[0 if self.reference_beam_add_before else -1])
-        ]
-        reference_mlc_positions_a = 2 * [float(mlc_positions_a[0])]
-        reference_mlc_positions_b = 2 * [float(mlc_positions_b[-1])]
-        reference_beam = self._beam(
-            "VMAT-DRGS-Ref",
-            reference_meterset,
-            reference_gantry_angle,
-            reference_mlc_positions_a,
-            reference_mlc_positions_b,
-        )
+        ref_meterset = [0, self.reference_beam_mu]
+        ref_ga = 2 * [float(gantry_angles[0 if self.reference_beam_add_before else -1])]
+        ref_mlc = 2 * [shaper.get_shape(Strip.from_minmax(min(mlc_b), max(mlc_a)))]
+        reference_beam = self._beam("VMAT-DRGS-Ref", ref_meterset, ref_ga, ref_mlc)
 
         # Append the dynamic and reference beams according to the order defined in init
         beams: list[Beam | None] = 2 * [None]
@@ -1451,11 +1440,7 @@ class VMATDRGS(QAProcedure):
         # Add static beams
         for gantry_angle in self.dynamic_delivery_at_static_gantry:
             beam = self._beam(
-                f"VMAT-DRGS-G{gantry_angle:03d}",
-                cumulative_mu,
-                [gantry_angle],
-                mlc_positions_a,
-                mlc_positions_b,
+                f"VMAT-DRGS-G{gantry_angle:03d}", cumulative_mu, [gantry_angle], mlc
             )
             beams.append(beam)
 
@@ -1466,18 +1451,11 @@ class VMATDRGS(QAProcedure):
         beam_name: str,
         metersets: Sequence[float],
         gantry_angles: Sequence[float],
-        mlc_positions_a: Sequence[float],
-        mlc_positions_b: Sequence[float],
+        mlc: list[list[float]],
     ) -> Beam:
         """Multiple similar beams are created for the VMAT test.
         Common parameters are stored as attributes, whereas the dynamic axes
         are passed as arguments to this method."""
-
-        # Expand mlc positions for all leaves
-        beam_mlc_position_a = np.tile(mlc_positions_a, (60, 1))
-        beam_mlc_position_b = np.tile(mlc_positions_b, (60, 1))
-        beam_mlc_positions = np.vstack((beam_mlc_position_b, beam_mlc_position_a))
-        beam_mlc_positions = beam_mlc_positions.transpose().tolist()
 
         return Beam(
             mlc_is_hd=self.machine.mlc_is_hd,
@@ -1491,7 +1469,282 @@ class VMATDRGS(QAProcedure):
             x2=self._x2,
             y1=self._y1,
             y2=self._y2,
-            mlc_positions=beam_mlc_positions,
+            mlc_positions=mlc,
+            coll_angle=0,
+            couch_vrt=0,
+            couch_lat=0,
+            couch_lng=0,
+            couch_rot=0,
+        )
+
+    def plot_control_points(self, specs: MachineSpecs | None = None) -> None:
+        """Plot the control points from dynamic beam
+
+        Parameters
+        ----------
+        specs : MachineSpecs | None
+            The machine specs used to compute speeds.
+        """
+        specs = specs or self.machine.specs
+        beam = self.dynamic_beam
+        beam.plot_control_points(specs)
+
+    def plot_fluence(self, imager: Imager, show: bool = True) -> None:
+        """Plot the fluence for the reference and dynamic beams
+
+        Parameters
+        ----------
+        imager : Imager
+            The target imager.
+        show : bool, optional
+            Whether to show the plots. Default is True.
+        """
+        self.reference_beam.plot_fluence(imager, show)
+        self.dynamic_beam.plot_fluence(imager, show)
+
+    def plot_fluence_profile(self, imager: Imager, zoom: float = 10):
+        """Plot the fluence profile for the dynamic beam
+
+        Parameters
+        ----------
+        imager : Imager
+            The target imager.
+        zoom: float
+            The zoom factor in % around the max value, i.e. ylim = 1 + [-1, 1] * zoom/100
+        """
+        beam = self.dynamic_beam
+        fluence = beam.generate_fluence(imager)
+        profile = fluence[imager.shape[0] // 2, :]
+        profile_max = profile.max()
+        plt.plot(profile)
+        plt.ylim((1 - zoom / 100) * profile_max, (1 + zoom / 100) * profile_max)
+        plt.show()
+
+
+@dataclass
+class VMATDRMLC(QAProcedure):
+    """Create beams like Clif Ling VMAT DRMLC tests. The defaults use an optimized
+    selection for a TrueBeam.
+
+    Parameters
+    ----------
+    mlc_speeds : tuple
+        The mlc speeds rates to test in mm/sec. Each dose rate will have its own ROI.
+    gantry_speeds: tuple | None
+        The gantry speeds. When None it will default to max gantry speed for all segments.
+    segment_width : tuple
+        The width of each exposed segment in mm.
+    gantry_rotation_clockwise : bool
+        The direction of the gantry rotation. If True, the gantry will rotate clockwise
+    initial_gantry_offset : float
+        The initial gantry offset in degrees. E.g. If initial_gantry_offset=1 and gantry_rotation_clockwise=True,
+        then start angle = 181 IEC. If gantry_rotation_clockwise=False, then start angle = 179 IEC
+    mlc_motion_reverse : bool
+        The direction of MLC motion. If False, the leaves move in positive direction (IEC)
+        from -mlc_span/2 to +mlc_span/2. If True, the leaves move in negative direction (IEC)
+        from +mlc_span/2 to -mlc_span/2.
+    interpolation_factor : int
+        Interpolation factor to create control points with finer resolution.
+    jaw_padding : float
+        The added jaw position in mm with respect to the initial/final MLC positions
+    energy : float
+        The energy of the beam.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
+    max_dose_rate : int
+        The max dose rate in MU/min. This is used to compute the control point sequence to achieve the test dose_rates
+    reference_beam_mu : float
+        The number of MU's to be delivered in the reference beam (static beam)
+    reference_beam_add_before : bool
+        Whether to add the reference_beam before or after the dynamic beam. If True, the gantry angle is set to
+        the initial gantry angle of the dynamic beam. If False, the gantry angle is set to the final gantry angle
+        of the dynamic beam.
+    dynamic_delivery_at_static_gantry : tuple
+        There is one beam created for each static gantry angle. These beams contain the same control point sequence
+        as the dynamic beam, but the gantry angle is replaced by a single value. There will be no modulation of
+        dose rate and gantry speeds, and can be used as an alternative reference beam.
+    """
+
+    mlc_speeds: tuple[float, ...] = (15.0, 20.0, 10.0, 5.0)
+    gantry_speeds: tuple[float, ...] | None = None
+    segment_width: float = 30.0
+    gantry_rotation_clockwise: bool = False
+    initial_gantry_offset: float = 10.0
+    mlc_motion_reverse: bool = False
+    interpolation_factor: int = 1
+    jaw_padding: float = 0.0
+    energy: float = 6
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
+    max_dose_rate: int = 600
+    reference_beam_mu: float = 100.0
+    reference_beam_add_before: bool = False
+    dynamic_delivery_at_static_gantry: tuple[float, ...] = ()
+
+    # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.
+    MIN_GANTRY_OFFSET: float = field(init=False, default=0.1)
+    # The reference beam may be acquired prior to or following the dynamic beam
+    # (as specified by the reference_beam_add_before argument).
+    # These attributes record the indices of the respective beams.
+    dynamic_beam_idx: int = field(init=False)
+    reference_beam_idx: int = field(init=False)
+
+    # private attributes: common to all beams to facilitate creation
+    _x1: float = field(init=False)
+    _x2: float = field(init=False)
+    _y1: float = field(init=False)
+    _y2: float = field(init=False)
+    machine: TrueBeamMachine = field(init=False)
+
+    @property
+    def reference_beam(self) -> Beam:
+        return self.beams[self.reference_beam_idx]
+
+    @property
+    def dynamic_beam(self) -> Beam:
+        return self.beams[self.dynamic_beam_idx]
+
+    def compute(self, machine: TrueBeamMachine):
+        # Nomenclature
+        # rois: the regions to be irradiated (related to mlc_speeds)
+        # segment: each roi is made of 2 segments, one for each bank motion (related to control points)
+        # Since this is about creating control points, most variables use a (implicit) _per_segment suffix unless specified.
+
+        # convert/cast variables
+        num_roi = len(self.mlc_speeds)
+        gantry_speed_per_roi = self.gantry_speeds
+        if not gantry_speed_per_roi:
+            gantry_speed_per_roi = num_roi * [machine.specs.max_gantry_speed]
+        gantry_speeds = np.array(np.repeat(gantry_speed_per_roi, 2), dtype=float)
+        mlc_speeds = np.array(np.repeat(self.mlc_speeds, 2), dtype=float)
+
+        # Verify inputs:
+        if self.initial_gantry_offset < self.MIN_GANTRY_OFFSET:
+            msg = f"The initial gantry offset cannot be smaller than {self.MIN_GANTRY_OFFSET} deg. Using 180 deg can cause ambiguity in the rotation direction."
+            raise ValueError(msg)
+        if any(mlc_speeds > machine.specs.max_mlc_speed):
+            raise ValueError("Requested mlc_speeds cannot exceed max_mlc_speed")
+
+        # The selected maximum MLC speed does not need to match the machine’s
+        # maximum MLC speed. Regardless, the selected max MLC speed will be paired
+        # with the maximum dose rate, and the remaining dose rates will be
+        # interpolated accordingly.
+        max_mlc_speed = max(mlc_speeds)
+        dose_rates = mlc_speeds / max_mlc_speed * float(self.max_dose_rate)
+
+        # Further verifications:
+        gantry_speeds_normalized = gantry_speeds / machine.specs.max_gantry_speed
+        dose_rates_normalized = dose_rates / self.max_dose_rate
+        # Verify that there are no requested speeds above limit
+        if np.any(gantry_speeds_normalized > 1):
+            raise ValueError("Requested gantry_speeds cannot exceed max_gantry_speed")
+        # Verify that at least one axis is maxed out for all control points
+        norm_max = np.max((gantry_speeds_normalized, dose_rates_normalized), axis=0)
+        if not np.all(norm_max == 1):
+            raise ValueError("At least one axis must be maxed out")
+
+        mu_per_sec = dose_rates / 60.0
+        time_to_deliver = self.segment_width / mlc_speeds
+        mu_per_segment = mu_per_sec * time_to_deliver
+        gantry_motion = gantry_speeds * time_to_deliver
+
+        # Extra verifications on gantry rotation
+        gantry_angles_without_offset = np.cumsum([0] + gantry_motion.tolist())
+        if gantry_angles_without_offset[-1] > 360 - 2 * self.MIN_GANTRY_OFFSET:
+            msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
+            raise ValueError(msg)
+        gantry_angles_var = gantry_angles_without_offset + self.initial_gantry_offset
+        if gantry_angles_var[-1] > 360 - self.MIN_GANTRY_OFFSET:
+            msg = "The gantry rotation exceeds 360 degrees. Reduce the initial_gantry_offset"
+            raise ValueError(msg)
+
+        # This is the modulation computation
+        # D is Dose, A/B are the banks, numbers are index of calculated values
+        # CP    0 1 2 3 4 5 6 7 8
+        # D     0 D D D D D D D D
+        # A     0 1 1 2 2 3 3 4 4
+        # B     0 0 1 1 2 2 3 3 4
+
+        roi_limits = np.linspace(-1, 1, num_roi + 1) * 2 * self.segment_width
+        mlc_a = roi_limits[np.repeat(range(num_roi + 1), [1] + num_roi * [2])]
+        mlc_b = roi_limits[np.repeat(range(num_roi + 1), num_roi * [2] + [1])]
+        if self.mlc_motion_reverse:
+            mlc_a = np.flip(mlc_a)
+            mlc_b = np.flip(mlc_b)
+        shaper = Beam.create_shaper(machine)
+        z = zip(mlc_a, mlc_b)
+        mlc = [shaper.get_shape(Strip.from_minmax(b, a)) for (a, b) in z]
+        cumulative_mu = np.cumsum([0] + mu_per_segment.tolist())
+
+        # store parameters common to all beams
+        mlc_boundaries = (
+            MLC_BOUNDARIES_TB_HD120 if machine.mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
+        )
+        self._y1 = mlc_boundaries[0]
+        self._y2 = mlc_boundaries[-1]
+        self._x1 = min(roi_limits) - self.jaw_padding
+        self._x2 = max(roi_limits) + self.jaw_padding
+        self.machine = machine
+
+        # Finalize values
+        gantry_angles = (180 - gantry_angles_var) % 360
+        if self.gantry_rotation_clockwise:
+            gantry_angles = 360 - gantry_angles
+        num_segments = len(cumulative_mu)
+        x = range(num_segments)
+        k = num_segments - 1
+        x_ = np.linspace(0, k, k * self.interpolation_factor + 1)
+        cumulative_mu = make_interp_spline(x, cumulative_mu, k=1)(x_)
+        gantry_angles = make_interp_spline(x, gantry_angles, k=1)(x_)
+        mlc = make_interp_spline(x, np.array(mlc).T, k=1, axis=1)(x_).T.tolist()
+
+        # Create dynamic beam
+        dynamic_beam = self._beam("VMAT-DRMLC-Dyn", cumulative_mu, gantry_angles, mlc)
+
+        # Create reference beam
+        ref_meterset = [0, self.reference_beam_mu]
+        ref_ga = 2 * [float(gantry_angles[0 if self.reference_beam_add_before else -1])]
+        ref_mlc = 2 * [shaper.get_shape(Strip.from_minmax(min(mlc_b), max(mlc_a)))]
+        ref_beam = self._beam("VMAT-DRMLC-Ref", ref_meterset, ref_ga, ref_mlc)
+
+        # Append the dynamic and reference beams according to the order defined in init
+        beams: list[Beam | None] = 2 * [None]
+        self.dynamic_beam_idx = 1 if self.reference_beam_add_before else 0
+        self.reference_beam_idx = 0 if self.reference_beam_add_before else 1
+        beams[self.dynamic_beam_idx] = dynamic_beam
+        beams[self.reference_beam_idx] = ref_beam
+
+        # Add static beams
+        for gantry_angle in self.dynamic_delivery_at_static_gantry:
+            beam = self._beam(
+                f"VMAT-DRMLC-G{gantry_angle:03d}", cumulative_mu, [gantry_angle], mlc
+            )
+            beams.append(beam)
+
+        self.beams = beams
+
+    def _beam(
+        self,
+        beam_name: str,
+        metersets: Sequence[float],
+        gantry_angles: Sequence[float],
+        mlc: list[list[float]],
+    ) -> Beam:
+        """Multiple similar beams are created for the VMAT test.
+        Common parameters are stored as attributes, whereas the dynamic axes
+        are passed as arguments to this method."""
+        return Beam(
+            mlc_is_hd=self.machine.mlc_is_hd,
+            beam_name=beam_name,
+            energy=self.energy,
+            fluence_mode=self.fluence_mode,
+            dose_rate=self.max_dose_rate,
+            metersets=metersets,
+            gantry_angles=gantry_angles,
+            x1=self._x1,
+            x2=self._x2,
+            y1=self._y1,
+            y2=self._y2,
+            mlc_positions=mlc,
             coll_angle=0,
             couch_vrt=0,
             couch_lat=0,
