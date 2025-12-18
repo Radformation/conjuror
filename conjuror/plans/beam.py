@@ -246,24 +246,23 @@ class BeamVisualizationMixin:
 
         self.compute_dynamics(specs)
 
-        def _plot_line(data, increment=True, title=None, y_label=None):
-            """helper function for line plot"""
+        def _plot(
+            as_line: bool,
+            data: np.ndarray,
+            increment: bool = True,
+            title: str = "",
+            y_label: str = "",
+        ) -> None:
+            """helper function for plotting"""
             if increment:
                 idx[0] += 1
             plt.subplot(num_rows, num_cols, idx[0])
-            plt.plot(self.metersets, data)
-            if title:
+            if as_line:
+                plt.plot(self.metersets, data)
+            else:
+                plt.step(self.metersets[:-1], data, where="post")
+            if increment:
                 plt.title(title)
-            if y_label:
-                plt.ylabel(y_label)
-
-        def _plot_step(data, increment=True, y_label=None):
-            """helper function for step plot"""
-            if increment:
-                idx[0] += 1
-            plt.subplot(num_rows, num_cols, idx[0])
-            plt.step(self.metersets[:-1], data, where="post")
-            if y_label:
                 plt.ylabel(y_label)
 
         idx = [0]
@@ -271,27 +270,27 @@ class BeamVisualizationMixin:
         fig, _ = plt.subplots(num_rows, num_cols)
 
         # Positions
-        _plot_line(self.metersets, title="MU", y_label="Absolute")
-        _plot_line(self.gantry_angles, title="Gantry")
-        _plot_line(self.beam_limiting_device_positions["MLCX"][0, :], title="MLC")
-        _plot_line(self.beam_limiting_device_positions["MLCX"][-1, :], increment=False)
+        _plot(True, self.metersets, title="MU", y_label="Absolute")
+        _plot(True, self.gantry_angles, title="Gantry")
+        _plot(True, self.beam_limiting_device_positions["MLCX"][0, :], title="MLC")
+        _plot(True, self.beam_limiting_device_positions["MLCX"][-1, :], increment=False)
 
         # Motions
-        _plot_step(self.dose_motions, y_label="Motion")
-        _plot_step(self.gantry_motions)
-        _plot_step(self.mlc_motions[0, :])
-        _plot_step(self.mlc_motions[-1, :], increment=False)
+        _plot(False, self.dose_motions, y_label="Motion")
+        _plot(False, self.gantry_motions)
+        _plot(False, self.mlc_motions[0, :])
+        _plot(False, self.mlc_motions[-1, :], increment=False)
 
         # Time to deliver
-        _plot_step(self.time_to_deliver, y_label="Delivery time")
-        _plot_step(self.time_to_deliver)
-        _plot_step(self.time_to_deliver)
+        _plot(False, self.time_to_deliver, y_label="Delivery time")
+        _plot(False, self.time_to_deliver)
+        _plot(False, self.time_to_deliver)
 
         # Speeds
-        _plot_step(self.dose_speeds * 60, y_label="Speed")
-        _plot_step(self.gantry_speeds)
-        _plot_step(self.mlc_speeds[0, :])
-        _plot_step(self.mlc_speeds[-1, :], increment=False)
+        _plot(False, self.dose_speeds * 60, y_label="Speed")
+        _plot(False, self.gantry_speeds)
+        _plot(False, self.mlc_speeds[0, :])
+        _plot(False, self.mlc_speeds[-1, :], increment=False)
 
         if show:
             plt.show()
