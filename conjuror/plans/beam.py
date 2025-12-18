@@ -1,16 +1,20 @@
 from abc import ABC
 from typing import Generic, Sequence, Iterable
 
+from matplotlib.figure import Figure
+from matplotlib import pyplot as plt
 import numpy as np
 from plotly import graph_objects as go
 from pydicom import Sequence as DicomSequence, Dataset
 
 from conjuror.images.simulators import Imager
-from conjuror.plans.machine import TMachine, GantryDirection, FluenceMode
+from conjuror.plans.machine import TMachine, MachineSpecs, GantryDirection, FluenceMode
 from conjuror.utils import wrap180
 
 
 class BeamVisualizationMixin:
+    """This Mixin class adds functionality to visualize beams"""
+
     def generate_fluence(self: "Beam", imager: Imager) -> np.ndarray:
         """Generate the fluence map from the RT Plan.
 
@@ -220,8 +224,111 @@ class BeamVisualizationMixin:
 
         return fig
 
+    def plot_control_points(
+        self: "Beam", specs: MachineSpecs, show: bool = True
+    ) -> Figure:
+        """Plot the control points from dynamic beam
+        Rows: Absolute position, relative motion, time to deliver, speed
+        Cols: Dose, Gantry, MLC
+        """
+        # This is used mostly for visual inspection during development
+        # Axis labeling could be improved
 
-class Beam(Generic[TMachine], BeamVisualizationMixin, ABC):
+        self.compute_dynamics(specs)
+
+        def _plot(
+            as_line: bool,
+            data: np.ndarray,
+            increment: bool = True,
+            title: str = "",
+            y_label: str = "",
+        ) -> None:
+            """helper function for plotting"""
+            if increment:
+                idx[0] += 1
+            plt.subplot(num_rows, num_cols, idx[0])
+            if as_line:
+                plt.plot(self.metersets, data)
+            else:
+                plt.step(self.metersets[:-1], data, where="post")
+            if increment:
+                plt.title(title)
+                plt.ylabel(y_label)
+
+        idx = [0]
+        num_rows, num_cols = 4, 3
+        fig, _ = plt.subplots(num_rows, num_cols)
+
+        # Positions
+        _plot(True, self.metersets, title="MU", y_label="Absolute")
+        _plot(True, self.gantry_angles, title="Gantry")
+        _plot(True, self.beam_limiting_device_positions["MLCX"][0, :], title="MLC")
+        _plot(True, self.beam_limiting_device_positions["MLCX"][-1, :], increment=False)
+
+        # Motions
+        _plot(False, self.dose_motions, y_label="Motion")
+        _plot(False, self.gantry_motions)
+        _plot(False, self.mlc_motions[0, :])
+        _plot(False, self.mlc_motions[-1, :], increment=False)
+
+        # Time to deliver
+        _plot(False, self.time_to_deliver, y_label="Delivery time")
+        _plot(False, self.time_to_deliver)
+        _plot(False, self.time_to_deliver)
+
+        # Speeds
+        _plot(False, self.dose_speeds * 60, y_label="Speed")
+        _plot(False, self.gantry_speeds)
+        _plot(False, self.mlc_speeds[0, :])
+        _plot(False, self.mlc_speeds[-1, :], increment=False)
+
+        if show:
+            plt.show()
+
+        return fig
+
+
+class BeamDynamicsMixin:
+    """This Mixin class adds functionalities to calculate dynamic parameters of the beam.
+
+    Nomenclature:
+
+    _motion: difference between consecutive control points
+    _speed: speed = _motion/time
+    """
+
+    time_to_deliver: np.ndarray
+    dose_motions: np.ndarray
+    gantry_motions: np.ndarray
+    mlc_motions: np.ndarray
+    dose_speeds: np.ndarray
+    gantry_speeds: np.ndarray
+    mlc_speeds: np.ndarray
+
+    def compute_dynamics(self: "Beam", specs: MachineSpecs) -> None:
+        # motions
+        # note: this is currently hardcoded for TrueBeam. Changes are necessary for Halcyon
+        self.dose_motions = np.abs(np.diff(self.metersets))
+        gantry_angle_var = (180 - self.gantry_angles) % 360
+        self.gantry_motions = np.abs(np.diff(gantry_angle_var))
+        mlc_positions = self.beam_limiting_device_positions["MLCX"]
+        self.mlc_motions = np.diff(mlc_positions, axis=1)
+
+        # ttd = time to deliver
+        ttd_dose = self.dose_motions / (self.dose_rate / 60)
+        ttd_gantry = self.gantry_motions / specs.max_gantry_speed
+        ttd_mlc = self.mlc_motions / specs.max_mlc_speed
+        times_to_deliver = np.vstack((ttd_dose, ttd_gantry, ttd_mlc))
+        self.time_to_deliver = np.max(np.abs(times_to_deliver), axis=0)
+
+        # speeds
+        # dose_speed is the same as dose_rate but in MU/sec
+        self.dose_speeds = self.dose_motions / self.time_to_deliver
+        self.gantry_speeds = self.gantry_motions / self.time_to_deliver
+        self.mlc_speeds = self.mlc_motions / self.time_to_deliver
+
+
+class Beam(Generic[TMachine], BeamDynamicsMixin, BeamVisualizationMixin, ABC):
     """Represents a DICOM beam dataset. Has methods for creating the dataset and adding control points."""
 
     ROUNDING_DECIMALS = 6
@@ -280,12 +387,12 @@ class Beam(Generic[TMachine], BeamVisualizationMixin, ABC):
         # Private attributes used for dicom creation only
         self._fluence_mode = fluence_mode
         self._energy = energy
-        self._dose_rate = dose_rate
         self._couch_vrt = couch_vrt
         self._couch_lat = couch_lat
         self._couch_lng = couch_lng
 
         # Public attributes (storing only)
+        self.dose_rate = dose_rate
         self.coll_angle = coll_angle
         self.couch_rot = couch_rot
 
@@ -459,7 +566,7 @@ class Beam(Generic[TMachine], BeamVisualizationMixin, ABC):
         cp0 = Dataset()
         cp0.ControlPointIndex = 0
         cp0.NominalBeamEnergy = self._energy
-        cp0.DoseRateSet = self._dose_rate
+        cp0.DoseRateSet = self.dose_rate
         beam_limiting_device_position_sequence = DicomSequence()
         for key, values in bld_positions.items():
             beam_limiting_device_position = Dataset()

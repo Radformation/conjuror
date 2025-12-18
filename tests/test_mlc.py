@@ -40,6 +40,18 @@ class TestShapes(TestCase):
         self.assertTrue(all(m == x_min for m in mlc[:60]))
         self.assertTrue(all(m == x_max for m in mlc[60:]))
 
+    @parameterized.expand([(-1, 2), (1, 2), (0, 0)])
+    def test_strip_from_minmax(self, x_min, x_max):
+        shape = Strip.from_minmax(x_min=x_min, x_max=x_max)
+        mlc = self.shaper.get_shape(shape)
+        self.assertTrue(all(m == x_min for m in mlc[:60]))
+        self.assertTrue(all(m == x_max for m in mlc[60:]))
+
+    def test_strip_error_if_min_larger_than_max(self):
+        x_min, x_max = 1, 0
+        with self.assertRaises(ValueError):
+            Strip.from_minmax(x_min, x_max)
+
     RECTANGLE_TEST_PARAM = [
         (-5, 5, RectangleMode.EXACT),
         (-4.9, 5.1, RectangleMode.ROUND),
