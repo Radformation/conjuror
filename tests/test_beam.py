@@ -116,14 +116,48 @@ class TestBeamType(TestCase):
 
 
 class TestBeamDynamics(TestCase):
-    def test_compute_dynamics(self):
-        attr = "gantry_speeds"
-        procedure = VMATDRGS()
-        procedure.compute(DEFAULT_TRUEBEAM_HD120)
-        beam = procedure.dynamic_beam
-        self.assertFalse(hasattr(beam, attr))
+    def test_static_beam(self):
+        beam = create_beam(
+            metersets=[0, 100],
+            gantry_angles=[0, 0],
+            mlc_positions=[[p] * 120 for p in [0, 0]],
+            dose_rate=600,  # 10 MU/sec
+        )
         beam.compute_dynamics(DEFAULT_SPECS_TB)
-        self.assertTrue(hasattr(beam, attr))
+
+        # Motions
+        np.testing.assert_array_equal(beam.dose_motions, 100.0)
+        np.testing.assert_array_equal(beam.gantry_motions, 0.0)
+        np.testing.assert_array_equal(beam.mlc_motions, 120 * [[0.0]])
+
+        # Speeds
+        np.testing.assert_allclose(beam.time_to_deliver, 10.0)
+        np.testing.assert_allclose(beam.dose_speeds, 10.0)
+        np.testing.assert_allclose(beam.gantry_speeds, 0.0)
+        np.testing.assert_allclose(beam.mlc_speeds, 120 * [[0.0]])
+
+    def test_dynamic_beam(self):
+        # all max motions=100, max speed=10, t=10 sec
+        beam = create_beam(
+            metersets=[0, 100, 100, 110],
+            gantry_angles=[0, 10, 110, 110],
+            mlc_positions=[[p] * 120 for p in [0, 0, 10, 110]],
+            dose_rate=600,  # 10 MU/sec
+        )
+        specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=10, max_mlc_speed=10)
+        beam.compute_dynamics(specs)
+
+        # Motions
+        np.testing.assert_array_equal(beam.dose_motions, np.array([100, 0, 10]))
+        np.testing.assert_array_equal(beam.gantry_motions, np.array([10, 100, 0]))
+        np.testing.assert_array_equal(beam.mlc_motions, 120 * [[0, 10, 100]])
+
+        # Speeds
+        # 1. dose is slower, 2. gantry is slower, 3. MLC is slower
+        np.testing.assert_allclose(beam.time_to_deliver, np.array([10.0, 10.0, 10.0]))
+        np.testing.assert_allclose(beam.dose_speeds, np.array([10.0, 0.0, 1.0]))
+        np.testing.assert_allclose(beam.gantry_speeds, np.array([1.0, 10.0, 0.0]))
+        np.testing.assert_allclose(beam.mlc_speeds, 120 * [[0.0, 1.0, 10.0]])
 
 
 class TestVisualizations(TestCase):
