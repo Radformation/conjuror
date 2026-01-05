@@ -2,10 +2,9 @@ from unittest import TestCase
 
 import numpy as np
 import pydicom
-from matplotlib import pyplot as plt
 from parameterized import parameterized
 
-from conjuror.images.simulators import IMAGER_AS1200
+from conjuror.images.simulators import IMAGER_AS1200, Imager
 from conjuror.plans.beam import Beam as BeamBase
 from conjuror.plans.machine import FluenceMode
 from conjuror.plans.truebeam import (
@@ -163,20 +162,24 @@ class TestBeamDynamics(TestCase):
 
 class TestVisualizations(TestCase):
     def test_plot_fluence(self):
-        # just tests it works
         machine = TrueBeamMachine(mlc_is_hd=True)
         procedure = PicketFence()
         procedure.compute(machine)
         beam = procedure.beams[0]
+        fig = beam.plot_fluence(IMAGER_AS1200)
+        self.assertTrue(fig is not None)
 
-        # new figure
-        beam.plot_fluence(IMAGER_AS1200)
+    def test_fluence_interpolation(self):
+        image = Imager(pixel_size=1, shape=(1, 100))
+        beam = create_beam(mlc_positions=[120 * [-50], 60 * [-50] + 60 * [50]])
 
-        # existing figure
-        fig, (ax1, ax2) = plt.subplots(1, 2)
-        beam.plot_fluence(IMAGER_AS1200, ax1)
-        beam.plot_fluence(IMAGER_AS1200, ax2)
-        plt.show()
+        fluence1 = beam.generate_fluence(image, interpolation_factor=1)
+        nominal1 = np.array(100 * [100])[np.newaxis]
+        np.testing.assert_array_equal(fluence1, nominal1)
+
+        fluence2 = beam.generate_fluence(image, interpolation_factor=100)
+        nominal2 = np.arange(100, 0, -1)[np.newaxis]
+        np.testing.assert_array_almost_equal(fluence2, nominal2, decimal=14)
 
     def test_animate_mlc(self):
         procedure = PicketFence()

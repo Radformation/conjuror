@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from plotly import graph_objects as go
 from pydicom import Sequence as DicomSequence, Dataset
+from scipy.interpolate import make_interp_spline
 
 from conjuror.images.simulators import Imager
 from conjuror.plans.machine import TMachine, MachineSpecs, GantryDirection, FluenceMode
@@ -14,19 +15,23 @@ from conjuror.utils import wrap180
 
 
 @dataclass
-class _BeamLimitingDeviceProps:
-    """Helper class intended to facilitate access to the properties of BeamLimitingDevice."""
+class _BeamLimitingDevice:
+    """Helper class intended to facilitate access to BeamLimitingDevices."""
 
     number_of_leaf_pairs: int
     leaf_position_boundaries: list[float]
     # This maps an imager rows to a given leaf (e.g. rows 450-470 -> leaf #10)
     row_to_leaf_map: np.ndarray
+    leaves_a: np.ndarray
+    leaves_b: np.ndarray
 
 
 class BeamVisualizationMixin:
     """This Mixin class adds functionality to visualize beams"""
 
-    def generate_fluence(self: "Beam", imager: Imager) -> np.ndarray:
+    def generate_fluence(
+        self: "Beam", imager: Imager, interpolation_factor: int = 100
+    ) -> np.ndarray:
         """Generate the fluence map from the RT Plan.
 
         Parameters
@@ -34,6 +39,8 @@ class BeamVisualizationMixin:
         imager : Imager
             The imager to use to generate the images. This provides the
             size of the image and the pixel size.
+        interpolation_factor : int
+            Interpolation factor to increase control points resolution.
 
         Returns
         -------
@@ -43,23 +50,38 @@ class BeamVisualizationMixin:
         x = imager.pixel_size * (np.arange(imager.shape[1]) - (imager.shape[1] - 1) / 2)
         y = imager.pixel_size * (np.arange(imager.shape[0]) - (imager.shape[0] - 1) / 2)
 
-        blds = dict[str, _BeamLimitingDeviceProps]()
-        for bldseq in self.beam_limiting_device_sequence:
-            lpb = bldseq.get("LeafPositionBoundaries")
-            r2lm = np.argmax(np.array([lpb]).T - y > 0, axis=0) - 1 if lpb else None
-            props = _BeamLimitingDeviceProps(bldseq.NumberOfLeafJawPairs, lpb, r2lm)
-            blds[bldseq.RTBeamLimitingDeviceType] = props
+        # Store MLC data in a single dictionary
+        bldseq = self.beam_limiting_device_sequence
+        blds = dict[str, _BeamLimitingDevice]()
+        for key, positions in self.beam_limiting_device_positions.items():
+            if "MLC" not in key:
+                continue
+            bld = next(blds for blds in bldseq if blds.RTBeamLimitingDeviceType == key)
+            blds[key] = _BeamLimitingDevice(
+                bld.NumberOfLeafJawPairs,
+                bld.LeafPositionBoundaries,
+                np.argmax(np.array([bld.LeafPositionBoundaries]).T - y > 0, axis=0) - 1,
+                positions[bld.NumberOfLeafJawPairs :, :],
+                positions[: bld.NumberOfLeafJawPairs, :],
+            )
 
-        meterset_per_cp = np.diff(self.metersets, prepend=0)
+        # Interpolate data
+        num_cp = self.number_of_control_points  # before interpolation
+        num_cp_ = interpolation_factor * (num_cp - 1) + 1  # after interpolation
+        t = range(num_cp)  # abscissas for interpolation (used t since x is imager axis)
+        t_ = np.linspace(0, num_cp - 1, num_cp_)  # evaluated abscissas
+        metersets = make_interp_spline(t, self.metersets, k=1)(t_)
+        for bld in blds.values():
+            bld.leaves_a = make_interp_spline(t, bld.leaves_a, k=1, axis=1)(t_)
+            bld.leaves_b = make_interp_spline(t, bld.leaves_b, k=1, axis=1)(t_)
+
+        meterset_per_cp = np.diff(metersets, prepend=0)
         fluence = np.zeros(imager.shape)
-        for cp_idx in range(1, self.number_of_control_points):
+        for cp_idx in range(1, num_cp_):
             stack_fluences = list()
-            for key, positions in self.beam_limiting_device_positions.items():
-                if "MLC" not in key:
-                    continue
-                bld = blds[key]
-                leaves_b = positions[: bld.number_of_leaf_pairs, cp_idx : cp_idx + 1]
-                leaves_a = positions[bld.number_of_leaf_pairs :, cp_idx : cp_idx + 1]
+            for bld in blds.values():
+                leaves_b = bld.leaves_b[:, cp_idx : cp_idx + 1]
+                leaves_a = bld.leaves_a[:, cp_idx : cp_idx + 1]
                 mu = meterset_per_cp[cp_idx]
                 # The mask contains the fluence boolean values, where the y-axis corresponds
                 # to the leaves and the x-axis indicates whether a given pixel is irradiated.
@@ -76,7 +98,9 @@ class BeamVisualizationMixin:
             fluence += cp_fluence
         return fluence
 
-    def plot_fluence(self: "Beam", imager: Imager, show: bool = True) -> go.Figure:
+    def plot_fluence(
+        self: "Beam", imager: Imager, interpolation_factor: int = 100, show: bool = True
+    ) -> go.Figure:
         """Plot the fluence map from the RT Beam.
 
         Parameters
@@ -84,10 +108,13 @@ class BeamVisualizationMixin:
         imager : Imager
             The imager to use to generate the images. This provides the
             size of the image and the pixel size.
+        interpolation_factor : int
+            Interpolation factor to increase control points resolution.
+
         show : bool, optional
             Whether to show the plots. Default is True.
         """
-        fluence = self.generate_fluence(imager)
+        fluence = self.generate_fluence(imager, interpolation_factor)
         fig = go.Figure()
         fig.add_heatmap(
             z=fluence,
