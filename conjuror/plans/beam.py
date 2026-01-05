@@ -1,4 +1,5 @@
 from abc import ABC
+from dataclasses import dataclass
 from typing import Generic, Sequence, Iterable
 
 from matplotlib.figure import Figure
@@ -10,6 +11,16 @@ from pydicom import Sequence as DicomSequence, Dataset
 from conjuror.images.simulators import Imager
 from conjuror.plans.machine import TMachine, MachineSpecs, GantryDirection, FluenceMode
 from conjuror.utils import wrap180
+
+
+@dataclass
+class _BeamLimitingDeviceProps:
+    """Helper class intended to facilitate access to the properties of BeamLimitingDevice."""
+
+    number_of_leaf_pairs: int
+    leaf_position_boundaries: list[float]
+    # This maps an imager rows to a given leaf (e.g. rows 450-470 -> leaf #10)
+    row_to_leaf_map: np.ndarray
 
 
 class BeamVisualizationMixin:
@@ -29,41 +40,40 @@ class BeamVisualizationMixin:
         np.ndarray
             The fluence map. Will be the same shape as the imager.
         """
-        meterset_per_cp = np.diff(self.metersets, prepend=0)
         x = imager.pixel_size * (np.arange(imager.shape[1]) - (imager.shape[1] - 1) / 2)
         y = imager.pixel_size * (np.arange(imager.shape[0]) - (imager.shape[0] - 1) / 2)
 
-        stack_fluences = list()
-        for key, positions in self.beam_limiting_device_positions.items():
-            if "MLC" not in key:
-                continue
-            stack_fluence = np.zeros(imager.shape)
-            number_of_leaf_pairs = int(positions.shape[0] / 2)
-            leaves_b = positions[0:number_of_leaf_pairs, :]
-            leaves_a = positions[number_of_leaf_pairs:, :]
+        blds = dict[str, _BeamLimitingDeviceProps]()
+        for bldseq in self.beam_limiting_device_sequence:
+            lpb = bldseq.get("LeafPositionBoundaries")
+            r2lm = np.argmax(np.array([lpb]).T - y > 0, axis=0) - 1 if lpb else None
+            props = _BeamLimitingDeviceProps(bldseq.NumberOfLeafJawPairs, lpb, r2lm)
+            blds[bldseq.RTBeamLimitingDeviceType] = props
 
-            stack_fluence_compact = np.zeros((number_of_leaf_pairs, imager.shape[1]))
-            for cp_idx in range(1, self.number_of_control_points):
-                mu = meterset_per_cp[cp_idx]
-                mask = (x > leaves_b[:, cp_idx : cp_idx + 1]) & (
-                    x <= leaves_a[:, cp_idx : cp_idx + 1]
-                )
-                stack_fluence_compact[mask] += mu
-
-            boundaries = next(
-                bld
-                for bld in self.beam_limiting_device_sequence
-                if bld.RTBeamLimitingDeviceType == key
-            ).LeafPositionBoundaries
-            row_to_leaf_map = np.argmax(np.array([boundaries]).T - y > 0, axis=0) - 1
-            for row in range(len(y)):
-                leaf = row_to_leaf_map[row]
-                if leaf < 0:
+        meterset_per_cp = np.diff(self.metersets, prepend=0)
+        fluence = np.zeros(imager.shape)
+        for cp_idx in range(1, self.number_of_control_points):
+            stack_fluences = list()
+            for key, positions in self.beam_limiting_device_positions.items():
+                if "MLC" not in key:
                     continue
-                stack_fluence[row, :] = stack_fluence_compact[leaf, :]
-            stack_fluences.append(stack_fluence)
-
-        fluence = np.min(stack_fluences, axis=0)
+                bld = blds[key]
+                leaves_b = positions[: bld.number_of_leaf_pairs, cp_idx : cp_idx + 1]
+                leaves_a = positions[bld.number_of_leaf_pairs :, cp_idx : cp_idx + 1]
+                mu = meterset_per_cp[cp_idx]
+                # The mask contains the fluence boolean values, where the y-axis corresponds
+                # to the leaves and the x-axis indicates whether a given pixel is irradiated.
+                stack_compact = (x > leaves_b) & (x <= leaves_a)
+                # This loop expands stack_compact into the full size image stack_fluence
+                stack_fluence = np.zeros(imager.shape)
+                for row in range(len(y)):
+                    leaf = bld.row_to_leaf_map[row]
+                    if leaf < 0:
+                        continue
+                    stack_fluence[row, stack_compact[leaf, :]] = mu
+                stack_fluences.append(stack_fluence)
+            cp_fluence = np.min(stack_fluences, axis=0)
+            fluence += cp_fluence
         return fluence
 
     def plot_fluence(self: "Beam", imager: Imager, show: bool = True) -> go.Figure:
