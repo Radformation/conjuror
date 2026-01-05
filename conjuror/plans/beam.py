@@ -30,7 +30,9 @@ class BeamVisualizationMixin:
     """This Mixin class adds functionality to visualize beams"""
 
     def generate_fluence(
-        self: "Beam", imager: Imager, interpolation_factor: int = 100
+        self: "Beam",
+        imager: Imager,
+        interpolation_factor: int = 100,
     ) -> np.ndarray:
         """Generate the fluence map from the RT Plan.
 
@@ -96,10 +98,23 @@ class BeamVisualizationMixin:
                 stack_fluences.append(stack_fluence)
             cp_fluence = np.min(stack_fluences, axis=0)
             fluence += cp_fluence
+
+        # Jaws
+        blds = self.beam_limiting_device_positions
+        jaws_x = next(val for key, val in blds.items() if key in ["ASYMX", "X"])
+        jaws_y = next(val for key, val in blds.items() if key in ["ASYMY", "Y"])
+        if np.any(np.diff(jaws_x, axis=1)) or np.any(np.diff(jaws_y, axis=1)):
+            raise ValueError("The jaws must be static")
+        fluence[:, (x < jaws_x[0, 0]) | (x > jaws_x[1, 0])] = 0
+        fluence[(y < jaws_y[0, 0]) | (y > jaws_y[1, 0]), :] = 0
+
         return fluence
 
     def plot_fluence(
-        self: "Beam", imager: Imager, interpolation_factor: int = 100, show: bool = True
+        self: "Beam",
+        imager: Imager,
+        interpolation_factor: int = 100,
+        show: bool = True,
     ) -> go.Figure:
         """Plot the fluence map from the RT Beam.
 
@@ -110,7 +125,6 @@ class BeamVisualizationMixin:
             size of the image and the pixel size.
         interpolation_factor : int
             Interpolation factor to increase control points resolution.
-
         show : bool, optional
             Whether to show the plots. Default is True.
         """
