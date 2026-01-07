@@ -32,6 +32,27 @@ def _get_generator_from_file(file):
 
 
 class TestPlanGeneratorCreation(TestCase):
+    def test_from_dataset(self):
+        dataset = pydicom.dcmread(TB_MIL_PLAN_FILE)
+        pg = PlanGenerator(dataset, plan_label="label", plan_name="name")
+        self.assertEqual("RTPLAN", pg.ds.Modality)
+
+    def test_from_rt_file(self):
+        pg = PlanGenerator.from_rt_plan_file(
+            TB_MIL_PLAN_FILE, plan_label="label", plan_name="name"
+        )
+        self.assertEqual("RTPLAN", pg.ds.Modality)
+
+    @parameterized.expand([(False, 14), (True, 47)])
+    def test_metadata(self, clone_base_plan: bool, len_metadata: int):
+        pg = PlanGenerator.from_rt_plan_file(
+            TB_MIL_PLAN_FILE,
+            plan_label="label",
+            plan_name="name",
+            clone_base_plan=clone_base_plan,
+        )
+        self.assertEqual(len_metadata, len(pg.ds))
+
     GENERATOR_TEST_PARAMS = [
         (TB_MIL_PLAN_FILE, TrueBeamMachine, False),
         (TB_HD_PLAN_FILE, TrueBeamMachine, True),
@@ -39,18 +60,9 @@ class TestPlanGeneratorCreation(TestCase):
     ]
 
     @parameterized.expand(GENERATOR_TEST_PARAMS)
-    def test_from_dataset(self, file: str, plan_generator_type: type, mlc_is_hd: bool):
+    def test_machine_type(self, file: str, plan_generator_type: type, mlc_is_hd: bool):
         dataset = pydicom.dcmread(file)
         pg = _get_generator_from_dataset(dataset)
-        self.assertIsInstance(pg.machine, plan_generator_type)
-        if isinstance(pg.machine, TrueBeamMachine):
-            self.assertEqual(pg.machine.mlc_is_hd, mlc_is_hd)
-
-    @parameterized.expand(GENERATOR_TEST_PARAMS)
-    def test_from_rt_plan_file(
-        self, file: str, plan_generator_type: type, mlc_is_hd: bool
-    ):
-        pg = _get_generator_from_file(file)
         self.assertIsInstance(pg.machine, plan_generator_type)
         if isinstance(pg.machine, TrueBeamMachine):
             self.assertEqual(pg.machine.mlc_is_hd, mlc_is_hd)

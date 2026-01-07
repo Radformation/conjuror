@@ -24,6 +24,8 @@ DEFAULT_SPECS_HAL = MachineSpecs(
 
 
 class HalcyonMachine(MachineBase):
+    """A class that represents a TrueBeam machine."""
+
     def __init__(self, machine_specs: MachineSpecs | None = None):
         self.machine_specs = machine_specs or DEFAULT_SPECS_HAL
         self.mlc_boundaries_dist = MLC_BOUNDARIES_HAL_DIST

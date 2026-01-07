@@ -7,15 +7,16 @@ Typical use
 
 .. code-block:: python
 
-    from conjuror.plans.plan_generator import PlanGenerator, OpenField
     import pydicom
+    from conjuror.plans.plan_generator import PlanGenerator
+    from conjuror.plans.truebeam import OpenField
 
     # create generator
     base_plan = pydicom.dcmread(r"C:\path\to\base_plan_truebeam_millennium_mlc.dcm")
     generator = PlanGenerator(base_plan, plan_name="New QA Plan", plan_label="New QA")
 
     # add procedures
-    procedure = OpenField(x1=-5, x2=5, y1=-10, y2=110, defined_by_mlcs=True, padding_mm=10)
+    procedure = OpenField(x1=-5, x2=5, y1=-10, y2=110, defined_by_mlc=True, padding=10)
     generator.add_procedure(procedure)
 
     # export to file
@@ -41,7 +42,7 @@ While plans created with the Plan Generator can, in principle, be loaded directl
     # or
 
     # create generator from a RT plan file
-    base_plan_file = r"C:\path\to\base_plan_halcyon.dcm"
+    base_plan_file = r"C:\path\to\base_plan_truebeam_millennium_mlc.dcm"
     generator = PlanGenerator.from_rt_plan_file(base_plan_file, plan_name="New QA Plan", plan_label="New QA")
 
 .. _creating-a-base-plan:
@@ -71,38 +72,13 @@ Use DICOM Import/Export to export the plan to a file.
 Required tags from base plan
 ############################
 
-The required tags in the base plan are:
+These are the DICOM tags in the base plan that the generator copies into the new plan.
 
-* Patient Name (0010, 0010) - This isn't changed, just referenced so that the exported plan has the same patient name.
-* Patient ID (0010, 0020) - This isn't changed, just referenced so that the exported plan has the same patient ID.
-* Machine Name (300A, 00B2) - This isn't changed, just referenced so that the exported plan has the same machine name.
-* Tolerance Table Sequence (300A, 0046) - This is required and will be reference by the generated beams. Only
-  the first tolerance table is considered. This is not changed by the generator.
-* BeamSequence (300A, 00B0) - This is required for Truebeam machines to identify the MLC configuration (Millennium MLC or HD MLC). Specifically, the ``LeafPositionBoundaries`` of the last ``BeamLimitingDeviceSequence`` of the first beam.
-
-  .. note::
-
-      Only the first beam is considered. Extra beams are ignored.
-
-Modified tags from base plan
-############################
-
-The metadata of the new plan will be mostly copied from the base plan with a few exceptions:
-
-* RT Plan Label (300A, 0003) - This is changed to reflect the new plan label.
-* RT Plan Name (300A, 0002) - This is changed to reflect the new plan name.
-* Instance Creation Time (0008, 0013) - This is changed to reflect the new plan creation time (now).
-* Instance Creation Date (0008, 0012) - This is changed to reflect the new plan creation date (now).
-* SOP Instance UID (0008, 0018) - A new, random UID is generated so it doesn't conflict with the original plan.
-* Patient Setup Sequence (300A, 0180) - This is overwritten to a new, single setup.
-* Dose Reference Sequence (300A, 0016) - This is overwritten to a new, single dose reference.
-* Fraction Group Sequence (300A, 0070) - This is overwritten to a new, single fraction group and
-  is dynamically updated based on the fields added by the user.
-* Beam Sequence (300A, 00B0) - This is overwritten and is dynamically updated based on the
-  procedures added by the user.
-* Referenced Beam Sequence (300C, 0006) - This is overwritten and is dynamically updated based on the
-  procedures added by the user.
-
+* Patient Name (0010, 0010) - Patient Name is used to link the new plan to this patient when importing.
+* Patient ID (0010, 0020) - Patient ID is used to link the new plan to this patient when importing.
+* Machine Name (300A, 00B2) - Machine Name is used to link the new plan to this machine when importing.
+* Tolerance Table Sequence (300A, 0046) - The *first Tolerance Table* in this sequence is copied to the new plan.
+* BeamSequence (300A, 00B0) - At least on beam in this sequence must contain MLC positions. This is required to identify the machine type.
 
 Adding procedures
 -----------------
@@ -111,7 +87,7 @@ Once the plan generator has been created, QA procedures can be added to the plan
 
 .. code-block:: python
 
-    procedure = OpenField(x1=-5, x2=5, y1=-10, y2=110, defined_by_mlcs=True, padding_mm=10)
+    procedure = OpenField(x1=-5, x2=5, y1=-10, y2=110, defined_by_mlc=True, padding=10)
     generator.add_procedure(procedure)
 
 Pre-defined procedures
@@ -125,6 +101,33 @@ The plan generator comes with pre-defined procedures for typical QA tests (Picke
 
 Advanced features
 -----------------
+
+Clone base plan
+################
+
+The plan generator normally creates a new RT Plan and copies key metadata from the base plan to ensure smooth import into Eclipse. In certain edge cases, it may be preferable to clone the base plan and modify only the beam-specific DICOM fields. This behavior can be enabled using the ``clone_base_plan`` parameter.
+
+.. code-block:: python
+
+    generator = PlanGenerator(..., clone_base_plan=True)
+
+.. warning::
+
+    Setting ``clone_ds=True`` copies the entire base RT Plan and overrides only selected sequences (e.g., beams and fraction groups). This mode may unintentionally preserve PHI, clinical metadata, and vendor/private tags from the base plan. In some cases, the beam behavior may be influenced by these private tags, potentially resulting in plans that import successfully but do not behave as intended. Prefer ``clone_ds=False`` unless cloning is explicitly required and the base plan is verified to be safe and appropriate for reuse.
+
+**Modified tags from base plan**
+
+* RT Plan Label (300A, 0003) - This is changed per input parameter.
+* RT Plan Name (300A, 0002) - This is changed per input parameter.
+* Instance Creation Time (0008, 0013) - This is changed to reflect the new plan creation time (now).
+* Instance Creation Date (0008, 0012) - This is changed to reflect the new plan creation date (now).
+* SOP Instance UID (0008, 0018) - A new, random UID is generated so it doesn't conflict with the original plan.
+* Patient Setup Sequence (300A, 0180) - This is overwritten to a new, single setup.
+* Dose Reference Sequence (300A, 0016) - This is overwritten to a new, single dose reference.
+* Fraction Group Sequence (300A, 0070) - This is overwritten to a new, single fraction group and is dynamically updated based on the procedures added by the user.
+* Beam Sequence (300A, 00B0) - This is overwritten and is dynamically updated based on the procedures added by the user.
+* Referenced Beam Sequence (300C, 0006) - This is overwritten and is dynamically updated based on the procedures added by the user.
+
 
 Customize machine parameters
 ############################
@@ -190,20 +193,25 @@ Custom procedures can be created by extending the ``QAProcedure`` abstract class
 API
 ---
 
+Core classes
+###############
+.. autoclass:: conjuror.plans.plan_generator.PlanGenerator
+.. autoclass:: conjuror.plans.machine.MachineSpecs
+
 Base classes
 ############
-
-.. autoclass:: conjuror.plans.plan_generator.PlanGenerator
+.. autoclass:: conjuror.plans.machine.MachineBase
 .. autoclass:: conjuror.plans.plan_generator.QAProcedureBase
 .. autoclass:: conjuror.plans.beam.Beam
-.. autoclass:: conjuror.plans.machine.MachineSpecs
 
 Derived classes - TrueBeam
 ##########################
+.. autoclass:: conjuror.plans.truebeam.TrueBeamMachine
 .. autoclass:: conjuror.plans.truebeam.QAProcedure
 .. autoclass:: conjuror.plans.truebeam.Beam
 
 Derived classes - Halcyon
 ##########################
+.. autoclass:: conjuror.plans.halcyon.HalcyonMachine
 .. autoclass:: conjuror.plans.halcyon.QAProcedure
 .. autoclass:: conjuror.plans.halcyon.Beam
