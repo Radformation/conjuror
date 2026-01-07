@@ -16,6 +16,7 @@ Picket Fence
 ------------
 
 .. autoclass:: conjuror.plans.truebeam.PicketFence
+   :members: from_varian_reference
 
 Winston-Lutz
 ------------
@@ -37,7 +38,14 @@ Gantry Speed
 
 .. autoclass:: conjuror.plans.truebeam.GantrySpeed
 
-VMAT Dose Rate Vs Gantry Speed
+VMAT Dose Rate & Gantry Speed
 ------------------------------
 
 .. autoclass:: conjuror.plans.truebeam.VMATDRGS
+   :members: from_varian_reference
+
+VMAT MLC Speed
+------------------------------
+
+.. autoclass:: conjuror.plans.truebeam.VMATDRMLC
+   :members: from_varian_reference
