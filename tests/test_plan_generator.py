@@ -43,7 +43,7 @@ class TestPlanGeneratorCreation(TestCase):
         )
         self.assertEqual("RTPLAN", pg.ds.Modality)
 
-    @parameterized.expand([(False, 14), (True, 47)])
+    @parameterized.expand([(False, 28), (True, 47)])
     def test_metadata(self, clone_base_plan: bool, len_metadata: int):
         pg = PlanGenerator.from_rt_plan_file(
             TB_MIL_PLAN_FILE,
