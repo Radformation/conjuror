@@ -65,6 +65,8 @@ class WinstonLutzField:
 
 
 class TrueBeamMachine(MachineBase):
+    """A class that represents a TrueBeam machine."""
+
     def __init__(self, mlc_is_hd: bool, specs: MachineSpecs | None = None):
         self.mlc_is_hd = mlc_is_hd
         self.specs = specs or DEFAULT_SPECS_TB

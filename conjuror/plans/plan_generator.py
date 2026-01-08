@@ -32,21 +32,22 @@ class QAProcedureBase(Generic[TMachine], ABC):
 
 
 class PlanGenerator(Generic[TMachine]):
-    """A tool for generating new QA RTPlan files based on an initial, somewhat empty RTPlan file."""
+    """A tool for generating new QA RTPlan files based on an initial base RTPlan file."""
 
     def __init__(
         self,
-        ds: Dataset,
+        base_plan: Dataset,
         plan_label: str,
         plan_name: str,
         patient_name: str | None = None,
         patient_id: str | None = None,
+        clone_base_plan: bool = False,
         machine_specs: MachineSpecs = None,
     ):
         """
         Parameters
         ----------
-        ds : Dataset
+        base_plan : Dataset
               The RTPLAN dataset to base the new plan off of. The plan must already have MLC positions.
         plan_label : str
             The label of the new plan.
@@ -56,31 +57,43 @@ class PlanGenerator(Generic[TMachine]):
             The name of the patient. If not provided, it will be taken from the RTPLAN file.
         patient_id : str, optional
             The ID of the patient. If not provided, it will be taken from the RTPLAN file.
+        clone_base_plan : bool
+            Whether to clone the base plan or only copy the essential portions.
+
+            .. warning::
+
+                Setting ``clone_ds=True`` copies the entire base RT Plan and overrides
+                only selected sequences (e.g., beams and fraction groups). This mode
+                may unintentionally preserve PHI, clinical metadata,
+                and vendor/private tags from the base plan. In some cases, the beam
+                behavior may be influenced by these private tags, potentially
+                resulting in plans that import successfully but do not behave as
+                intended. Prefer ``clone_ds=False`` unless cloning is explicitly
+                required and the base plan is verified to be safe and appropriate for reuse.
+
         machine_specs : MachineSpecs
             The specs of the machine
         """
-        if ds.Modality != "RTPLAN":
+        if base_plan.Modality != "RTPLAN":
             raise ValueError("File is not an RTPLAN file")
-        patient_name = patient_name or getattr(ds, "PatientName", None)
+        patient_name = patient_name or getattr(base_plan, "PatientName", None)
         if not patient_name:
-            raise ValueError(
-                "RTPLAN file must have PatientName or pass it via `patient_name`"
-            )
-        patient_id = patient_id or getattr(ds, "PatientID", None)
+            msg = "RTPLAN file must have PatientName or pass it via `patient_name`"
+            raise ValueError(msg)
+        patient_id = patient_id or getattr(base_plan, "PatientID", None)
         if not patient_id:
-            raise ValueError(
-                "RTPLAN file must have PatientID or pass it via `patient_id`"
-            )
-        if not hasattr(ds, "ToleranceTableSequence"):
-            raise ValueError("RTPLAN file must have ToleranceTableSequence")
-        if not hasattr(ds, "BeamSequence"):
-            raise ValueError(
-                "RTPLAN file must have at least one beam in the beam sequence"
-            )
+            msg = "RTPLAN file must have PatientID or pass it via `patient_id`"
+            raise ValueError(msg)
+        if not hasattr(base_plan, "ToleranceTableSequence"):
+            msg = "RTPLAN file must have ToleranceTableSequence"
+            raise ValueError(msg)
+        if not hasattr(base_plan, "BeamSequence"):
+            msg = "RTPLAN file must have at least one beam in the beam sequence"
+            raise ValueError(msg)
         try:
             mlc = next(
                 bld
-                for bs in ds.BeamSequence
+                for bs in base_plan.BeamSequence
                 for bld in bs.BeamLimitingDeviceSequence
                 if "MLCX" in bld.RTBeamLimitingDeviceType
             )
@@ -89,25 +102,65 @@ class PlanGenerator(Generic[TMachine]):
 
         self.machine = _get_machine_type_from_mlc(mlc, machine_specs)
 
-        ######  Clear/initialize the metadata for the new plan
-        ds.PatientName = patient_name
-        ds.PatientID = patient_id
-        ds.RTPlanLabel = plan_label
-        ds.RTPlanName = plan_name
         date = datetime.datetime.now().strftime("%Y%m%d")
         time = datetime.datetime.now().strftime("%H%M%S")
 
-        ds.InstanceCreationDate = date
-        ds.InstanceCreationTime = time
-        ds.SOPInstanceUID = generate_uid()
+        if clone_base_plan:
+            plan = base_plan.copy()
+            plan.SOPInstanceUID = generate_uid()
+            plan.InstanceCreationDate = date
+            plan.InstanceCreationTime = time
+        else:
+            # Default mode: create mandatory tags (empty if not applicable)
+            plan = Dataset()
+
+            # SOP Common Module
+            plan.SOPClassUID = base_plan.SOPClassUID
+            plan.SOPInstanceUID = generate_uid()
+
+            # Patient Module
+            plan.PatientBirthDate = ""
+            plan.PatientSex = ""
+
+            # General Study Module
+            plan.StudyDate = date
+            plan.StudyTime = time
+            plan.AccessionNumber = ""
+            plan.ReferringPhysicianName = ""
+            plan.StudyInstanceUID = generate_uid()
+            plan.StudyID = ""
+
+            # RT Series Module
+            plan.Modality = "RTPLAN"
+            plan.OperatorsName = ""
+            plan.SeriesInstanceUID = generate_uid()
+            plan.SeriesNumber = ""
+
+            # General Equipment Module
+            plan.Manufacturer = ""
+
+            # RT General Plan Module
+            plan.RTPlanDate = date
+            plan.RTPlanTime = time
+            plan.RTPlanGeometry = "TREATMENT_DEVICE"
+            plan.PlanIntent = "MACHINE_QA"
+
+            # RT Tolerance Tables Module - use first table from base plan
+            plan.ToleranceTableSequence = (base_plan.ToleranceTableSequence[0],)
+
+        # Input parameters
+        plan.PatientName = patient_name
+        plan.PatientID = patient_id
+        plan.RTPlanLabel = plan_label
+        plan.RTPlanName = plan_name
 
         # Patient Setup Sequence
         patient_setup = Dataset()
         patient_setup.PatientPosition = "HFS"
         patient_setup.PatientSetupNumber = 0
-        ds.PatientSetupSequence = DicomSequence((patient_setup,))
+        plan.PatientSetupSequence = DicomSequence((patient_setup,))
 
-        # Dose Reference Sequence
+        # RT Prescription Module - Dose Reference Sequence
         dose_ref1 = Dataset()
         dose_ref1.DoseReferenceNumber = 1
         dose_ref1.DoseReferenceUID = generate_uid()
@@ -117,7 +170,7 @@ class PlanGenerator(Generic[TMachine]):
         dose_ref1.DeliveryMaximumDose = 20.0
         dose_ref1.TargetPrescriptionDose = 40.0
         dose_ref1.TargetMaximumDose = 20.0
-        ds.DoseReferenceSequence = DicomSequence((dose_ref1,))
+        plan.DoseReferenceSequence = DicomSequence((dose_ref1,))
 
         # Fraction Group Sequence
         frxn_gp1 = Dataset()
@@ -126,14 +179,15 @@ class PlanGenerator(Generic[TMachine]):
         frxn_gp1.NumberOfBeams = 0
         frxn_gp1.NumberOfBrachyApplicationSetups = 0
         frxn_gp1.ReferencedBeamSequence = DicomSequence()
-        ds.FractionGroupSequence = DicomSequence((frxn_gp1,))
+        plan.FractionGroupSequence = DicomSequence((frxn_gp1,))
 
         # Store attributes
-        self.ds = ds
-        self.machine_name = ds.BeamSequence[0].TreatmentMachineName
+        self._base_plan = base_plan
+        self.ds = plan
+        self.machine_name = base_plan.BeamSequence[0].TreatmentMachineName
 
         # Clear beam sequence, this will be filled with the custom beams
-        ds.BeamSequence = DicomSequence()
+        plan.BeamSequence = DicomSequence()
 
     @classmethod
     def from_rt_plan_file(cls, rt_plan_file: str | Path, **kwargs) -> Self:
@@ -185,7 +239,12 @@ class PlanGenerator(Generic[TMachine]):
 
     def to_file(self, filename: str | Path) -> None:
         """Write the DICOM dataset to file"""
-        self.ds.save_as(filename, write_like_original=False)
+        self.ds.save_as(
+            filename,
+            implicit_vr=self._base_plan.is_implicit_VR,
+            little_endian=self._base_plan.is_little_endian,
+            enforce_file_format=True,
+        )
 
     def as_dicom(self) -> Dataset:
         """Return the new DICOM dataset."""
@@ -244,7 +303,7 @@ class OvertravelError(ValueError):
     pass
 
 
-def _get_machine_type_from_mlc(mlc: Dataset, machine_specs: MachineSpecs):
+def _get_machine_type_from_mlc(mlc: Dataset, machine_specs: MachineSpecs) -> TMachine:
     """This function acts as factory to build the machine from the mlc data set."""
     # Local imports are used to avoid circular dependencies.
     # When a new machine type is added, this factory must be updated accordingly.
@@ -255,9 +314,9 @@ def _get_machine_type_from_mlc(mlc: Dataset, machine_specs: MachineSpecs):
     bld_type = mlc.RTBeamLimitingDeviceType
 
     if bld_type == "MLCX":
-        mlc_is_hd = mlc.LeafPositionBoundaries[0] == -110
         from .truebeam import TrueBeamMachine
 
+        mlc_is_hd = mlc.LeafPositionBoundaries[0] == -110
         machine = TrueBeamMachine(mlc_is_hd, machine_specs)
 
     elif bld_type == "MLCX1" or bld_type == "MLCX2":

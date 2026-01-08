@@ -31,6 +31,8 @@ class MachineSpecs:
 
 
 class MachineBase(ABC):
+    """This is a base class that represents a generic machine (TrueBeam or Halcyon)"""
+
     specs: MachineSpecs
 
 
