@@ -199,14 +199,7 @@ class TestPicketFence(TestCase):
         ds = pydicom.dcmread(picket_fence_file)
         beam_nominal = Beam.from_dicom(ds, 0)
 
-        procedure = PicketFence(
-            picket_width=1,
-            picket_positions=np.arange(-74.5, 76, 15),
-            mu_per_picket=8.125,
-            mu_per_transition=1.875,
-            skip_first_picket=True,
-            jaw_padding=5.5,
-        )
+        procedure = PicketFence.from_varian_reference()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         beam_actual = procedure.beams[0]
 
@@ -501,22 +494,7 @@ class TestVmatDRGS(TestCase):
 
         # Run
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
-        procedure = VMATDRGS(
-            dose_rates=(600, 600, 600, 600, 502.691, 335.128, 167.564),
-            gantry_speeds=(2.75, 3.056, 3.438, 4.296, 4.8, 4.8, 4.8),
-            mu_per_segment=48.0,
-            mu_per_transition=8.0,
-            correct_fluence=False,
-            gantry_motion_per_transition=10.0,
-            gantry_rotation_clockwise=False,
-            initial_gantry_offset=1.0,
-            mlc_span=138.0,
-            mlc_motion_reverse=True,
-            mlc_gap=2.0,
-            jaw_padding=0.0,
-            max_dose_rate=600,
-            reference_beam_mu=400.0,
-        )
+        procedure = VMATDRGS.from_varian_reference()
         procedure.compute(TrueBeamMachine(False, specs))
 
         # Extract data from the original plan - dynamic beam
@@ -670,19 +648,7 @@ class TestVmatDRMLC(TestCase):
 
         # Run
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
-        procedure = VMATDRMLC(
-            mlc_speeds=(13.714, 20.0, 8.0, 4.0),
-            gantry_speeds=(4.8, 4.0, 4.8, 4.8),
-            segment_width=30,
-            gantry_rotation_clockwise=False,
-            initial_gantry_offset=10.0,
-            mlc_motion_reverse=False,
-            interpolation_factor=3,
-            jaw_padding=0.0,
-            max_dose_rate=600,
-            reference_beam_mu=120.0,
-            reference_beam_add_before=False,
-        )
+        procedure = VMATDRMLC.from_varian_reference()
         procedure.compute(TrueBeamMachine(False, specs))
 
         # Extract data from the original plan - dynamic beam
@@ -693,7 +659,6 @@ class TestVmatDRMLC(TestCase):
         cumulative_meterset_1 = plan_beam_dyn.metersets
         gantry_angle_1 = plan_beam_dyn.gantry_angles
         mlc_position_1 = plan_beam_dyn.beam_limiting_device_positions["MLCX"]
-        plan_beam_dyn.plot_control_points(specs)
 
         # Extract data from the conjuror plan - dynamic beam
         beam = procedure.dynamic_beam
