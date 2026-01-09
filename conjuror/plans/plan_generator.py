@@ -225,7 +225,7 @@ class PlanGenerator(Generic[TMachine]):
         base_plan.PatientID = patient_id
 
         # Machine type specific tags required on the base plan
-        sop, beam, tolerance_table = _set_defaults_from_machine_type(machine)
+        sop, beam, tolerance_table = _set_datasets_from_machine_type(machine)
         beam.TreatmentMachineName = machine_name
         base_plan.SOPClassUID = sop
         base_plan.BeamSequence = (beam,)
@@ -359,7 +359,7 @@ def _get_machine_type_from_mlc(mlc: Dataset, machine_specs: MachineSpecs) -> TMa
     return machine
 
 
-def _set_defaults_from_machine_type(
+def _set_datasets_from_machine_type(
     machine: MachineBase,
 ) -> tuple[str, Dataset, Dataset]:
     """This function acts as factory to build the required data set from machine type."""
