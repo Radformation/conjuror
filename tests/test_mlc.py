@@ -12,41 +12,35 @@ from conjuror.plans.mlc import (
 from conjuror.plans.truebeam import TrueBeamMachine
 
 
-@pytest.fixture(scope="class")
-def shaper():
-    machine = TrueBeamMachine(False)
-    return MLCShaper(
-        machine.mlc_boundaries,
-        machine.specs.max_mlc_position,
-        machine.specs.max_mlc_overtravel,
-    )
-
-
-@pytest.fixture(scope="class")
-def leaf_boundaries():
-    return tuple(np.arange(start=-200, stop=201, step=5).astype(float))
-
-
 class TestShapes:
-    def test_park(self, shaper):
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        machine = TrueBeamMachine(False)
+        self.shaper = MLCShaper(
+            machine.mlc_boundaries,
+            machine.specs.max_mlc_position,
+            machine.specs.max_mlc_overtravel,
+        )
+
+    def test_park(self):
         park = Park()
-        shape = shaper.get_shape(park)
-        assert all(s == -shaper.max_mlc_position for s in shape[:60])
-        assert all(s == shaper.max_mlc_position for s in shape[60:])
+        shape = self.shaper.get_shape(park)
+        assert all(s == -self.shaper.max_mlc_position for s in shape[:60])
+        assert all(s == self.shaper.max_mlc_position for s in shape[60:])
 
     @pytest.mark.parametrize("position,width", [(-1, 2), (0, 2), (1, 2), (0, 0)])
-    def test_strip(self, shaper, position, width):
+    def test_strip(self, position, width):
         x_min = position - width / 2
         x_max = position + width / 2
         shape = Strip(position=position, width=width)
-        mlc = shaper.get_shape(shape)
+        mlc = self.shaper.get_shape(shape)
         assert all(m == x_min for m in mlc[:60])
         assert all(m == x_max for m in mlc[60:])
 
     @pytest.mark.parametrize("x_min,x_max", [(-1, 2), (1, 2), (0, 0)])
-    def test_strip_from_minmax(self, shaper, x_min, x_max):
+    def test_strip_from_minmax(self, x_min, x_max):
         shape = Strip.from_minmax(x_min=x_min, x_max=x_max)
-        mlc = shaper.get_shape(shape)
+        mlc = self.shaper.get_shape(shape)
         assert all(m == x_min for m in mlc[:60])
         assert all(m == x_max for m in mlc[60:])
 
@@ -66,10 +60,10 @@ class TestShapes:
     ]
 
     @pytest.mark.parametrize("y_min,y_max,y_mode", RECTANGLE_TEST_PARAM)
-    def test_rectangle(self, shaper, y_min, y_max, y_mode):
+    def test_rectangle(self, y_min, y_max, y_mode):
         x_min, x_max = -100, 100
         shape = Rectangle(x_min, x_max, y_min, y_max, y_mode, 0, 0)
-        mlc = shaper.get_shape(shape)
+        mlc = self.shaper.get_shape(shape)
         assert all(x == 0 for x in mlc[:29])
         assert all(x == x_min for x in mlc[29:31])
         assert all(x == 0 for x in mlc[31:60])
@@ -85,10 +79,10 @@ class TestShapes:
     ]
 
     @pytest.mark.parametrize("mode", RECTANGLE_OPEN_TEST_PARAM)
-    def test_rectangle_open(self, shaper, mode):
+    def test_rectangle_open(self, mode):
         x_min, x_max, y_min, y_max = -100, 100, -200, 200
         shape = Rectangle(x_min, x_max, y_min, y_max, mode, 0, 0)
-        mlc = shaper.get_shape(shape)
+        mlc = self.shaper.get_shape(shape)
         assert all(x == -100 for x in mlc[:60])
         assert all(x == 100 for x in mlc[60:])
 
@@ -98,40 +92,46 @@ class TestShapes:
             Rectangle(x_min, x_max, y_min, y_max, RectangleMode.ROUND, 0, 0)
 
     @pytest.mark.parametrize("y_min,y_max", [(-0.1, 0), (0, 0.1)])
-    def test_rectangle_error_if_exact_and_not_possible(self, shaper, y_min, y_max):
+    def test_rectangle_error_if_exact_and_not_possible(self, y_min, y_max):
         shape = Rectangle(0, 1, y_min, y_max, RectangleMode.EXACT, 0, 0)
         with pytest.raises(ValueError):
-            shaper.get_shape(shape)
+            self.shaper.get_shape(shape)
 
 
 class TestMLCModulator:
-    def test_init(self, leaf_boundaries):
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.leaf_boundaries = tuple(
+            np.arange(start=-200, stop=201, step=5).astype(float)
+        )
+
+    def test_init(self):
         MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=200,
             max_overtravel_mm=140,
         )
 
-    def test_num_leaves(self, leaf_boundaries):
+    def test_num_leaves(self):
         shaper = MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=200,
             max_overtravel_mm=140,
         )
         assert shaper.num_leaves == 160
 
-    def test_meterset_over_1(self, leaf_boundaries):
+    def test_meterset_over_1(self):
         shaper = MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=200,
             max_overtravel_mm=140,
         )
         with pytest.raises(ValueError):
             shaper.add_strip(position_mm=-5, strip_width_mm=0, meterset_at_target=2)
 
-    def test_sacrifice_without_transition_dose(self, leaf_boundaries):
+    def test_sacrifice_without_transition_dose(self):
         shaper = MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=400,
             max_overtravel_mm=140,
         )
@@ -144,9 +144,9 @@ class TestMLCModulator:
                 sacrificial_distance_mm=50,
             )
 
-    def test_initial_sacrificial_gap(self, leaf_boundaries):
+    def test_initial_sacrificial_gap(self):
         shaper = MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=200,
             max_overtravel_mm=140,
         )
@@ -158,9 +158,9 @@ class TestMLCModulator:
         )
         assert shaper.control_points[0][0] == -10
 
-    def test_cant_add_sacrificial_gap_after_first_point(self, leaf_boundaries):
+    def test_cant_add_sacrificial_gap_after_first_point(self):
         shaper = MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=200,
             max_overtravel_mm=140,
         )
@@ -170,18 +170,18 @@ class TestMLCModulator:
             meterset_at_target=0.2,
             initial_sacrificial_gap_mm=5,
         )
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(ValueError) as context:
             shaper.add_strip(
                 position_mm=-5,
                 strip_width_mm=0,
                 meterset_at_target=0.2,
                 initial_sacrificial_gap_mm=10,
             )
-        assert "already control points" in str(exc_info.value)
+        assert "already control points" in str(context.value)
 
-    def test_cant_have_initial_sacrifice_and_transition_dose(self, leaf_boundaries):
+    def test_cant_have_initial_sacrifice_and_transition_dose(self):
         shaper = MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=200,
             max_overtravel_mm=140,
         )
@@ -194,32 +194,28 @@ class TestMLCModulator:
                 initial_sacrificial_gap_mm=5,
             )
 
-    def test_cant_have_meterset_transition_for_first_control_point(
-        self, leaf_boundaries
-    ):
+    def test_cant_have_meterset_transition_for_first_control_point(self):
         shaper = MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=200,
             max_overtravel_mm=140,
         )
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(ValueError) as context:
             shaper.add_strip(
                 position_mm=-5,
                 strip_width_mm=0,
                 meterset_at_target=0,
                 meterset_transition=1,
             )
-        assert "Cannot have a transition" in str(exc_info.value)
+        assert "Cannot have a transition" in str(context.value)
 
-    def test_cant_have_initial_sacrificial_gap_and_sacrificial_distance(
-        self, leaf_boundaries
-    ):
+    def test_cant_have_initial_sacrificial_gap_and_sacrificial_distance(self):
         shaper = MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=200,
             max_overtravel_mm=140,
         )
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(ValueError) as context:
             shaper.add_strip(
                 position_mm=-5,
                 strip_width_mm=0,
@@ -228,25 +224,23 @@ class TestMLCModulator:
                 sacrificial_distance_mm=5,
                 initial_sacrificial_gap_mm=5,
             )
-        assert "Cannot specify both" in str(exc_info.value)
+        assert "Cannot specify both" in str(context.value)
 
-    def test_cannot_have_sacrifical_gap_on_secondary_control_point(
-        self, leaf_boundaries
-    ):
+    def test_cannot_have_sacrifical_gap_on_secondary_control_point(self):
         shaper = MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=200,
             max_overtravel_mm=140,
         )
         shaper.add_strip(position_mm=-5, strip_width_mm=0, meterset_at_target=0.5)
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(ValueError) as context:
             shaper.add_strip(
                 position_mm=-5,
                 strip_width_mm=0,
                 meterset_at_target=0.5,
                 initial_sacrificial_gap_mm=10,
             )
-        assert "already control points" in str(exc_info.value)
+        assert "already control points" in str(context.value)
 
     def test_split_sacrifices(self):
         res = MLCModulator._split_sacrifice_travel(distance=33, max_travel=20)
@@ -256,9 +250,9 @@ class TestMLCModulator:
         res = MLCModulator._split_sacrifice_travel(distance=66, max_travel=20)
         assert set(res) == {20, 20, 20, 6}
 
-    def test_as_control_points(self, leaf_boundaries):
+    def test_as_control_points(self):
         shaper = MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=200,
             max_overtravel_mm=140,
         )
@@ -267,9 +261,9 @@ class TestMLCModulator:
         assert len(cp) == 2  # start and end positions given meterset increments
         assert cp[0][0] == -5
 
-    def test_as_metersets(self, leaf_boundaries):
+    def test_as_metersets(self):
         shaper = MLCModulator(
-            leaf_y_positions=leaf_boundaries,
+            leaf_y_positions=self.leaf_boundaries,
             max_mlc_position=200,
             max_overtravel_mm=140,
         )
