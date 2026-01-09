@@ -5,8 +5,8 @@ from plotly import graph_objects as go
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import UID
 
-from ..utils import array_to_dicom
-from .layers import Layer
+from conjuror.images.layers import Layer
+from conjuror.utils import array_to_dicom
 
 
 def generate_file_metadata() -> Dataset:
