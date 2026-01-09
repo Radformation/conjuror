@@ -1,8 +1,6 @@
-from unittest import TestCase
-
 import numpy as np
 import pydicom
-from parameterized import parameterized
+import pytest
 
 from conjuror.images.simulators import IMAGER_AS1200, Imager
 from conjuror.plans.beam import Beam as BeamBase
@@ -42,53 +40,54 @@ def create_beam(**kwargs) -> Beam:
     )
 
 
-class TestBeamCreation(TestCase):
+class TestBeamCreation:
     def test_beam_normal(self):
         # shouldn't raise; happy path
         beam = create_beam(gantry_angles=0)
         beam_dcm = beam.to_dicom()
-        self.assertEqual(beam_dcm.BeamName, "name")
-        self.assertEqual(beam_dcm.BeamType, "STATIC")
-        self.assertEqual(beam_dcm.ControlPointSequence[0].GantryAngle, 0)
+        assert beam_dcm.BeamName == "name"
+        assert beam_dcm.BeamType == "STATIC"
+        assert beam_dcm.ControlPointSequence[0].GantryAngle == 0
 
     def test_from_dicom(self):
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
         beam = BeamBase.from_dicom(ds, 0)
-        self.assertEqual(2, beam.number_of_control_points)
+        assert beam.number_of_control_points == 2
 
     def test_from_dicom_without_primary_fluence_mode_sequence(self):
         # E.g. the picket fence RT plan does not have PrimaryFluenceModeSequence
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
         ds.BeamSequence[0].pop("PrimaryFluenceModeSequence")
         beam = BeamBase.from_dicom(ds, 0)
-        self.assertEqual(2, beam.number_of_control_points)
+        assert beam.number_of_control_points == 2
 
     def test_from_dicom_error_if_not_rt_plan(self):
         file = get_file_from_cloud_test_repo(["picket_fence", "AS500#2.dcm"])
         ds = pydicom.dcmread(file)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             Beam.from_dicom(ds, 0)
 
     def test_from_dicom_error_if_beam_not_in_plan(self):
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             Beam.from_dicom(ds, 1)
 
     def test_error_if_beam_name_too_long(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             create_beam(beam_name="superlongbeamname")
 
 
-class TestBeamType(TestCase):
+class TestBeamType:
     def test_static_beam(self):
         beam = create_beam()
-        self.assertEqual(beam.to_dicom().BeamType, "STATIC")
+        assert beam.to_dicom().BeamType == "STATIC"
 
     def test_dynamic_beam(self):
         beam = create_beam(gantry_angles=[0, 1])
-        self.assertEqual(beam.to_dicom().BeamType, "DYNAMIC")
+        assert beam.to_dicom().BeamType == "DYNAMIC"
 
-    @parameterized.expand(
+    @pytest.mark.parametrize(
+        "gantry_angles,rotation_direction,beam_type",
         [
             ([0, 90], "CW", "DYNAMIC"),
             ([90, 0], "CC", "DYNAMIC"),
@@ -97,7 +96,7 @@ class TestBeamType(TestCase):
             ([170, -170], "CC", "DYNAMIC"),
             ([-170, 170], "CW", "DYNAMIC"),
             ([0, 0], "NONE", "STATIC"),
-        ]
+        ],
     )
     def test_beam_type_and_gantry_rotation_direction(
         self, gantry_angles, rotation_direction, beam_type
@@ -106,16 +105,16 @@ class TestBeamType(TestCase):
             gantry_angles=gantry_angles,
         )
         beam_dcm = beam.to_dicom()
-        self.assertEqual(beam_dcm.BeamType, beam_type)
+        assert beam_dcm.BeamType == beam_type
         cp_sequence = beam_dcm.ControlPointSequence
-        self.assertEqual(cp_sequence[0].GantryRotationDirection, rotation_direction)
+        assert cp_sequence[0].GantryRotationDirection == rotation_direction
         if beam_type == "DYNAMIC":
-            self.assertEqual(cp_sequence[1].GantryRotationDirection, "NONE")
+            assert cp_sequence[1].GantryRotationDirection == "NONE"
         else:
-            self.assertNotIn("GantryRotationDirection", cp_sequence[1])
+            assert "GantryRotationDirection" not in cp_sequence[1]
 
 
-class TestBeamDynamics(TestCase):
+class TestBeamDynamics:
     def test_static_beam(self):
         beam = create_beam(
             metersets=[0, 100],
@@ -160,14 +159,14 @@ class TestBeamDynamics(TestCase):
         np.testing.assert_allclose(beam.mlc_speeds, 120 * [[0.0, 1.0, 10.0]])
 
 
-class TestVisualizations(TestCase):
+class TestVisualizations:
     def test_plot_fluence(self):
         machine = TrueBeamMachine(mlc_is_hd=True)
         procedure = PicketFence()
         procedure.compute(machine)
         beam = procedure.beams[0]
         fig = beam.plot_fluence(IMAGER_AS1200)
-        self.assertTrue(fig is not None)
+        assert fig is not None
 
     def test_fluence_interpolation(self):
         image = Imager(pixel_size=1, shape=(1, 100))
@@ -198,10 +197,10 @@ class TestVisualizations(TestCase):
         )
 
         fluence = beam.generate_fluence(image)
-        self.assertFalse(np.any(fluence[:, : 50 - 13]))
-        self.assertFalse(np.any(fluence[:, 50 + 16 :]))
-        self.assertFalse(np.any(fluence[: 50 - 12, :]))
-        self.assertFalse(np.any(fluence[50 + 15 :, :]))
+        assert not np.any(fluence[:, : 50 - 13])
+        assert not np.any(fluence[:, 50 + 16 :])
+        assert not np.any(fluence[: 50 - 12, :])
+        assert not np.any(fluence[50 + 15 :, :])
 
     def test_animate_mlc(self):
         procedure = PicketFence()
@@ -209,11 +208,11 @@ class TestVisualizations(TestCase):
         beam = procedure.beams[0]
         fig = beam.animate_mlc()
         num_lines = sum(True for f in fig.data if f["line"]["color"] == "blue")
-        self.assertEqual(120, num_lines)
+        assert num_lines == 120
 
     def test_plot_control_points(self):
         procedure = VMATDRGS()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         beam = procedure.dynamic_beam
         fig = beam.plot_control_points(DEFAULT_SPECS_TB)
-        self.assertEqual(12, len(fig.axes))
+        assert len(fig.axes) == 12

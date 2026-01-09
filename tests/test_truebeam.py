@@ -1,9 +1,6 @@
-from unittest import TestCase, skipIf
-
 import numpy as np
 import pydicom
-
-from parameterized import parameterized
+import pytest
 
 from conjuror.images.simulators import IMAGER_AS1200
 from conjuror.plans.plan_generator import PlanGenerator
@@ -32,7 +29,7 @@ DEFAULT_TRUEBEAM_HD120 = TrueBeamMachine(mlc_is_hd=True)
 RUN_PLOT_TESTS = True
 
 
-class TestProcedures(TestCase):
+class TestProcedures:
     def test_adding_procedure(self):
         pg = PlanGenerator.from_rt_plan_file(
             TB_MIL_PLAN_FILE,
@@ -48,10 +45,10 @@ class TestProcedures(TestCase):
         pg.add_procedure(GantrySpeed())  # 2
         pg.add_procedure(VMATDRGS())  # 2
         dcm = pg.as_dicom()
-        self.assertEqual(14, len(dcm.BeamSequence))
+        assert len(dcm.BeamSequence) == 14
 
 
-class TestOpenField(TestCase):
+class TestOpenField:
     # An Open field is mostly a Rectangle, so some of these tests strategy mimics the Rectangle shape tests
     # There is a significant portion of these tests that are copied in WinstonLutz.
 
@@ -62,7 +59,7 @@ class TestOpenField(TestCase):
         (-2.4, 2.4, OpenFieldMLCMode.OUTWARD),
     ]
 
-    @parameterized.expand(OPENFIELD_MLC_PARAM)
+    @pytest.mark.parametrize("y1,y2,mlc_mode", OPENFIELD_MLC_PARAM)
     def test_defined_by_mlc(self, y1, y2, mlc_mode):
         x1, x2 = -100, 100
         procedure = OpenField(x1, x2, y1, y2, mlc_mode=mlc_mode)
@@ -71,24 +68,24 @@ class TestOpenField(TestCase):
         bld = procedure.beams[0].beam_limiting_device_positions
 
         mlc = bld["MLCX"]
-        self.assertFalse(np.any(mlc[:, 0] - mlc[:, 1]))
+        assert not np.any(mlc[:, 0] - mlc[:, 1])
         mlc0 = mlc[:, 0]
-        self.assertTrue(all(x == -127.5 for x in mlc0[:29]))
-        self.assertTrue(all(x == x1 for x in mlc0[29:31]))
-        self.assertTrue(all(x == -127.5 for x in mlc0[31:60]))
-        self.assertTrue(all(x == -122.5 for x in mlc0[60 : 29 + 60]))
-        self.assertTrue(all(x == x2 for x in mlc0[29 + 60 : 31 + 60]))
-        self.assertTrue(all(x == -122.5 for x in mlc0[31 + 60 :]))
+        assert all(x == -127.5 for x in mlc0[:29])
+        assert all(x == x1 for x in mlc0[29:31])
+        assert all(x == -127.5 for x in mlc0[31:60])
+        assert all(x == -122.5 for x in mlc0[60 : 29 + 60])
+        assert all(x == x2 for x in mlc0[29 + 60 : 31 + 60])
+        assert all(x == -122.5 for x in mlc0[31 + 60 :])
 
         jaw_x = bld["ASYMX"]
-        self.assertFalse(np.any(jaw_x[:, 0] - jaw_x[:, 1]))
-        self.assertEqual(x1 - 5, jaw_x[0, 0])
-        self.assertEqual(x2 + 5, jaw_x[1, 0])
+        assert not np.any(jaw_x[:, 0] - jaw_x[:, 1])
+        assert jaw_x[0, 0] == x1 - 5
+        assert jaw_x[1, 0] == x2 + 5
 
         jaw_y = bld["ASYMY"]
-        self.assertFalse(np.any(jaw_y[:, 0] - jaw_y[:, 1]))
-        self.assertEqual(y1 - 5, jaw_y[0, 0])
-        self.assertEqual(y2 + 5, jaw_y[1, 0])
+        assert not np.any(jaw_y[:, 0] - jaw_y[:, 1])
+        assert jaw_y[0, 0] == y1 - 5
+        assert jaw_y[1, 0] == y2 + 5
 
     OPEN_MLC_PARAM = [
         OpenFieldMLCMode.EXACT,
@@ -97,7 +94,7 @@ class TestOpenField(TestCase):
         OpenFieldMLCMode.OUTWARD,
     ]
 
-    @parameterized.expand(OPEN_MLC_PARAM)
+    @pytest.mark.parametrize("mlc_mode", OPEN_MLC_PARAM)
     def test_open_mlc(self, mlc_mode):
         x1, x2, y1, y2 = -100, 100, -110, 110
         procedure = OpenField(x1, x2, y1, y2, mlc_mode=mlc_mode)
@@ -106,10 +103,10 @@ class TestOpenField(TestCase):
         bld = procedure.beams[0].beam_limiting_device_positions
 
         mlc = bld["MLCX"]
-        self.assertFalse(np.any(mlc[:, 0] - mlc[:, 1]))
+        assert not np.any(mlc[:, 0] - mlc[:, 1])
         mlc0 = mlc[:, 0]
-        self.assertTrue(all(x == -100 for x in mlc0[:60]))
-        self.assertTrue(all(x == 100 for x in mlc0[60:]))
+        assert all(x == -100 for x in mlc0[:60])
+        assert all(x == 100 for x in mlc0[60:])
 
     def test_defined_by_jaws(self):
         x1, x2, y1, y2 = -100, 100, -110, 110
@@ -119,34 +116,34 @@ class TestOpenField(TestCase):
         bld = procedure.beams[0].beam_limiting_device_positions
 
         mlc = bld["MLCX"]
-        self.assertFalse(np.any(mlc[:, 0] - mlc[:, 1]))
+        assert not np.any(mlc[:, 0] - mlc[:, 1])
         mlc0 = mlc[:, 0]
-        self.assertTrue(all(x == -105 for x in mlc0[:60]))
-        self.assertTrue(all(x == 105 for x in mlc0[60:]))
+        assert all(x == -105 for x in mlc0[:60])
+        assert all(x == 105 for x in mlc0[60:])
 
         jaw_x = bld["ASYMX"]
-        self.assertFalse(np.any(jaw_x[:, 0] - jaw_x[:, 1]))
-        self.assertEqual(x1, jaw_x[0, 0])
-        self.assertEqual(x2, jaw_x[1, 0])
+        assert not np.any(jaw_x[:, 0] - jaw_x[:, 1])
+        assert jaw_x[0, 0] == x1
+        assert jaw_x[1, 0] == x2
 
         jaw_y = bld["ASYMY"]
-        self.assertFalse(np.any(jaw_y[:, 0] - jaw_y[:, 1]))
-        self.assertEqual(y1, jaw_y[0, 0])
-        self.assertEqual(y2, jaw_y[1, 0])
+        assert not np.any(jaw_y[:, 0] - jaw_y[:, 1])
+        assert jaw_y[0, 0] == y1
+        assert jaw_y[1, 0] == y2
 
-    @parameterized.expand([(2, 1, 0, 1), (0, 1, 2, 1)])
+    @pytest.mark.parametrize("x1,x2,y1,y2", [(2, 1, 0, 1), (0, 1, 2, 1)])
     def test_error_if_min_larger_than_max(self, x1, x2, y1, y2):
         procedure = OpenField(x1, x2, y1, y2, 100)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
-    @parameterized.expand([(-0.1, 0), (0, 0.1)])
+    @pytest.mark.parametrize("y1,y2", [(-0.1, 0), (0, 0.1)])
     def test_error_if_mlc_exact_and_not_possible(self, y1, y2):
         procedure = OpenField(0, 1, y1, y2, mlc_mode=OpenFieldMLCMode.EXACT)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
-    @parameterized.expand([(-0.1, 0), (0, 0.1)])
+    @pytest.mark.parametrize("y1,y2", [(-0.1, 0), (0, 0.1)])
     def test_exact_is_ignored_if_defined_by_jaws(self, y1, y2):
         procedure = OpenField(
             0, 1, y1, y2, mlc_mode=OpenFieldMLCMode.EXACT, defined_by_mlc=False
@@ -154,11 +151,11 @@ class TestOpenField(TestCase):
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
 
-class TestMLCTransmission(TestCase):
+class TestMLCTransmission:
     def test_defaults(self):
         procedure = MLCTransmission()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
-        self.assertEqual(3, len(procedure.beams))
+        assert len(procedure.beams) == 3
 
     def test_banks(self):
         procedure = MLCTransmission()
@@ -179,14 +176,14 @@ class TestMLCTransmission(TestCase):
         procedure = MLCTransmission(beam_names=beam_names)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         actual = [b.beam_name for b in procedure.beams]
-        self.assertEqual(beam_names, actual)
+        assert beam_names == actual
 
 
-class TestPicketFence(TestCase):
+class TestPicketFence:
     def test_defaults(self):
         procedure = PicketFence()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
-        self.assertEqual(1, len(procedure.beams))
+        assert len(procedure.beams) == 1
 
     def test_replicate_varian_plan(self):
         path = [
@@ -217,28 +214,28 @@ class TestPicketFence(TestCase):
 
     def test_error_if_too_wide(self):
         procedure = PicketFence(picket_positions=(-100, 100))
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
 
-class TestWinstonLutz(TestCase):
+class TestWinstonLutz:
     # There is a significant portion of these tests that are copied from OpenField
     def test_defaults(self):
         procedure = WinstonLutz()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
-        self.assertEqual(1, len(procedure.beams))
+        assert len(procedure.beams) == 1
 
     def test_non_defaults(self):
         fields = [WinstonLutzField(0, 0, 0, "name1"), WinstonLutzField(90.7, 0.7, 10.7)]
         names_nominal = ["name1", "G091C001T011"]
         procedure = WinstonLutz(fields=fields)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
-        self.assertEqual(2, len(procedure.beams))
+        assert len(procedure.beams) == 2
         for f, b, n in zip(fields, procedure.beams, names_nominal):
-            self.assertEqual(f.gantry, b.gantry_angles[0])
-            self.assertEqual(f.collimator, b.coll_angle)
-            self.assertEqual(f.couch, b.couch_rot)
-            self.assertEqual(b.beam_name, n)
+            assert f.gantry == b.gantry_angles[0]
+            assert f.collimator == b.coll_angle
+            assert f.couch == b.couch_rot
+            assert b.beam_name == n
 
     WL_MLC_PARAM = [
         (-2.5, 2.5, WinstonLutzMLCMode.EXACT),
@@ -247,7 +244,7 @@ class TestWinstonLutz(TestCase):
         (-2.4, 2.4, WinstonLutzMLCMode.OUTWARD),
     ]
 
-    @parameterized.expand(WL_MLC_PARAM)
+    @pytest.mark.parametrize("y1,y2,mlc_mode", WL_MLC_PARAM)
     def test_defined_by_mlc(self, y1, y2, mlc_mode):
         x1, x2 = -100, 100
         procedure = WinstonLutz(x1, x2, y1, y2, mlc_mode=mlc_mode)
@@ -256,24 +253,24 @@ class TestWinstonLutz(TestCase):
         bld = procedure.beams[0].beam_limiting_device_positions
 
         mlc = bld["MLCX"]
-        self.assertFalse(np.any(mlc[:, 0] - mlc[:, 1]))
+        assert not np.any(mlc[:, 0] - mlc[:, 1])
         mlc0 = mlc[:, 0]
-        self.assertTrue(all(x == -127.5 for x in mlc0[:29]))
-        self.assertTrue(all(x == x1 for x in mlc0[29:31]))
-        self.assertTrue(all(x == -127.5 for x in mlc0[31:60]))
-        self.assertTrue(all(x == -122.5 for x in mlc0[60 : 29 + 60]))
-        self.assertTrue(all(x == x2 for x in mlc0[29 + 60 : 31 + 60]))
-        self.assertTrue(all(x == -122.5 for x in mlc0[31 + 60 :]))
+        assert all(x == -127.5 for x in mlc0[:29])
+        assert all(x == x1 for x in mlc0[29:31])
+        assert all(x == -127.5 for x in mlc0[31:60])
+        assert all(x == -122.5 for x in mlc0[60 : 29 + 60])
+        assert all(x == x2 for x in mlc0[29 + 60 : 31 + 60])
+        assert all(x == -122.5 for x in mlc0[31 + 60 :])
 
         jaw_x = bld["ASYMX"]
-        self.assertFalse(np.any(jaw_x[:, 0] - jaw_x[:, 1]))
-        self.assertEqual(x1 - 5, jaw_x[0, 0])
-        self.assertEqual(x2 + 5, jaw_x[1, 0])
+        assert not np.any(jaw_x[:, 0] - jaw_x[:, 1])
+        assert jaw_x[0, 0] == x1 - 5
+        assert jaw_x[1, 0] == x2 + 5
 
         jaw_y = bld["ASYMY"]
-        self.assertFalse(np.any(jaw_y[:, 0] - jaw_y[:, 1]))
-        self.assertEqual(y1 - 5, jaw_y[0, 0])
-        self.assertEqual(y2 + 5, jaw_y[1, 0])
+        assert not np.any(jaw_y[:, 0] - jaw_y[:, 1])
+        assert jaw_y[0, 0] == y1 - 5
+        assert jaw_y[1, 0] == y2 + 5
 
     def test_defined_by_jaws(self):
         x1, x2, y1, y2 = -100, 100, -110, 110
@@ -283,46 +280,47 @@ class TestWinstonLutz(TestCase):
         bld = procedure.beams[0].beam_limiting_device_positions
 
         mlc = bld["MLCX"]
-        self.assertFalse(np.any(mlc[:, 0] - mlc[:, 1]))
+        assert not np.any(mlc[:, 0] - mlc[:, 1])
         mlc0 = mlc[:, 0]
-        self.assertTrue(all(x == -105 for x in mlc0[:60]))
-        self.assertTrue(all(x == 105 for x in mlc0[60:]))
+        assert all(x == -105 for x in mlc0[:60])
+        assert all(x == 105 for x in mlc0[60:])
 
         jaw_x = bld["ASYMX"]
-        self.assertFalse(np.any(jaw_x[:, 0] - jaw_x[:, 1]))
-        self.assertEqual(x1, jaw_x[0, 0])
-        self.assertEqual(x2, jaw_x[1, 0])
+        assert not np.any(jaw_x[:, 0] - jaw_x[:, 1])
+        assert jaw_x[0, 0] == x1
+        assert jaw_x[1, 0] == x2
 
         jaw_y = bld["ASYMY"]
-        self.assertFalse(np.any(jaw_y[:, 0] - jaw_y[:, 1]))
-        self.assertEqual(y1, jaw_y[0, 0])
-        self.assertEqual(y2, jaw_y[1, 0])
+        assert not np.any(jaw_y[:, 0] - jaw_y[:, 1])
+        assert jaw_y[0, 0] == y1
+        assert jaw_y[1, 0] == y2
 
-    @parameterized.expand([(2, 1, 0, 1), (0, 1, 2, 1)])
+    @pytest.mark.parametrize("x1,x2,y1,y2", [(2, 1, 0, 1), (0, 1, 2, 1)])
     def test_error_if_min_larger_than_max(self, x1, x2, y1, y2):
         procedure = WinstonLutz(x1, x2, y1, y2, 100)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
-    @parameterized.expand([(-0.1, 0), (0, 0.1)])
+    @pytest.mark.parametrize("y1,y2", [(-0.1, 0), (0, 0.1)])
     def test_error_if_mlc_exact_and_not_possible(self, y1, y2):
         procedure = WinstonLutz(0, 1, y1, y2, mlc_mode=WinstonLutzMLCMode.EXACT)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
-    @parameterized.expand([(-0.1, 0), (0, 0.1)])
+    @pytest.mark.parametrize("y1,y2", [(-0.1, 0), (0, 0.1)])
     def test_exact_is_ignored_if_defined_by_jaws(self, y1, y2):
         procedure = WinstonLutz(
             0, 1, y1, y2, mlc_mode=WinstonLutzMLCMode.EXACT, defined_by_mlc=False
         )
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         jaw_y = procedure.beams[0].beam_limiting_device_positions["ASYMY"]
-        self.assertEqual(y1, jaw_y[0, 0])
-        self.assertEqual(y2, jaw_y[1, 0])
+        assert jaw_y[0, 0] == y1
+        assert jaw_y[1, 0] == y2
 
 
-class TestDoseRate(TestCase):
-    def setUp(self) -> None:
+class TestDoseRate:
+    @pytest.fixture(autouse=True)
+    def setup(self):
         self.pg = PlanGenerator.from_rt_plan_file(
             TB_MIL_PLAN_FILE,
             plan_label="label",
@@ -339,17 +337,17 @@ class TestDoseRate(TestCase):
         )
         self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 2)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "DR Ref")
-        self.assertEqual(dcm.BeamSequence[1].BeamName, "DR100-600")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 2)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
+        assert len(dcm.BeamSequence) == 2
+        assert dcm.BeamSequence[0].BeamName == "DR Ref"
+        assert dcm.BeamSequence[1].BeamName == "DR100-600"
+        assert dcm.BeamSequence[0].BeamNumber == 1
+        assert dcm.FractionGroupSequence[0].NumberOfBeams == 2
+        assert (
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset == 123
         )
 
     def test_dose_rate_too_wide(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure = DoseRate(
                 dose_rates=(100, 150, 200, 250, 300, 350, 400, 600),
                 roi_size_mm=30,
@@ -361,8 +359,9 @@ class TestDoseRate(TestCase):
             self.pg.add_procedure(procedure)
 
 
-class TestMlcSpeed(TestCase):
-    def setUp(self) -> None:
+class TestMlcSpeed:
+    @pytest.fixture(autouse=True)
+    def setup(self):
         self.pg = PlanGenerator.from_rt_plan_file(
             TB_MIL_PLAN_FILE,
             plan_label="label",
@@ -378,19 +377,19 @@ class TestMlcSpeed(TestCase):
         )
         self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 2)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "MLC Speed Ref")
-        self.assertEqual(dcm.BeamSequence[1].BeamName, "MLC Speed")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 2)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
+        assert len(dcm.BeamSequence) == 2
+        assert dcm.BeamSequence[0].BeamName == "MLC Speed Ref"
+        assert dcm.BeamSequence[1].BeamName == "MLC Speed"
+        assert dcm.BeamSequence[0].BeamNumber == 1
+        assert dcm.FractionGroupSequence[0].NumberOfBeams == 2
+        assert (
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset == 123
         )
-        self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
-        self.assertEqual(dcm.BeamSequence[1].BeamType, "DYNAMIC")
+        assert dcm.BeamSequence[0].BeamType == "DYNAMIC"
+        assert dcm.BeamSequence[1].BeamType == "DYNAMIC"
 
     def test_mlc_speed_too_fast(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure = MLCSpeed(
                 speeds=(10, 20, 30, 40, 50),
                 y1=-100,
@@ -399,7 +398,7 @@ class TestMlcSpeed(TestCase):
             self.pg.add_procedure(procedure)
 
     def test_mlc_speed_too_wide(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure = MLCSpeed(
                 speeds=(0.5, 1, 1.5, 2),
                 roi_size_mm=50,
@@ -409,7 +408,7 @@ class TestMlcSpeed(TestCase):
             self.pg.add_procedure(procedure)
 
     def test_0_mlc_speed(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure = MLCSpeed(
                 speeds=(0, 1, 2),
                 y1=-100,
@@ -418,8 +417,9 @@ class TestMlcSpeed(TestCase):
             self.pg.add_procedure(procedure)
 
 
-class TestGantrySpeed(TestCase):
-    def setUp(self) -> None:
+class TestGantrySpeed:
+    @pytest.fixture(autouse=True)
+    def setup(self):
         self.pg = PlanGenerator.from_rt_plan_file(
             TB_MIL_PLAN_FILE,
             plan_label="label",
@@ -436,13 +436,13 @@ class TestGantrySpeed(TestCase):
         )
         self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 2)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "GS")
-        self.assertEqual(dcm.BeamSequence[1].BeamName, "GS Ref")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 2)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
+        assert len(dcm.BeamSequence) == 2
+        assert dcm.BeamSequence[0].BeamName == "GS"
+        assert dcm.BeamSequence[1].BeamName == "GS Ref"
+        assert dcm.BeamSequence[0].BeamNumber == 1
+        assert dcm.FractionGroupSequence[0].NumberOfBeams == 2
+        assert (
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset == 123
         )
 
     def test_gantry_speed_too_fast(self):
@@ -452,7 +452,7 @@ class TestGantrySpeed(TestCase):
             y1=-100,
             y2=100,
         )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.pg.add_procedure(procedure)
 
     def test_gantry_speed_too_wide(self):
@@ -462,11 +462,11 @@ class TestGantrySpeed(TestCase):
             y1=-100,
             y2=100,
         )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.pg.add_procedure(procedure)
 
     def test_gantry_range_over_360(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure = GantrySpeed(
                 speeds=(4, 4, 4, 4),
                 y1=-100,
@@ -476,7 +476,7 @@ class TestGantrySpeed(TestCase):
             self.pg.add_procedure(procedure)
 
 
-class TestVmatDRGS(TestCase):
+class TestVmatDRGS:
     def test_defaults(self):
         VMATDRGS().compute(DEFAULT_TRUEBEAM_HD120)
 
@@ -513,9 +513,9 @@ class TestVmatDRGS(TestCase):
         mlc_position_2 = beam.beam_limiting_device_positions["MLCX"]
 
         # Assert dynamic beam
-        self.assertTrue(np.allclose(cumulative_meterset_1, cumulative_meterset_2))
-        self.assertTrue(np.allclose(gantry_angle_1, gantry_angle_2, atol=1e-2))
-        self.assertTrue(np.allclose(mlc_position_1, mlc_position_2))
+        assert np.allclose(cumulative_meterset_1, cumulative_meterset_2)
+        assert np.allclose(gantry_angle_1, gantry_angle_2, atol=1e-2)
+        assert np.allclose(mlc_position_1, mlc_position_2)
 
         # Extract data from the original plan - reference beam
         ds = pydicom.dcmread(original_file)
@@ -533,9 +533,9 @@ class TestVmatDRGS(TestCase):
         mlc_position_2 = beam.beam_limiting_device_positions["MLCX"]
 
         # Assert reference beam
-        self.assertTrue(np.allclose(cumulative_meterset_1, cumulative_meterset_2))
-        self.assertTrue(np.allclose(gantry_angle_1, gantry_angle_2))
-        self.assertTrue(np.allclose(mlc_position_1, mlc_position_2))
+        assert np.allclose(cumulative_meterset_1, cumulative_meterset_2)
+        assert np.allclose(gantry_angle_1, gantry_angle_2)
+        assert np.allclose(mlc_position_1, mlc_position_2)
 
     def test_adding_static_beams(self):
         static_angles = (0, 90, 270, 180)
@@ -543,24 +543,24 @@ class TestVmatDRGS(TestCase):
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         expected_number_of_beams = 6  # dynamic, reference, 4x static
         actual_number_of_beams = len(procedure.beams)
-        self.assertEqual(actual_number_of_beams, expected_number_of_beams)
+        assert actual_number_of_beams == expected_number_of_beams
 
         for idx, expected_angle in enumerate(static_angles):
             dcm = procedure.beams[idx + 2].to_dicom()
             actual_angle = dcm.ControlPointSequence[0].GantryAngle
-            self.assertEqual(actual_angle, expected_angle)
+            assert actual_angle == expected_angle
 
     def test_error_if_gantry_speeds_and_dose_rates_have_different_sizes(self):
         gantry_speeds = (1, 2, 3)
         dose_rates = (1, 2)
         procedure = VMATDRGS(gantry_speeds=gantry_speeds, dose_rates=dose_rates)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     def test_error_if_initial_gantry_offset_less_than_min(self):
         initial_gantry_offset = 0
         procedure = VMATDRGS(initial_gantry_offset=initial_gantry_offset)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     def test_error_if_gantry_speeds_above_max(self):
@@ -569,7 +569,7 @@ class TestVmatDRGS(TestCase):
         max_gantry_speed = 4
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
         procedure = VMATDRGS(gantry_speeds=gantry_speeds, dose_rates=dose_rates)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(TrueBeamMachine(False, specs))
 
     def test_error_if_dose_rates_above_max(self):
@@ -581,7 +581,7 @@ class TestVmatDRGS(TestCase):
             dose_rates=dose_rates,
             max_dose_rate=max_dose_rate,
         )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     def test_error_if_axis_not_maxed_out(self):
@@ -595,41 +595,41 @@ class TestVmatDRGS(TestCase):
             dose_rates=dose_rates,
             max_dose_rate=max_dose_rate,
         )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(TrueBeamMachine(False, specs))
 
     def test_error_if_rotation_larger_than_360(self):
         mu_per_segment = 100
         procedure = VMATDRGS(mu_per_segment=mu_per_segment)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
-    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
+    @pytest.mark.skipif(not RUN_PLOT_TESTS, reason="skip plot test")
     def test_plot_control_points(self):
         procedure = VMATDRGS()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_control_points()
 
-    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
+    @pytest.mark.skipif(not RUN_PLOT_TESTS, reason="skip plot test")
     def test_plot_fluence(self):
         procedure = VMATDRGS()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_fluence(IMAGER_AS1200)
 
-    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
+    @pytest.mark.skipif(not RUN_PLOT_TESTS, reason="skip plot test")
     def test_plot_profile(self):
         procedure = VMATDRGS()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_fluence_profile(IMAGER_AS1200)
 
-    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
+    @pytest.mark.skipif(not RUN_PLOT_TESTS, reason="skip plot test")
     def test_animate_mlc(self):
         procedure = VMATDRGS()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.dynamic_beam.animate_mlc()
 
 
-class TestVmatDRMLC(TestCase):
+class TestVmatDRMLC:
     def test_defaults(self):
         procedure = VMATDRMLC()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
@@ -667,9 +667,9 @@ class TestVmatDRMLC(TestCase):
         mlc_position_2 = beam.beam_limiting_device_positions["MLCX"]
 
         # Assert dynamic beam
-        self.assertTrue(np.allclose(cumulative_meterset_1, cumulative_meterset_2))
-        self.assertTrue(np.allclose(gantry_angle_1, gantry_angle_2, atol=1e-3))
-        self.assertTrue(np.allclose(mlc_position_1, mlc_position_2))
+        assert np.allclose(cumulative_meterset_1, cumulative_meterset_2)
+        assert np.allclose(gantry_angle_1, gantry_angle_2, atol=1e-3)
+        assert np.allclose(mlc_position_1, mlc_position_2)
 
         # Extract data from the original plan - reference beam
         ds = pydicom.dcmread(original_file)
@@ -687,14 +687,14 @@ class TestVmatDRMLC(TestCase):
         mlc_position_2 = beam.beam_limiting_device_positions["MLCX"]
 
         # Assert reference beam
-        self.assertTrue(np.allclose(cumulative_meterset_1, cumulative_meterset_2))
-        self.assertTrue(np.allclose(gantry_angle_1, gantry_angle_2, atol=1e-3))
-        self.assertTrue(np.allclose(mlc_position_1, mlc_position_2))
+        assert np.allclose(cumulative_meterset_1, cumulative_meterset_2)
+        assert np.allclose(gantry_angle_1, gantry_angle_2, atol=1e-3)
+        assert np.allclose(mlc_position_1, mlc_position_2)
 
     def test_error_if_initial_gantry_offset_less_than_min(self):
         initial_gantry_offset = 0
         procedure = VMATDRMLC(initial_gantry_offset=initial_gantry_offset)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     def test_error_if_mlc_speeds_above_max(self):
@@ -702,7 +702,7 @@ class TestVmatDRMLC(TestCase):
         max_mlc_speed = 50.0
         specs = DEFAULT_SPECS_TB.replace(max_mlc_speed=max_mlc_speed)
         procedure = VMATDRMLC(mlc_speeds=mlc_speeds)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(TrueBeamMachine(False, specs))
 
     def test_error_if_gantry_speeds_above_max(self):
@@ -711,41 +711,41 @@ class TestVmatDRMLC(TestCase):
         gantry_speeds = (max_gantry_speed, max_gantry_speed + 1)
         specs = DEFAULT_SPECS_TB.replace(max_gantry_speed=max_gantry_speed)
         procedure = VMATDRMLC(mlc_speeds=mlc_speeds, gantry_speeds=gantry_speeds)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(TrueBeamMachine(False, specs))
 
     def test_error_if_axis_not_maxed_out(self):
         mlc_speeds = (10.0, 20.0)
         gantry_speeds = (5.0, 6.0)
         procedure = VMATDRMLC(mlc_speeds=mlc_speeds, gantry_speeds=gantry_speeds)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     def test_error_if_rotation_larger_than_360(self):
         mlc_speeds = (1.0, 20.0)
         procedure = VMATDRMLC(mlc_speeds=mlc_speeds)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
-    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
+    @pytest.mark.skipif(not RUN_PLOT_TESTS, reason="skip plot test")
     def test_plot_control_points(self):
         procedure = VMATDRMLC()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_control_points()
 
-    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
+    @pytest.mark.skipif(not RUN_PLOT_TESTS, reason="skip plot test")
     def test_plot_fluence(self):
         procedure = VMATDRMLC()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_fluence(IMAGER_AS1200)
 
-    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
+    @pytest.mark.skipif(not RUN_PLOT_TESTS, reason="skip plot test")
     def test_plot_profile(self):
         procedure = VMATDRMLC()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         procedure.plot_fluence_profile(IMAGER_AS1200)
 
-    @skipIf(not RUN_PLOT_TESTS, "skip plot test")
+    @pytest.mark.skipif(not RUN_PLOT_TESTS, reason="skip plot test")
     def test_animate_mlc(self):
         procedure = VMATDRMLC()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)

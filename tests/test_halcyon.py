@@ -1,4 +1,4 @@
-from unittest import TestCase
+import pytest
 
 from conjuror.plans.halcyon import Stack, PicketFence
 from conjuror.plans.plan_generator import PlanGenerator
@@ -12,8 +12,9 @@ HALCYON_MLC_INDEX = {
 }
 
 
-class TestHalcyonPrefabs(TestCase):
-    def setUp(self) -> None:
+class TestHalcyonPrefabs:
+    @pytest.fixture(autouse=True)
+    def setup(self):
         self.pg = PlanGenerator.from_rt_plan_file(
             HAL_PLAN_FILE,
             plan_label="label",
@@ -29,30 +30,30 @@ class TestHalcyonPrefabs(TestCase):
         )
         self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 1)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "Picket Fence")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 1)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
+        assert len(dcm.BeamSequence) == 1
+        assert dcm.BeamSequence[0].BeamName == "Picket Fence"
+        assert dcm.BeamSequence[0].BeamNumber == 1
+        assert dcm.FractionGroupSequence[0].NumberOfBeams == 1
+        assert (
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset == 123
         )
         # check first CP of proximal is at the PF position
-        self.assertEqual(
+        assert (
             dcm.BeamSequence[0]
             .ControlPointSequence[0]
             .BeamLimitingDevicePositionSequence[HALCYON_MLC_INDEX[Stack.PROXIMAL]]
-            .LeafJawPositions[0],
-            -53.5,
+            .LeafJawPositions[0]
+            == -53.5
         )
         # distal should be parked
-        self.assertEqual(
+        assert (
             dcm.BeamSequence[0]
             .ControlPointSequence[0]
             .BeamLimitingDevicePositionSequence[HALCYON_MLC_INDEX[Stack.DISTAL]]
-            .LeafJawPositions[0],
-            -140,
+            .LeafJawPositions[0]
+            == -140
         )
-        self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
+        assert dcm.BeamSequence[0].BeamType == "DYNAMIC"
 
     def test_create_picket_fence_distal(self):
         procedure = PicketFence(
@@ -63,30 +64,30 @@ class TestHalcyonPrefabs(TestCase):
         )
         self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 1)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "Picket Fence")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 1)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
+        assert len(dcm.BeamSequence) == 1
+        assert dcm.BeamSequence[0].BeamName == "Picket Fence"
+        assert dcm.BeamSequence[0].BeamNumber == 1
+        assert dcm.FractionGroupSequence[0].NumberOfBeams == 1
+        assert (
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset == 123
         )
         # check first CP of proximal is parked
-        self.assertEqual(
+        assert (
             dcm.BeamSequence[0]
             .ControlPointSequence[0]
             .BeamLimitingDevicePositionSequence[HALCYON_MLC_INDEX[Stack.PROXIMAL]]
-            .LeafJawPositions[0],
-            -140,
+            .LeafJawPositions[0]
+            == -140
         )
         # distal should be at picket position
-        self.assertEqual(
+        assert (
             dcm.BeamSequence[0]
             .ControlPointSequence[0]
             .BeamLimitingDevicePositionSequence[HALCYON_MLC_INDEX[Stack.DISTAL]]
-            .LeafJawPositions[0],
-            -53.5,
+            .LeafJawPositions[0]
+            == -53.5
         )
-        self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
+        assert dcm.BeamSequence[0].BeamType == "DYNAMIC"
 
     def test_create_picket_fence_both(self):
         procedure = PicketFence(
@@ -97,27 +98,27 @@ class TestHalcyonPrefabs(TestCase):
         )
         self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 1)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "Picket Fence")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 1)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 123
+        assert len(dcm.BeamSequence) == 1
+        assert dcm.BeamSequence[0].BeamName == "Picket Fence"
+        assert dcm.BeamSequence[0].BeamNumber == 1
+        assert dcm.FractionGroupSequence[0].NumberOfBeams == 1
+        assert (
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset == 123
         )
         # check first CP of proximal is at the PF position
-        self.assertEqual(
+        assert (
             dcm.BeamSequence[0]
             .ControlPointSequence[0]
             .BeamLimitingDevicePositionSequence[HALCYON_MLC_INDEX[Stack.PROXIMAL]]
-            .LeafJawPositions[0],
-            -53.5,
+            .LeafJawPositions[0]
+            == -53.5
         )
         # distal should be at picket position
-        self.assertEqual(
+        assert (
             dcm.BeamSequence[0]
             .ControlPointSequence[0]
             .BeamLimitingDevicePositionSequence[HALCYON_MLC_INDEX[Stack.DISTAL]]
-            .LeafJawPositions[0],
-            -53.5,
+            .LeafJawPositions[0]
+            == -53.5
         )
-        self.assertEqual(dcm.BeamSequence[0].BeamType, "DYNAMIC")
+        assert dcm.BeamSequence[0].BeamType == "DYNAMIC"

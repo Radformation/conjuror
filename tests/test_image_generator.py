@@ -1,10 +1,10 @@
 import copy
 import tempfile
-from unittest import TestCase
 
 import numpy as np
 import numpy.testing
 import pydicom
+import pytest
 
 
 from conjuror.images.layers import (
@@ -31,13 +31,13 @@ from conjuror.images.simulators import (
 np.random.seed(1234)  # noqa
 
 
-class TestClipAdd(TestCase):
+class TestClipAdd:
     def test_clip_add_normal(self):
         image1 = np.zeros((10, 10), dtype=np.uint16)
         image2 = np.ones((10, 10), dtype=np.uint16)
         output = clip_add(image1, image2, dtype=np.uint16)
-        self.assertEqual(output.dtype, np.uint16)
-        self.assertEqual(output.shape, image1.shape)
+        assert output.dtype == np.uint16
+        assert output.shape == image1.shape
         numpy.testing.assert_array_equal(
             output, image2
         )  # arrays are equal because image1 is zeros
@@ -48,20 +48,20 @@ class TestClipAdd(TestCase):
         image2 = np.ones((10, 10), dtype=np.uint16)
         output = clip_add(image1, image2, dtype=np.uint16)
         # adding 1 to an array at the max would normally flip bits; ensure it doesn't
-        self.assertEqual(output.dtype, np.uint16)
+        assert output.dtype == np.uint16
         numpy.testing.assert_array_equal(
             output, image1
         )  # output is same as image1 because image2 didn't actually add anything
 
 
-class TestEvenRound(TestCase):
+class TestEvenRound:
     def test_even_round(self):
-        self.assertEqual(even_round(3), 4)
-        self.assertEqual(even_round(2), 2)
-        self.assertEqual(even_round(15), 16)
+        assert even_round(3) == 4
+        assert even_round(2) == 2
+        assert even_round(15) == 16
 
 
-class TestSlopeLayer(TestCase):
+class TestSlopeLayer:
     def test_slope_x(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
         # create field that will cover the whole image; want a uniform field
@@ -70,7 +70,7 @@ class TestSlopeLayer(TestCase):
         # test that the left is less than the right edge
         left = as1200.image[:, 100].max()
         right = as1200.image[:, -100].max()
-        self.assertLess(left, right)
+        assert left < right
 
     def test_negative_slope_x(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
@@ -80,7 +80,7 @@ class TestSlopeLayer(TestCase):
         # test that the left is greater than the right edge
         left = as1200.image[:, 100].max()
         right = as1200.image[:, -100].max()
-        self.assertGreater(left, right)
+        assert left > right
 
     def test_slope_y(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
@@ -90,51 +90,51 @@ class TestSlopeLayer(TestCase):
         # test that the top is less than the bottom edge
         top = as1200.image[100, :].max()
         bottom = as1200.image[-100, :].max()
-        self.assertLess(top, bottom)
+        assert top < bottom
 
 
-class TestRandomNoise(TestCase):
+class TestRandomNoise:
     def test_mean_doesnt_change(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
         as1200.add_layer(ConstantLayer(constant=35000))
         as1200.add_layer(RandomNoiseLayer(mean=0, sigma=0.001))
-        self.assertAlmostEqual(as1200.image.mean(), 35000, delta=1)
+        assert as1200.image.mean() == pytest.approx(35000, abs=1)
 
     def test_std(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
         as1200.add_layer(ConstantLayer(constant=35000))
         as1200.add_layer(RandomNoiseLayer(mean=0, sigma=0.003))
         std = np.iinfo(np.uint16).max * 0.003
-        self.assertAlmostEqual(as1200.image.std(), std, delta=1)
+        assert as1200.image.std() == pytest.approx(std, abs=1)
 
 
-class TestConstantLayer(TestCase):
+class TestConstantLayer:
     def test_constant(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
         as1200.add_layer(ConstantLayer(constant=35))
-        self.assertAlmostEqual(as1200.image.max(), 35)
-        self.assertAlmostEqual(as1200.image.min(), 35)
+        assert as1200.image.max() == pytest.approx(35, abs=1e-6)
+        assert as1200.image.min() == pytest.approx(35, abs=1e-6)
 
     def test_two_constants(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
         as1200.add_layer(ConstantLayer(constant=35))
         as1200.add_layer(ConstantLayer(constant=11))
-        self.assertAlmostEqual(as1200.image.max(), 46)
-        self.assertAlmostEqual(as1200.image.min(), 46)
+        assert as1200.image.max() == pytest.approx(46, abs=1e-6)
+        assert as1200.image.min() == pytest.approx(46, abs=1e-6)
 
     def test_constant_wont_flip_bits_over(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
         as1200.add_layer(ConstantLayer(constant=35))
         as1200.add_layer(ConstantLayer(constant=777777777))
-        self.assertAlmostEqual(as1200.image.max(), np.iinfo(np.uint16).max)
-        self.assertAlmostEqual(as1200.image.min(), np.iinfo(np.uint16).max)
+        assert as1200.image.max() == pytest.approx(np.iinfo(np.uint16).max, abs=1e-6)
+        assert as1200.image.min() == pytest.approx(np.iinfo(np.uint16).max, abs=1e-6)
 
     def test_constant_wont_flip_bits_under(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
         as1200.add_layer(ConstantLayer(constant=35))
         as1200.add_layer(ConstantLayer(constant=-777777777))
-        self.assertAlmostEqual(as1200.image.max(), np.iinfo(np.uint16).min)
-        self.assertAlmostEqual(as1200.image.min(), np.iinfo(np.uint16).min)
+        assert as1200.image.max() == pytest.approx(np.iinfo(np.uint16).min, abs=1e-6)
+        assert as1200.image.min() == pytest.approx(np.iinfo(np.uint16).min, abs=1e-6)
 
 
 class NOOPLayer(Layer):
@@ -144,25 +144,23 @@ class NOOPLayer(Layer):
         return image
 
 
-class TestArrayLayer(TestCase):
+class TestArrayLayer:
     def test_array_layer_same_size(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
         as1200.add_layer(
             ArrayLayer(np.ones((as1200.image.shape[0], as1200.image.shape[1])))
         )
-        self.assertTrue(np.all(as1200.image == 1))
+        assert np.all(as1200.image == 1)
 
     def test_smaller_size(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
         original_shape = as1200.image.shape
         as1200.add_layer(ArrayLayer(np.ones((5, 5))))
-        self.assertTrue(np.max(as1200.image) == 1)
-        self.assertTrue(np.min(as1200.image) == 0)
+        assert np.max(as1200.image) == 1
+        assert np.min(as1200.image) == 0
         # test center is 1
-        self.assertTrue(
-            as1200.image[as1200.image.shape[0] // 2, as1200.image.shape[1] // 2] == 1
-        )
-        self.assertEqual(as1200.image.shape, original_shape)
+        assert as1200.image[as1200.image.shape[0] // 2, as1200.image.shape[1] // 2] == 1
+        assert as1200.image.shape == original_shape
 
     def test_bigger_size(self):
         as1200 = Simulator(IMAGER_AS1200, sid=1000)
@@ -170,9 +168,9 @@ class TestArrayLayer(TestCase):
         as1200.add_layer(
             ArrayLayer(np.ones((as1200.image.shape[0] + 5, as1200.image.shape[1] + 5)))
         )
-        self.assertTrue(np.max(as1200.image) == 1)
+        assert np.max(as1200.image) == 1
         # test shape didn't change even though the added array was bigger
-        self.assertEqual(as1200.image.shape, original_shape)
+        assert as1200.image.shape == original_shape
 
 
 class SimulatorTestMixin:
@@ -180,25 +178,27 @@ class SimulatorTestMixin:
     pixel_size: float
     shape: tuple[int, int]
     mag_factor = 1.5
-    simulator: Simulator
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def simulator(self):
         self.simulator = Simulator(self.imager)
+        yield
+        # Cleanup if needed
 
     def test_pixel_size(self):
-        self.assertEqual(self.simulator.imager.pixel_size, self.pixel_size)
+        assert self.simulator.imager.pixel_size == self.pixel_size
 
     def test_shape(self):
-        self.assertEqual(self.simulator.imager.shape, self.shape)
+        assert self.simulator.imager.shape == self.shape
 
     def test_image(self):
-        self.assertEqual(self.simulator.image.shape, self.shape)
-        self.assertEqual(self.simulator.image.dtype, np.uint16)
+        assert self.simulator.image.shape == self.shape
+        assert self.simulator.image.dtype == np.uint16
 
     def test_mag_factor(self):
-        self.assertEqual(self.simulator.mag_factor, self.mag_factor)
+        assert self.simulator.mag_factor == self.mag_factor
         ssd1000 = Simulator(imager=self.imager, sid=1000)
-        self.assertEqual(ssd1000.mag_factor, 1)
+        assert ssd1000.mag_factor == 1
 
     def test_noop_layer_doesnt_change_image(self):
         sim = self.simulator
@@ -212,10 +212,10 @@ class SimulatorTestMixin:
             sim.generate_dicom(tf.name, gantry_angle=12, coll_angle=33, table_angle=5)
             # shouldn't raise
             ds = pydicom.dcmread(tf.name)
-        self.assertEqual(ds.pixel_array.shape, self.shape)
-        self.assertEqual(ds.GantryAngle, 12)
-        self.assertEqual(ds.BeamLimitingDeviceAngle, 33)
-        self.assertEqual(ds.PatientSupportAngle, 5)
+        assert ds.pixel_array.shape == self.shape
+        assert ds.GantryAngle == 12
+        assert ds.BeamLimitingDeviceAngle == 33
+        assert ds.PatientSupportAngle == 5
 
     def test_invert_array(self):
         sim = self.simulator
@@ -224,28 +224,28 @@ class SimulatorTestMixin:
         # when false, the array retains the same values
         # the corner should be lower than the center, where dose was delivered
         mid = sim.image.shape[0] // 2
-        self.assertGreater(float(ds.pixel_array[mid, mid]), float(ds.pixel_array[0, 0]))
+        assert float(ds.pixel_array[mid, mid]) > float(ds.pixel_array[0, 0])
 
 
-class TestAS500(SimulatorTestMixin, TestCase):
+class TestAS500(SimulatorTestMixin):
     imager = IMAGER_AS500
     pixel_size = 0.78125
     shape = (384, 512)
 
 
-class TestAS1000(SimulatorTestMixin, TestCase):
+class TestAS1000(SimulatorTestMixin):
     imager = IMAGER_AS1000
     pixel_size = 0.390625
     shape = (768, 1024)
 
 
-class TestAS1200(SimulatorTestMixin, TestCase):
+class TestAS1200(SimulatorTestMixin):
     imager = IMAGER_AS1200
     pixel_size = 0.336
     shape = (1280, 1280)
 
 
-class TestCustomSimulator(SimulatorTestMixin, TestCase):
+class TestCustomSimulator(SimulatorTestMixin):
     pixel_size = 0.123
     shape = (500, 700)
     imager = Imager(pixel_size, shape)
