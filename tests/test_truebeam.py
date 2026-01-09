@@ -167,9 +167,9 @@ class TestMLCTransmission:
             mlc_nominal = 60 * [2 * [slit_pos - 0.5]] + 60 * [2 * [slit_pos + 0.5]]
 
             bld = procedure.beams[beam_idx].beam_limiting_device_positions
-            np.testing.assert_array_equal(mlc_nominal, bld["MLCX"])
-            np.testing.assert_array_equal([[-50, -50], [50, 50]], bld["ASYMX"])
-            np.testing.assert_array_equal([[-50, -50], [50, 50]], bld["ASYMY"])
+            assert np.all(bld["MLCX"] == mlc_nominal)
+            assert np.all(bld["ASYMX"] == [[-50, -50], [50, 50]])
+            assert np.all(bld["ASYMY"] == [[-50, -50], [50, 50]])
 
     def test_beam_names(self):
         beam_names = ["Ref", "A", "B"]
@@ -201,12 +201,12 @@ class TestPicketFence:
         beam_actual = procedure.beams[0]
 
         mu_nominal, mu_actual = beam_nominal.metersets, beam_actual.metersets
-        np.testing.assert_array_almost_equal(mu_nominal, mu_actual, decimal=2)
+        assert mu_actual == pytest.approx(mu_nominal, abs=0.01)
 
         bls_nominal = beam_nominal.beam_limiting_device_positions
         bld_actual = beam_actual.beam_limiting_device_positions
-        np.testing.assert_array_equal(bls_nominal["MLCX"], bld_actual["MLCX"])
-        np.testing.assert_array_equal(bls_nominal["ASYMX"][0], bld_actual["ASYMX"][0])
+        assert np.all(bld_actual["MLCX"] == bls_nominal["MLCX"])
+        assert all(bld_actual["ASYMX"][0] == bls_nominal["ASYMX"][0])
         # Note #1: jaw x2 is different (cannot be replicated) since the left padding
         # is different than the right padding
         # Note #2: jaws y1,y2 are different (cannot be replicated) since this procedure

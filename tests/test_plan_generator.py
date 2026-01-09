@@ -253,12 +253,12 @@ class TestPlanGeneratorBeams:
         beam2 = BeamBase.from_dicom(pg.ds, 0)
         assert beam1.beam_name == beam2.beam_name
         assert beam1.beam_meterset == beam2.beam_meterset
-        np.testing.assert_array_equal(beam1.gantry_angles, beam2.gantry_angles)
-        np.testing.assert_array_equal(beam1.metersets, beam2.metersets)
+        assert all(beam1.gantry_angles == beam2.gantry_angles)
+        assert all(beam1.metersets == beam2.metersets)
         for bld_type in ["ASYMX", "ASYMY", "MLCX"]:
-            np.testing.assert_array_equal(
-                beam1.beam_limiting_device_positions[bld_type],
-                beam2.beam_limiting_device_positions[bld_type],
+            assert np.all(
+                beam1.beam_limiting_device_positions[bld_type]
+                == beam2.beam_limiting_device_positions[bld_type]
             )
 
     def test_plot_fluence(self):

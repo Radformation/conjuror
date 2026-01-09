@@ -125,15 +125,15 @@ class TestBeamDynamics:
         beam.compute_dynamics(DEFAULT_SPECS_TB)
 
         # Motions
-        np.testing.assert_array_equal(beam.dose_motions, 100.0)
-        np.testing.assert_array_equal(beam.gantry_motions, 0.0)
-        np.testing.assert_array_equal(beam.mlc_motions, 120 * [[0.0]])
+        assert beam.dose_motions == 100.0
+        assert beam.gantry_motions == 0.0
+        assert all(beam.mlc_motions == 0.0)
 
         # Speeds
-        np.testing.assert_allclose(beam.time_to_deliver, 10.0)
-        np.testing.assert_allclose(beam.dose_speeds, 10.0)
-        np.testing.assert_allclose(beam.gantry_speeds, 0.0)
-        np.testing.assert_allclose(beam.mlc_speeds, 120 * [[0.0]])
+        assert beam.time_to_deliver == 10.0
+        assert beam.dose_speeds == 10.0
+        assert beam.gantry_speeds == 0.0
+        assert all(beam.mlc_speeds == 0.0)
 
     def test_dynamic_beam(self):
         # all max motions=100, max speed=10, t=10 sec
@@ -147,16 +147,16 @@ class TestBeamDynamics:
         beam.compute_dynamics(specs)
 
         # Motions
-        np.testing.assert_array_equal(beam.dose_motions, np.array([100, 0, 10]))
-        np.testing.assert_array_equal(beam.gantry_motions, np.array([10, 100, 0]))
-        np.testing.assert_array_equal(beam.mlc_motions, 120 * [[0, 10, 100]])
+        assert all(beam.dose_motions == [100, 0, 10])
+        assert all(beam.gantry_motions == [10, 100, 0])
+        assert np.all(beam.mlc_motions == [0, 10, 100])
 
         # Speeds
         # 1. dose is slower, 2. gantry is slower, 3. MLC is slower
-        np.testing.assert_allclose(beam.time_to_deliver, np.array([10.0, 10.0, 10.0]))
-        np.testing.assert_allclose(beam.dose_speeds, np.array([10.0, 0.0, 1.0]))
-        np.testing.assert_allclose(beam.gantry_speeds, np.array([1.0, 10.0, 0.0]))
-        np.testing.assert_allclose(beam.mlc_speeds, 120 * [[0.0, 1.0, 10.0]])
+        assert all(beam.time_to_deliver == [10.0, 10.0, 10.0])
+        assert all(beam.dose_speeds == [10.0, 0.0, 1.0])
+        assert all(beam.gantry_speeds == [1.0, 10.0, 0.0])
+        assert np.all(beam.mlc_speeds == [0.0, 1.0, 10.0])
 
 
 class TestVisualizations:
@@ -180,11 +180,11 @@ class TestVisualizations:
 
         fluence1 = beam.generate_fluence(image, interpolation_factor=1)
         nominal1 = np.array(100 * [100])[np.newaxis]
-        np.testing.assert_array_equal(fluence1, nominal1)
+        assert np.all(fluence1 == nominal1)
 
         fluence2 = beam.generate_fluence(image, interpolation_factor=100)
         nominal2 = np.arange(100, 0, -1)[np.newaxis]
-        np.testing.assert_array_almost_equal(fluence2, nominal2, decimal=14)
+        assert fluence2 == pytest.approx(nominal2, abs=1e-14)
 
     def test_jaws(self):
         image = Imager(pixel_size=1, shape=(100, 100))
