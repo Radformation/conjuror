@@ -102,33 +102,6 @@ The plan generator comes with pre-defined procedures for typical QA tests (Picke
 Advanced features
 -----------------
 
-Clone base plan
-################
-
-The plan generator normally creates a new RT Plan and copies key metadata from the base plan to ensure smooth import into Eclipse. In certain edge cases, it may be preferable to clone the base plan and modify only the beam-specific DICOM fields. This behavior can be enabled using the ``clone_base_plan`` parameter.
-
-.. code-block:: python
-
-    generator = PlanGenerator(..., clone_base_plan=True)
-
-.. warning::
-
-    Setting ``clone_ds=True`` copies the entire base RT Plan and overrides only selected sequences (e.g., beams and fraction groups). This mode may unintentionally preserve PHI, clinical metadata, and vendor/private tags from the base plan. In some cases, the beam behavior may be influenced by these private tags, potentially resulting in plans that import successfully but do not behave as intended. Prefer ``clone_ds=False`` unless cloning is explicitly required and the base plan is verified to be safe and appropriate for reuse.
-
-**Modified tags from base plan**
-
-* RT Plan Label (300A, 0003) - This is changed per input parameter.
-* RT Plan Name (300A, 0002) - This is changed per input parameter.
-* Instance Creation Time (0008, 0013) - This is changed to reflect the new plan creation time (now).
-* Instance Creation Date (0008, 0012) - This is changed to reflect the new plan creation date (now).
-* SOP Instance UID (0008, 0018) - A new, random UID is generated so it doesn't conflict with the original plan.
-* Patient Setup Sequence (300A, 0180) - This is overwritten to a new, single setup.
-* Dose Reference Sequence (300A, 0016) - This is overwritten to a new, single dose reference.
-* Fraction Group Sequence (300A, 0070) - This is overwritten to a new, single fraction group and is dynamically updated based on the procedures added by the user.
-* Beam Sequence (300A, 00B0) - This is overwritten and is dynamically updated based on the procedures added by the user.
-* Referenced Beam Sequence (300C, 0006) - This is overwritten and is dynamically updated based on the procedures added by the user.
-
-
 Customize machine parameters
 ############################
 

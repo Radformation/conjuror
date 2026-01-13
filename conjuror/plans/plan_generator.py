@@ -41,7 +41,6 @@ class PlanGenerator(Generic[TMachine]):
         plan_name: str,
         patient_name: str | None = None,
         patient_id: str | None = None,
-        clone_base_plan: bool = False,
         machine_specs: MachineSpecs = None,
     ):
         """
@@ -57,20 +56,6 @@ class PlanGenerator(Generic[TMachine]):
             The name of the patient. If not provided, it will be taken from the RTPLAN file.
         patient_id : str, optional
             The ID of the patient. If not provided, it will be taken from the RTPLAN file.
-        clone_base_plan : bool
-            Whether to clone the base plan or only copy the essential portions.
-
-            .. warning::
-
-                Setting ``clone_ds=True`` copies the entire base RT Plan and overrides
-                only selected sequences (e.g., beams and fraction groups). This mode
-                may unintentionally preserve PHI, clinical metadata,
-                and vendor/private tags from the base plan. In some cases, the beam
-                behavior may be influenced by these private tags, potentially
-                resulting in plans that import successfully but do not behave as
-                intended. Prefer ``clone_ds=False`` unless cloning is explicitly
-                required and the base plan is verified to be safe and appropriate for reuse.
-
         machine_specs : MachineSpecs
             The specs of the machine
         """
@@ -105,81 +90,79 @@ class PlanGenerator(Generic[TMachine]):
         date = datetime.datetime.now().strftime("%Y%m%d")
         time = datetime.datetime.now().strftime("%H%M%S")
 
-        if clone_base_plan:
-            plan = base_plan.copy()
-            plan.SOPInstanceUID = generate_uid()
-            plan.InstanceCreationDate = date
-            plan.InstanceCreationTime = time
-        else:
-            # Default mode: create mandatory tags (empty if not applicable)
-            plan = Dataset()
+        #### Create mandatory tags (empty if not applicable)
+        plan = Dataset()
 
-            # SOP Common Module
-            plan.SOPClassUID = base_plan.SOPClassUID
-            plan.SOPInstanceUID = generate_uid()
+        # SOP Common Module
+        plan.SOPClassUID = base_plan.SOPClassUID
+        plan.SOPInstanceUID = generate_uid()
 
-            # Patient Module
-            plan.PatientBirthDate = ""
-            plan.PatientSex = ""
+        # Patient Module
+        plan.PatientBirthDate = ""
+        plan.PatientSex = ""
 
-            # General Study Module
-            plan.StudyDate = date
-            plan.StudyTime = time
-            plan.AccessionNumber = ""
-            plan.ReferringPhysicianName = ""
-            plan.StudyInstanceUID = generate_uid()
-            plan.StudyID = ""
+        # General Study Module
+        plan.StudyDate = date
+        plan.StudyTime = time
+        plan.AccessionNumber = ""
+        plan.ReferringPhysicianName = ""
+        plan.StudyInstanceUID = generate_uid()
+        plan.StudyID = ""
 
-            # RT Series Module
-            plan.Modality = "RTPLAN"
-            plan.OperatorsName = ""
-            plan.SeriesInstanceUID = generate_uid()
-            plan.SeriesNumber = ""
+        # RT Series Module
+        plan.Modality = "RTPLAN"
+        plan.OperatorsName = ""
+        plan.SeriesInstanceUID = generate_uid()
+        plan.SeriesNumber = ""
 
-            # General Equipment Module
-            plan.Manufacturer = ""
+        # General Equipment Module
+        plan.Manufacturer = ""
 
-            # RT General Plan Module
-            plan.RTPlanDate = date
-            plan.RTPlanTime = time
-            plan.RTPlanGeometry = "TREATMENT_DEVICE"
-            plan.PlanIntent = "MACHINE_QA"
+        # RT General Plan Module
+        plan.RTPlanDate = date
+        plan.RTPlanTime = time
+        plan.RTPlanGeometry = "TREATMENT_DEVICE"
+        plan.PlanIntent = "MACHINE_QA"
 
-            # RT Tolerance Tables Module - use first table from base plan
-            plan.ToleranceTableSequence = (base_plan.ToleranceTableSequence[0],)
-
-        # Input parameters
+        #### Input parameters
         plan.PatientName = patient_name
         plan.PatientID = patient_id
         plan.RTPlanLabel = plan_label
         plan.RTPlanName = plan_name
 
+        #### Copy from base plan
+        # RT Tolerance Tables Module - use first table from base plan
+        plan.ToleranceTableSequence = (base_plan.ToleranceTableSequence[0],)
+
+        #### Modules required for beams
+        # Use 1-indexing for sequence number per:
+        # https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_7.5.html
         # Patient Setup Sequence
         patient_setup = Dataset()
         patient_setup.PatientPosition = "HFS"
-        patient_setup.PatientSetupNumber = 0
+        patient_setup.PatientSetupNumber = 1
         plan.PatientSetupSequence = DicomSequence((patient_setup,))
 
         # RT Prescription Module - Dose Reference Sequence
-        dose_ref1 = Dataset()
-        dose_ref1.DoseReferenceNumber = 1
-        dose_ref1.DoseReferenceUID = generate_uid()
-        dose_ref1.DoseReferenceStructureType = "SITE"
-        dose_ref1.DoseReferenceDescription = "PTV"
-        dose_ref1.DoseReferenceType = "TARGET"
-        dose_ref1.DeliveryMaximumDose = 20.0
-        dose_ref1.TargetPrescriptionDose = 40.0
-        dose_ref1.TargetMaximumDose = 20.0
-        plan.DoseReferenceSequence = DicomSequence((dose_ref1,))
+        dose_ref = Dataset()
+        dose_ref.DoseReferenceNumber = 1
+        dose_ref.DoseReferenceUID = generate_uid()
+        dose_ref.DoseReferenceStructureType = "SITE"
+        dose_ref.DoseReferenceDescription = "PTV"
+        dose_ref.DoseReferenceType = "TARGET"
+        dose_ref.DeliveryMaximumDose = 20.0
+        dose_ref.TargetPrescriptionDose = 40.0
+        dose_ref.TargetMaximumDose = 20.0
+        plan.DoseReferenceSequence = DicomSequence((dose_ref,))
 
         # Fraction Group Sequence
-        frxn_gp1 = Dataset()
-        frxn_gp1.FractionGroupNumber = 1
-        frxn_gp1.NumberOfFractionsPlanned = 1
-        frxn_gp1.NumberOfBeams = 0
-        frxn_gp1.NumberOfBrachyApplicationSetups = 0
-        frxn_gp1.ReferencedBeamSequence = DicomSequence()
-        plan.FractionGroupSequence = DicomSequence((frxn_gp1,))
+        frxn_gp = Dataset()
+        frxn_gp.FractionGroupNumber = 1
+        frxn_gp.NumberOfFractionsPlanned = 1
+        frxn_gp.NumberOfBeams = 0
+        frxn_gp.NumberOfBrachyApplicationSetups = 0
+        frxn_gp.ReferencedBeamSequence = DicomSequence()
+        plan.FractionGroupSequence = DicomSequence((frxn_gp,))
 
         # Store attributes
         self._base_plan = base_plan

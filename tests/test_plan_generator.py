@@ -36,22 +36,13 @@ class TestPlanGeneratorCreation(TestCase):
         dataset = pydicom.dcmread(TB_MIL_PLAN_FILE)
         pg = PlanGenerator(dataset, plan_label="label", plan_name="name")
         self.assertEqual("RTPLAN", pg.ds.Modality)
+        self.assertEqual(28, len(pg.ds))
 
     def test_from_rt_file(self):
         pg = PlanGenerator.from_rt_plan_file(
             TB_MIL_PLAN_FILE, plan_label="label", plan_name="name"
         )
         self.assertEqual("RTPLAN", pg.ds.Modality)
-
-    @parameterized.expand([(False, 28), (True, 47)])
-    def test_metadata(self, clone_base_plan: bool, len_metadata: int):
-        pg = PlanGenerator.from_rt_plan_file(
-            TB_MIL_PLAN_FILE,
-            plan_label="label",
-            plan_name="name",
-            clone_base_plan=clone_base_plan,
-        )
-        self.assertEqual(len_metadata, len(pg.ds))
 
     GENERATOR_TEST_PARAMS = [
         (TB_MIL_PLAN_FILE, TrueBeamMachine, False),
