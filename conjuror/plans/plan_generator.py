@@ -11,11 +11,11 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 from pydicom.uid import generate_uid
 
-from .beam import Beam
-from .machine import MachineSpecs, TMachine, MachineBase
-from ..images.layers import ArrayLayer
-from ..images.simulators import Simulator, Imager
-from .visualization import plot_fluences
+from conjuror.images.layers import ArrayLayer
+from conjuror.images.simulators import Imager, Simulator
+from conjuror.plans.beam import Beam
+from conjuror.plans.machine import TMachine, MachineSpecs, MachineBase
+from conjuror.plans.visualization import plot_fluences
 
 
 class QAProcedureBase(Generic[TMachine], ABC):
@@ -343,13 +343,13 @@ def _get_machine_type_from_mlc(mlc: Dataset, machine_specs: MachineSpecs) -> TMa
     bld_type = mlc.RTBeamLimitingDeviceType
 
     if bld_type == "MLCX":
-        from .truebeam import TrueBeamMachine
+        from conjuror.plans.truebeam import TrueBeamMachine
 
         mlc_is_hd = mlc.LeafPositionBoundaries[0] == -110
         machine = TrueBeamMachine(mlc_is_hd, machine_specs)
 
     elif bld_type == "MLCX1" or bld_type == "MLCX2":
-        from .halcyon import HalcyonMachine
+        from conjuror.plans.halcyon import HalcyonMachine
 
         machine = HalcyonMachine(machine_specs)
 
@@ -378,8 +378,8 @@ def _get_datasets_from_machine_type(
     tolerance_table = Dataset()
     tolerance_table.ToleranceTableNumber = 1
 
-    from .truebeam import TrueBeamMachine
-    from .halcyon import HalcyonMachine
+    from conjuror.plans.truebeam import TrueBeamMachine
+    from conjuror.plans.halcyon import HalcyonMachine
 
     bld = Dataset()
     if isinstance(machine, TrueBeamMachine):

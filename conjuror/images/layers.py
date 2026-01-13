@@ -4,7 +4,7 @@ import numpy as np
 from skimage import draw, filters
 from skimage.draw import polygon
 
-from ..utils import geometric_center_idx
+from conjuror.utils import geometric_center_idx
 
 
 def clip_add(
