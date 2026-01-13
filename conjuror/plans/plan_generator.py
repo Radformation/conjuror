@@ -12,7 +12,7 @@ from pydicom.sequence import Sequence as DicomSequence
 from pydicom.uid import generate_uid
 
 from .beam import Beam
-from .machine import MachineSpecs, TMachine
+from .machine import MachineSpecs, TMachine, MachineBase
 from ..images.layers import ArrayLayer
 from ..images.simulators import Simulator, Imager
 from .visualization import plot_fluences
@@ -186,6 +186,52 @@ class PlanGenerator(Generic[TMachine]):
         ds = pydicom.dcmread(rt_plan_file)
         return cls(ds, **kwargs)
 
+    @classmethod
+    def from_machine(
+        cls,
+        machine: MachineBase,
+        machine_name: str = "RadMachine",
+        plan_label: str = "Radformation",
+        plan_name: str = "Radformation",
+        patient_name: str = "RadMachine",
+        patient_id: str = "RadMachine",
+    ) -> Self:
+        """Create a plan for a target machine type.
+
+        Parameters
+        ----------
+        machine : MachineBase
+            The target machine.
+        machine_name : str
+            The target machine name.
+        plan_label : str
+            The label of the new plan.
+        plan_name : str
+            The name of the new plan.
+        patient_name : str, optional
+            The name of the patient. If not provided, it will be taken from the RTPLAN file.
+        patient_id : str, optional
+            The ID of the patient. If not provided, it will be taken from the RTPLAN file."""
+        base_plan = Dataset()
+
+        # Transfer syntax UID (Implicit VR Little Endian: Default Transfer Syntax for DICOM)
+        # https://dicom.nema.org/medical/dicom/current/output/chtml/part06/chapter_a.html
+        base_plan.is_implicit_VR = True
+        base_plan.is_little_endian = True
+
+        # General tags required on the base plan
+        base_plan.Modality = "RTPLAN"
+        base_plan.PatientName = patient_name
+        base_plan.PatientID = patient_id
+
+        # Machine type specific tags required on the base plan
+        sop, beam, tolerance_table = _get_datasets_from_machine_type(machine)
+        beam.TreatmentMachineName = machine_name
+        base_plan.SOPClassUID = sop
+        base_plan.BeamSequence = (beam,)
+        base_plan.ToleranceTableSequence = (tolerance_table,)
+        return cls(base_plan, plan_label, plan_name)
+
     def add_beam(self, beam: Beam):
         """Add a beam to the plan using the Beam object. Although public,
         this is a low-level method that is used by the higher-level methods like add_open_field_beam.
@@ -311,3 +357,42 @@ def _get_machine_type_from_mlc(mlc: Dataset, machine_specs: MachineSpecs) -> TMa
         raise ValueError("MLC type not supported")
 
     return machine
+
+
+def _get_datasets_from_machine_type(
+    machine: MachineBase,
+) -> tuple[str, Dataset, Dataset]:
+    """This function acts as factory to build the required data set from machine type."""
+    # Local imports are used to avoid circular dependencies.
+    # When a new machine type is added, this factory must be updated accordingly.
+    # This is an intentional design choice: although a plugin/registry pattern could
+    # automate new additions, new machine types are expected to be added rarely,
+    # and maintaining explicit control in this method is preferred.
+
+    # Note: This function does not create realistic datasets. Instead, the datasets
+    # contain only the minimum elements required to be processed by
+    # _get_machine_type_from_mlc. For example, LeafPositionBoundaries for TrueBeam
+    # includes only what is needed to distinguish between HDMLC and Millennium,
+    # whereas for Halcyon it does not exist at all.
+
+    tolerance_table = Dataset()
+    tolerance_table.ToleranceTableNumber = 1
+
+    from .truebeam import TrueBeamMachine
+    from .halcyon import HalcyonMachine
+
+    bld = Dataset()
+    if isinstance(machine, TrueBeamMachine):
+        sop = "1.2.840.10008.5.1.4.1.1.481.5"
+        bld.RTBeamLimitingDeviceType = "MLCX"
+        bld.LeafPositionBoundaries = 2 * [-110 if machine.mlc_is_hd else -200]
+    elif isinstance(machine, HalcyonMachine):
+        sop = "1.2.246.352.70.1.70"
+        bld.RTBeamLimitingDeviceType = "MLCX1"
+    else:
+        raise ValueError("Unknown machine type")
+
+    beam = Dataset()
+    beam.BeamLimitingDeviceSequence = (bld,)
+
+    return sop, beam, tolerance_table

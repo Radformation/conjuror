@@ -8,7 +8,7 @@ from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
 from conjuror.plans.plan_generator import PlanGenerator
-from conjuror.plans.machine import FluenceMode
+from conjuror.plans.machine import FluenceMode, TMachine
 from conjuror.plans.beam import Beam as BeamBase
 from conjuror.plans.halcyon import HalcyonMachine
 from conjuror.plans.truebeam import TrueBeamMachine, OpenField, Beam
@@ -44,13 +44,26 @@ class TestPlanGeneratorCreation(TestCase):
         )
         self.assertEqual("RTPLAN", pg.ds.Modality)
 
-    GENERATOR_TEST_PARAMS = [
+    MACHINE_TEST_PARAMS = [
+        TrueBeamMachine(True),
+        TrueBeamMachine(False),
+        HalcyonMachine(),
+    ]
+
+    @parameterized.expand(MACHINE_TEST_PARAMS)
+    def test_from_machine(self, machine: TMachine):
+        pg = PlanGenerator.from_machine(machine)
+        self.assertIsInstance(pg.machine, type(machine))
+        if isinstance(machine, TrueBeamMachine):
+            self.assertEqual(machine.mlc_is_hd, pg.machine.mlc_is_hd)
+
+    MACHINE_TYPE_TEST_PARAMS = [
         (TB_MIL_PLAN_FILE, TrueBeamMachine, False),
         (TB_HD_PLAN_FILE, TrueBeamMachine, True),
         (HAL_PLAN_FILE, HalcyonMachine, None),
     ]
 
-    @parameterized.expand(GENERATOR_TEST_PARAMS)
+    @parameterized.expand(MACHINE_TYPE_TEST_PARAMS)
     def test_machine_type(self, file: str, plan_generator_type: type, mlc_is_hd: bool):
         dataset = pydicom.dcmread(file)
         pg = _get_generator_from_dataset(dataset)
