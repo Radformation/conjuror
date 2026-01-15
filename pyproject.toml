@@ -1,6 +1,6 @@
 [project]
 name = "conjuror"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.12" # match RM
 version = "0.1.0"
 description = "Medical Physics Synthetic Image generator and RT Plan generator"
 authors = [
@@ -12,11 +12,11 @@ license = "MIT"
 keywords = ["medical", "physics", "image", "analysis", "RT Plan"]
 
 dependencies = [
-    "pydicom>=3.0",
-    "numpy>=2.3.3",
-    "plotly>=6.3.1",
-    "scikit-image>=0.25.2",
-    "matplotlib>=3.10.6",
+    "pydicom~=2.4.0", # match RM
+    "numpy~=1.23.0", # match RM
+    "plotly~=5.8", # match RM
+    "scikit-image~=0.20.0", # match RM
+    "matplotlib~=3.6.0", # match RM
     "pre-commit>=4.3.0",
 ]
 

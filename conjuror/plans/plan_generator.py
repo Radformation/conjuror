@@ -268,12 +268,9 @@ class PlanGenerator(Generic[TMachine]):
 
     def to_file(self, filename: str | Path) -> None:
         """Write the DICOM dataset to file"""
-        self.ds.save_as(
-            filename,
-            implicit_vr=self._base_plan.is_implicit_VR,
-            little_endian=self._base_plan.is_little_endian,
-            enforce_file_format=True,
-        )
+        self.ds.is_implicit_VR = self._base_plan.is_implicit_VR
+        self.ds.is_little_endian = self._base_plan.is_little_endian
+        self.ds.save_as(filename, write_like_original=False)
 
     def as_dicom(self) -> Dataset:
         """Return the new DICOM dataset."""
