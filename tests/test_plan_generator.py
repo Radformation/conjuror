@@ -1,14 +1,13 @@
 import tempfile
-from unittest import TestCase
 
 import numpy as np
 import pydicom
+import pytest
 from plotly.graph_objects import Figure
-from parameterized import parameterized
 
 from conjuror.images.simulators import IMAGER_AS1200
 from conjuror.plans.plan_generator import PlanGenerator
-from conjuror.plans.machine import FluenceMode
+from conjuror.plans.machine import FluenceMode, TMachine
 from conjuror.plans.beam import Beam as BeamBase
 from conjuror.plans.halcyon import HalcyonMachine
 from conjuror.plans.truebeam import TrueBeamMachine, OpenField, Beam
@@ -31,33 +30,51 @@ def _get_generator_from_file(file):
     return PlanGenerator.from_rt_plan_file(file, plan_label="label", plan_name="name")
 
 
-class TestPlanGeneratorCreation(TestCase):
-    GENERATOR_TEST_PARAMS = [
+class TestPlanGeneratorCreation:
+    def test_from_dataset(self):
+        dataset = pydicom.dcmread(TB_MIL_PLAN_FILE)
+        pg = PlanGenerator(dataset, plan_label="label", plan_name="name")
+        assert pg.ds.Modality == "RTPLAN"
+        assert len(pg.ds) == 28
+
+    def test_from_rt_file(self):
+        pg = PlanGenerator.from_rt_plan_file(
+            TB_MIL_PLAN_FILE, plan_label="label", plan_name="name"
+        )
+        assert pg.ds.Modality == "RTPLAN"
+
+    MACHINE_TEST_PARAMS = [
+        TrueBeamMachine(True),
+        TrueBeamMachine(False),
+        HalcyonMachine(),
+    ]
+
+    @pytest.mark.parametrize("machine", MACHINE_TEST_PARAMS)
+    def test_from_machine(self, machine: TMachine):
+        pg = PlanGenerator.from_machine(machine)
+        assert isinstance(pg.machine, type(machine))
+        if isinstance(machine, TrueBeamMachine):
+            assert machine.mlc_is_hd == pg.machine.mlc_is_hd
+
+    MACHINE_TYPE_TEST_PARAMS = [
         (TB_MIL_PLAN_FILE, TrueBeamMachine, False),
         (TB_HD_PLAN_FILE, TrueBeamMachine, True),
         (HAL_PLAN_FILE, HalcyonMachine, None),
     ]
 
-    @parameterized.expand(GENERATOR_TEST_PARAMS)
-    def test_from_dataset(self, file: str, plan_generator_type: type, mlc_is_hd: bool):
+    @pytest.mark.parametrize(
+        "file,plan_generator_type,mlc_is_hd", MACHINE_TYPE_TEST_PARAMS
+    )
+    def test_machine_type(self, file: str, plan_generator_type: type, mlc_is_hd: bool):
         dataset = pydicom.dcmread(file)
         pg = _get_generator_from_dataset(dataset)
-        self.assertIsInstance(pg.machine, plan_generator_type)
+        assert isinstance(pg.machine, plan_generator_type)
         if isinstance(pg.machine, TrueBeamMachine):
-            self.assertEqual(pg.machine.mlc_is_hd, mlc_is_hd)
-
-    @parameterized.expand(GENERATOR_TEST_PARAMS)
-    def test_from_rt_plan_file(
-        self, file: str, plan_generator_type: type, mlc_is_hd: bool
-    ):
-        pg = _get_generator_from_file(file)
-        self.assertIsInstance(pg.machine, plan_generator_type)
-        if isinstance(pg.machine, TrueBeamMachine):
-            self.assertEqual(pg.machine.mlc_is_hd, mlc_is_hd)
+            assert pg.machine.mlc_is_hd == mlc_is_hd
 
     def test_from_not_rt_plan_file(self):
         file = get_file_from_cloud_test_repo(["picket_fence", "AS500#2.dcm"])
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             _get_generator_from_file(file)
 
     def test_to_file(self):
@@ -67,21 +84,21 @@ class TestPlanGeneratorCreation(TestCase):
             pg.to_file(t.name)
         # shouldn't raise; should be valid DICOM
         ds = pydicom.dcmread(t.name)
-        self.assertEqual(ds.RTPlanLabel, "label")
-        self.assertEqual(len(ds.BeamSequence), 1)
+        assert ds.RTPlanLabel == "label"
+        assert len(ds.BeamSequence) == 1
 
 
-class TestPlanGeneratorParameters(TestCase):
+class TestPlanGeneratorParameters:
     def test_no_patient_id(self):
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
         ds.pop("PatientID")
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             PlanGenerator(ds, plan_label="plan_label", plan_name="plan_name")
 
     def test_no_patient_name(self):
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
         ds.pop("PatientName")
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             _get_generator_from_dataset(ds)
 
     def test_pass_patient_name(self):
@@ -89,56 +106,56 @@ class TestPlanGeneratorParameters(TestCase):
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
         pg = PlanGenerator(ds, plan_label="l", plan_name="n", patient_name=patient_name)
         pg_dcm = pg.as_dicom()
-        self.assertEqual(pg_dcm.PatientName, patient_name)
+        assert pg_dcm.PatientName == patient_name
 
     def test_pass_patient_id(self):
         patient_id = "id"
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
         pg = PlanGenerator(ds, plan_label="l", plan_name="n", patient_id=patient_id)
         pg_dcm = pg.as_dicom()
-        self.assertEqual(pg_dcm.PatientID, patient_id)
+        assert pg_dcm.PatientID == patient_id
 
     def test_no_tolerance_table(self):
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
         ds.pop("ToleranceTableSequence")
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             _get_generator_from_dataset(ds)
 
     def test_no_beam_sequence(self):
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
         ds.pop("BeamSequence")
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             _get_generator_from_dataset(ds)
 
     def test_no_mlc_data(self):
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
         # pop MLC part of the data; at this point it's just an open field
         ds.BeamSequence[0].BeamLimitingDeviceSequence.pop()
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             _get_generator_from_dataset(ds)
 
     def test_machine_name(self):
         pg = _get_generator_from_file(TB_MIL_PLAN_FILE)
-        self.assertEqual(pg.machine_name, "TrueBeamSN5837")
+        assert pg.machine_name == "TrueBeamSN5837"
 
     def test_machine_name_set_on_beam(self):
         """Beam machine name is set when added to the plan"""
         pg = _get_generator_from_file(TB_MIL_PLAN_FILE)
         pg.add_beam(create_beam())
         dcm = pg.as_dicom()
-        self.assertEqual(dcm.BeamSequence[0].TreatmentMachineName, "TrueBeamSN5837")
+        assert dcm.BeamSequence[0].TreatmentMachineName == "TrueBeamSN5837"
 
     def test_leaf_boundaries(self):
         pg = _get_generator_from_file(TB_MIL_PLAN_FILE)
-        self.assertEqual(len(pg.machine.mlc_boundaries), 61)
-        self.assertEqual(max(pg.machine.mlc_boundaries), 200)
-        self.assertEqual(min(pg.machine.mlc_boundaries), -200)
+        assert len(pg.machine.mlc_boundaries) == 61
+        assert max(pg.machine.mlc_boundaries) == 200
+        assert min(pg.machine.mlc_boundaries) == -200
 
     def test_instance_uid_changes(self):
         dcm = pydicom.dcmread(TB_MIL_PLAN_FILE)
         pg = _get_generator_from_file(TB_MIL_PLAN_FILE)
         pg_dcm = pg.as_dicom()
-        self.assertNotEqual(pg_dcm.SOPInstanceUID, dcm.SOPInstanceUID)
+        assert pg_dcm.SOPInstanceUID != dcm.SOPInstanceUID
 
     def test_invert_array(self):
         pg = _get_generator_from_file(TB_MIL_PLAN_FILE)
@@ -148,12 +165,12 @@ class TestPlanGeneratorParameters(TestCase):
         pg_dcm = pg.to_dicom_images(imager=IMAGER_AS1200, invert=False)
         non_inverted_array = pg_dcm[0].pixel_array
         # when inverted, the corner should NOT be 0
-        self.assertAlmostEqual(float(non_inverted_array[0, 0]), 0)
+        assert float(non_inverted_array[0, 0]) == pytest.approx(0, abs=1e-6)
 
         pg_dcm = pg.to_dicom_images(imager=IMAGER_AS1200, invert=True)
         inverted_array = pg_dcm[0].pixel_array
         # when inverted, the corner should NOT be 0
-        self.assertAlmostEqual(float(inverted_array[0, 0]), 100)
+        assert float(inverted_array[0, 0]) == pytest.approx(100, abs=1e-6)
 
 
 def create_beam(**kwargs) -> Beam:
@@ -178,25 +195,26 @@ def create_beam(**kwargs) -> Beam:
     )
 
 
-class TestPlanGeneratorBeams(TestCase):
+class TestPlanGeneratorBeams:
     """Test real workflow where beams are added"""
 
-    def setUp(self) -> None:
+    @pytest.fixture(autouse=True)
+    def setup(self):
         self.pg = _get_generator_from_file(TB_MIL_PLAN_FILE)
 
     def test_add_beam_low_level(self):
         self.pg.add_beam(create_beam())
         dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 1)
-        self.assertEqual(dcm.BeamSequence[0].BeamName, "name")
-        self.assertEqual(dcm.BeamSequence[0].BeamNumber, 1)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 1)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 100
+        assert len(dcm.BeamSequence) == 1
+        assert dcm.BeamSequence[0].BeamName == "name"
+        assert dcm.BeamSequence[0].BeamNumber == 1
+        assert dcm.FractionGroupSequence[0].NumberOfBeams == 1
+        assert (
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset == 100
         )
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].ReferencedBeamNumber,
-            1,
+        assert (
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].ReferencedBeamNumber
+            == 1
         )
         nominal_boundaries = (
             TB_MIL_PLAN_DS.BeamSequence[0]
@@ -206,22 +224,22 @@ class TestPlanGeneratorBeams(TestCase):
         actual_boundaries = (
             dcm.BeamSequence[0].BeamLimitingDeviceSequence[-1].LeafPositionBoundaries
         )
-        self.assertEqual(nominal_boundaries, actual_boundaries)
+        assert nominal_boundaries == actual_boundaries
 
     def test_add_2_beams(self):
         self.pg.add_beam(create_beam())
         self.pg.add_beam(create_beam(beam_name="beam2"))
         dcm = self.pg.as_dicom()
-        self.assertEqual(len(dcm.BeamSequence), 2)
-        self.assertEqual(dcm.FractionGroupSequence[0].NumberOfBeams, 2)
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset, 100
+        assert len(dcm.BeamSequence) == 2
+        assert dcm.FractionGroupSequence[0].NumberOfBeams == 2
+        assert (
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset == 100
         )
-        self.assertEqual(
-            dcm.FractionGroupSequence[0].ReferencedBeamSequence[1].BeamMeterset, 100
+        assert (
+            dcm.FractionGroupSequence[0].ReferencedBeamSequence[1].BeamMeterset == 100
         )
-        self.assertEqual(dcm.BeamSequence[1].BeamName, "beam2")
-        self.assertEqual(dcm.BeamSequence[1].BeamNumber, 2)
+        assert dcm.BeamSequence[1].BeamName == "beam2"
+        assert dcm.BeamSequence[1].BeamNumber == 2
 
     def test_beam_roundtrip(self):
         # Round trip:
@@ -233,14 +251,14 @@ class TestPlanGeneratorBeams(TestCase):
         pg = _get_generator_from_file(TB_MIL_PLAN_FILE)
         pg.add_beam(beam1)
         beam2 = BeamBase.from_dicom(pg.ds, 0)
-        self.assertEqual(beam1.beam_name, beam2.beam_name)
-        self.assertEqual(beam1.beam_meterset, beam2.beam_meterset)
-        np.testing.assert_array_equal(beam1.gantry_angles, beam2.gantry_angles)
-        np.testing.assert_array_equal(beam1.metersets, beam2.metersets)
+        assert beam1.beam_name == beam2.beam_name
+        assert beam1.beam_meterset == beam2.beam_meterset
+        assert all(beam1.gantry_angles == beam2.gantry_angles)
+        assert all(beam1.metersets == beam2.metersets)
         for bld_type in ["ASYMX", "ASYMY", "MLCX"]:
-            np.testing.assert_array_equal(
-                beam1.beam_limiting_device_positions[bld_type],
-                beam2.beam_limiting_device_positions[bld_type],
+            assert np.all(
+                beam1.beam_limiting_device_positions[bld_type]
+                == beam2.beam_limiting_device_positions[bld_type]
             )
 
     def test_plot_fluence(self):
@@ -248,9 +266,9 @@ class TestPlanGeneratorBeams(TestCase):
         procedure = OpenField(x1=-5, x2=5, y1=-5, y2=5, mu=100)
         self.pg.add_procedure(procedure)
         figs = self.pg.plot_fluences(IMAGER_AS1200)
-        self.assertIsInstance(figs, list)
-        self.assertIsInstance(figs[0], Figure)
+        assert isinstance(figs, list)
+        assert isinstance(figs[0], Figure)
 
     def test_list_procedure(self):
         procedures = self.pg.list_procedures()
-        self.assertEqual(len(procedures), 9)
+        assert len(procedures) == 9

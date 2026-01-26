@@ -3,6 +3,7 @@ from abc import ABC
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Self
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -64,6 +65,8 @@ class WinstonLutzField:
 
 
 class TrueBeamMachine(MachineBase):
+    """A class that represents a TrueBeam machine."""
+
     def __init__(self, mlc_is_hd: bool, specs: MachineSpecs | None = None):
         self.mlc_is_hd = mlc_is_hd
         self.specs = specs or DEFAULT_SPECS_TB
@@ -477,7 +480,7 @@ class PicketFence(QAProcedure):
     mu_per_transition : int
         The monitor units for MLC transitions between pickets.
     skip_first_picket: bool
-        Whether or not to skip the first picket.
+        Whether to skip the first picket.
     energy : float
         The energy of the beam.
     fluence_mode : FluenceMode
@@ -518,6 +521,25 @@ class PicketFence(QAProcedure):
     couch_rot: float = 0
     jaw_padding: float = 10
     beam_name: str = "Picket fence"
+
+    @classmethod
+    def from_varian_reference(cls) -> Self:
+        """Add a picket fence that replicates Varian's T0.2_PicketFenceStatic_M120_TB_Rev02.dcm
+
+        .. include:: varian_reference_warning.rst
+        """
+        # Note #1: jaw x2 is different (cannot be replicated) since the left padding
+        # is different from the right padding
+        # Note #2: jaws y1,y2 are different (cannot be replicated) since this procedure
+        # doesn't hide any leafs, whereas in the Varian plan, the last top/bottom leaves are hidden.
+        return cls(
+            picket_width=1,
+            picket_positions=np.arange(-74.5, 76, 15),
+            mu_per_picket=8.125,
+            mu_per_transition=1.875,
+            skip_first_picket=True,
+            jaw_padding=5.5,
+        )
 
     def compute(self, machine: TrueBeamMachine) -> None:
         # check MLC overtravel; machine may prevent delivery if exposing leaf tail
@@ -1329,6 +1351,29 @@ class VMATDRGS(QAProcedure):
     def dynamic_beam(self) -> Beam:
         return self.beams[self.dynamic_beam_idx]
 
+    @classmethod
+    def from_varian_reference(cls) -> Self:
+        """Add two beams that replicates Varian's T2_DoseRateGantrySpeed_M120_TB_Rev02.dcm
+
+        .. include:: varian_reference_warning.rst
+        """
+        return cls(
+            dose_rates=(600, 600, 600, 600, 502.691, 335.128, 167.564),
+            gantry_speeds=(2.75, 3.056, 3.438, 4.296, 4.8, 4.8, 4.8),
+            mu_per_segment=48.0,
+            mu_per_transition=8.0,
+            correct_fluence=False,
+            gantry_motion_per_transition=10.0,
+            gantry_rotation_clockwise=False,
+            initial_gantry_offset=1.0,
+            mlc_span=138.0,
+            mlc_motion_reverse=True,
+            mlc_gap=2.0,
+            jaw_padding=0.0,
+            max_dose_rate=600,
+            reference_beam_mu=400.0,
+        )
+
     def compute(self, machine: TrueBeamMachine) -> None:
         # store parameters common to all beams
         mlc_boundaries = (
@@ -1600,6 +1645,26 @@ class VMATDRMLC(QAProcedure):
     @property
     def dynamic_beam(self) -> Beam:
         return self.beams[self.dynamic_beam_idx]
+
+    @classmethod
+    def from_varian_reference(cls) -> Self:
+        """Add two beams that replicates Varian's T3_MLCSpeed_M120_TB_Rev02.dcm
+
+        .. include:: varian_reference_warning.rst
+        """
+        return cls(
+            mlc_speeds=(13.714, 20.0, 8.0, 4.0),
+            gantry_speeds=(4.8, 4.0, 4.8, 4.8),
+            segment_width=30,
+            gantry_rotation_clockwise=False,
+            initial_gantry_offset=10.0,
+            mlc_motion_reverse=False,
+            interpolation_factor=3,
+            jaw_padding=0.0,
+            max_dose_rate=600,
+            reference_beam_mu=120.0,
+            reference_beam_add_before=False,
+        )
 
     def compute(self, machine: TrueBeamMachine):
         # Nomenclature

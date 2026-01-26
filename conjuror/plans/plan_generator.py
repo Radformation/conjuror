@@ -11,11 +11,11 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 from pydicom.uid import generate_uid
 
-from .beam import Beam
-from .machine import MachineSpecs, TMachine
-from ..images.layers import ArrayLayer
-from ..images.simulators import Simulator, Imager
-from .visualization import plot_fluences
+from conjuror.images.layers import ArrayLayer
+from conjuror.images.simulators import Imager, Simulator
+from conjuror.plans.beam import Beam
+from conjuror.plans.machine import TMachine, MachineSpecs, MachineBase
+from conjuror.plans.visualization import plot_fluences
 
 
 class QAProcedureBase(Generic[TMachine], ABC):
@@ -32,11 +32,11 @@ class QAProcedureBase(Generic[TMachine], ABC):
 
 
 class PlanGenerator(Generic[TMachine]):
-    """A tool for generating new QA RTPlan files based on an initial, somewhat empty RTPlan file."""
+    """A tool for generating new QA RTPlan files based on an initial base RTPlan file."""
 
     def __init__(
         self,
-        ds: Dataset,
+        base_plan: Dataset,
         plan_label: str,
         plan_name: str,
         patient_name: str | None = None,
@@ -46,7 +46,7 @@ class PlanGenerator(Generic[TMachine]):
         """
         Parameters
         ----------
-        ds : Dataset
+        base_plan : Dataset
               The RTPLAN dataset to base the new plan off of. The plan must already have MLC positions.
         plan_label : str
             The label of the new plan.
@@ -59,28 +59,26 @@ class PlanGenerator(Generic[TMachine]):
         machine_specs : MachineSpecs
             The specs of the machine
         """
-        if ds.Modality != "RTPLAN":
+        if base_plan.Modality != "RTPLAN":
             raise ValueError("File is not an RTPLAN file")
-        patient_name = patient_name or getattr(ds, "PatientName", None)
+        patient_name = patient_name or getattr(base_plan, "PatientName", None)
         if not patient_name:
-            raise ValueError(
-                "RTPLAN file must have PatientName or pass it via `patient_name`"
-            )
-        patient_id = patient_id or getattr(ds, "PatientID", None)
+            msg = "RTPLAN file must have PatientName or pass it via `patient_name`"
+            raise ValueError(msg)
+        patient_id = patient_id or getattr(base_plan, "PatientID", None)
         if not patient_id:
-            raise ValueError(
-                "RTPLAN file must have PatientID or pass it via `patient_id`"
-            )
-        if not hasattr(ds, "ToleranceTableSequence"):
-            raise ValueError("RTPLAN file must have ToleranceTableSequence")
-        if not hasattr(ds, "BeamSequence"):
-            raise ValueError(
-                "RTPLAN file must have at least one beam in the beam sequence"
-            )
+            msg = "RTPLAN file must have PatientID or pass it via `patient_id`"
+            raise ValueError(msg)
+        if not hasattr(base_plan, "ToleranceTableSequence"):
+            msg = "RTPLAN file must have ToleranceTableSequence"
+            raise ValueError(msg)
+        if not hasattr(base_plan, "BeamSequence"):
+            msg = "RTPLAN file must have at least one beam in the beam sequence"
+            raise ValueError(msg)
         try:
             mlc = next(
                 bld
-                for bs in ds.BeamSequence
+                for bs in base_plan.BeamSequence
                 for bld in bs.BeamLimitingDeviceSequence
                 if "MLCX" in bld.RTBeamLimitingDeviceType
             )
@@ -89,51 +87,90 @@ class PlanGenerator(Generic[TMachine]):
 
         self.machine = _get_machine_type_from_mlc(mlc, machine_specs)
 
-        ######  Clear/initialize the metadata for the new plan
-        ds.PatientName = patient_name
-        ds.PatientID = patient_id
-        ds.RTPlanLabel = plan_label
-        ds.RTPlanName = plan_name
         date = datetime.datetime.now().strftime("%Y%m%d")
         time = datetime.datetime.now().strftime("%H%M%S")
 
-        ds.InstanceCreationDate = date
-        ds.InstanceCreationTime = time
-        ds.SOPInstanceUID = generate_uid()
+        #### Create mandatory tags (empty if not applicable)
+        plan = Dataset()
 
+        # SOP Common Module
+        plan.SOPClassUID = base_plan.SOPClassUID
+        plan.SOPInstanceUID = generate_uid()
+
+        # Patient Module
+        plan.PatientBirthDate = ""
+        plan.PatientSex = ""
+
+        # General Study Module
+        plan.StudyDate = date
+        plan.StudyTime = time
+        plan.AccessionNumber = ""
+        plan.ReferringPhysicianName = ""
+        plan.StudyInstanceUID = generate_uid()
+        plan.StudyID = ""
+
+        # RT Series Module
+        plan.Modality = "RTPLAN"
+        plan.OperatorsName = ""
+        plan.SeriesInstanceUID = generate_uid()
+        plan.SeriesNumber = ""
+
+        # General Equipment Module
+        plan.Manufacturer = ""
+
+        # RT General Plan Module
+        plan.RTPlanDate = date
+        plan.RTPlanTime = time
+        plan.RTPlanGeometry = "TREATMENT_DEVICE"
+        plan.PlanIntent = "MACHINE_QA"
+
+        #### Input parameters
+        plan.PatientName = patient_name
+        plan.PatientID = patient_id
+        plan.RTPlanLabel = plan_label
+        plan.RTPlanName = plan_name
+
+        #### Copy from base plan
+        # RT Tolerance Tables Module - use first table from base plan
+        plan.ToleranceTableSequence = (base_plan.ToleranceTableSequence[0],)
+
+        #### Modules required for beams
+        # Use 1-indexing for sequence number per:
+        # https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_7.5.html
         # Patient Setup Sequence
         patient_setup = Dataset()
         patient_setup.PatientPosition = "HFS"
-        patient_setup.PatientSetupNumber = 0
-        ds.PatientSetupSequence = DicomSequence((patient_setup,))
+        patient_setup.PatientSetupNumber = 1
+        plan.PatientSetupSequence = DicomSequence((patient_setup,))
 
-        # Dose Reference Sequence
-        dose_ref1 = Dataset()
-        dose_ref1.DoseReferenceNumber = 1
-        dose_ref1.DoseReferenceUID = generate_uid()
-        dose_ref1.DoseReferenceStructureType = "SITE"
-        dose_ref1.DoseReferenceDescription = "PTV"
-        dose_ref1.DoseReferenceType = "TARGET"
-        dose_ref1.DeliveryMaximumDose = 20.0
-        dose_ref1.TargetPrescriptionDose = 40.0
-        dose_ref1.TargetMaximumDose = 20.0
-        ds.DoseReferenceSequence = DicomSequence((dose_ref1,))
+        # RT Prescription Module - Dose Reference Sequence
+        dose_ref = Dataset()
+        dose_ref.DoseReferenceNumber = 1
+        dose_ref.DoseReferenceUID = generate_uid()
+        dose_ref.DoseReferenceStructureType = "SITE"
+        dose_ref.DoseReferenceDescription = "PTV"
+        dose_ref.DoseReferenceType = "TARGET"
+        dose_ref.DeliveryMaximumDose = 20.0
+        dose_ref.TargetPrescriptionDose = 40.0
+        dose_ref.TargetMaximumDose = 20.0
+        plan.DoseReferenceSequence = DicomSequence((dose_ref,))
 
         # Fraction Group Sequence
-        frxn_gp1 = Dataset()
-        frxn_gp1.FractionGroupNumber = 1
-        frxn_gp1.NumberOfFractionsPlanned = 1
-        frxn_gp1.NumberOfBeams = 0
-        frxn_gp1.NumberOfBrachyApplicationSetups = 0
-        frxn_gp1.ReferencedBeamSequence = DicomSequence()
-        ds.FractionGroupSequence = DicomSequence((frxn_gp1,))
+        frxn_gp = Dataset()
+        frxn_gp.FractionGroupNumber = 1
+        frxn_gp.NumberOfFractionsPlanned = 1
+        frxn_gp.NumberOfBeams = 0
+        frxn_gp.NumberOfBrachyApplicationSetups = 0
+        frxn_gp.ReferencedBeamSequence = DicomSequence()
+        plan.FractionGroupSequence = DicomSequence((frxn_gp,))
 
         # Store attributes
-        self.ds = ds
-        self.machine_name = ds.BeamSequence[0].TreatmentMachineName
+        self._base_plan = base_plan
+        self.ds = plan
+        self.machine_name = base_plan.BeamSequence[0].TreatmentMachineName
 
         # Clear beam sequence, this will be filled with the custom beams
-        ds.BeamSequence = DicomSequence()
+        plan.BeamSequence = DicomSequence()
 
     @classmethod
     def from_rt_plan_file(cls, rt_plan_file: str | Path, **kwargs) -> Self:
@@ -148,6 +185,52 @@ class PlanGenerator(Generic[TMachine]):
         """
         ds = pydicom.dcmread(rt_plan_file)
         return cls(ds, **kwargs)
+
+    @classmethod
+    def from_machine(
+        cls,
+        machine: MachineBase,
+        machine_name: str = "RadMachine",
+        plan_label: str = "Radformation",
+        plan_name: str = "Radformation",
+        patient_name: str = "RadMachine",
+        patient_id: str = "RadMachine",
+    ) -> Self:
+        """Create a plan for a target machine type.
+
+        Parameters
+        ----------
+        machine : MachineBase
+            The target machine.
+        machine_name : str
+            The target machine name.
+        plan_label : str
+            The label of the new plan.
+        plan_name : str
+            The name of the new plan.
+        patient_name : str, optional
+            The name of the patient. If not provided, it will be taken from the RTPLAN file.
+        patient_id : str, optional
+            The ID of the patient. If not provided, it will be taken from the RTPLAN file."""
+        base_plan = Dataset()
+
+        # Transfer syntax UID (Implicit VR Little Endian: Default Transfer Syntax for DICOM)
+        # https://dicom.nema.org/medical/dicom/current/output/chtml/part06/chapter_a.html
+        base_plan.is_implicit_VR = True
+        base_plan.is_little_endian = True
+
+        # General tags required on the base plan
+        base_plan.Modality = "RTPLAN"
+        base_plan.PatientName = patient_name
+        base_plan.PatientID = patient_id
+
+        # Machine type specific tags required on the base plan
+        sop, beam, tolerance_table = _get_datasets_from_machine_type(machine)
+        beam.TreatmentMachineName = machine_name
+        base_plan.SOPClassUID = sop
+        base_plan.BeamSequence = (beam,)
+        base_plan.ToleranceTableSequence = (tolerance_table,)
+        return cls(base_plan, plan_label, plan_name)
 
     def add_beam(self, beam: Beam):
         """Add a beam to the plan using the Beam object. Although public,
@@ -185,6 +268,8 @@ class PlanGenerator(Generic[TMachine]):
 
     def to_file(self, filename: str | Path) -> None:
         """Write the DICOM dataset to file"""
+        self.ds.is_implicit_VR = self._base_plan.is_implicit_VR
+        self.ds.is_little_endian = self._base_plan.is_little_endian
         self.ds.save_as(filename, write_like_original=False)
 
     def as_dicom(self) -> Dataset:
@@ -244,7 +329,7 @@ class OvertravelError(ValueError):
     pass
 
 
-def _get_machine_type_from_mlc(mlc: Dataset, machine_specs: MachineSpecs):
+def _get_machine_type_from_mlc(mlc: Dataset, machine_specs: MachineSpecs) -> TMachine:
     """This function acts as factory to build the machine from the mlc data set."""
     # Local imports are used to avoid circular dependencies.
     # When a new machine type is added, this factory must be updated accordingly.
@@ -255,13 +340,13 @@ def _get_machine_type_from_mlc(mlc: Dataset, machine_specs: MachineSpecs):
     bld_type = mlc.RTBeamLimitingDeviceType
 
     if bld_type == "MLCX":
-        mlc_is_hd = mlc.LeafPositionBoundaries[0] == -110
-        from .truebeam import TrueBeamMachine
+        from conjuror.plans.truebeam import TrueBeamMachine
 
+        mlc_is_hd = mlc.LeafPositionBoundaries[0] == -110
         machine = TrueBeamMachine(mlc_is_hd, machine_specs)
 
     elif bld_type == "MLCX1" or bld_type == "MLCX2":
-        from .halcyon import HalcyonMachine
+        from conjuror.plans.halcyon import HalcyonMachine
 
         machine = HalcyonMachine(machine_specs)
 
@@ -269,3 +354,42 @@ def _get_machine_type_from_mlc(mlc: Dataset, machine_specs: MachineSpecs):
         raise ValueError("MLC type not supported")
 
     return machine
+
+
+def _get_datasets_from_machine_type(
+    machine: MachineBase,
+) -> tuple[str, Dataset, Dataset]:
+    """This function acts as factory to build the required data set from machine type."""
+    # Local imports are used to avoid circular dependencies.
+    # When a new machine type is added, this factory must be updated accordingly.
+    # This is an intentional design choice: although a plugin/registry pattern could
+    # automate new additions, new machine types are expected to be added rarely,
+    # and maintaining explicit control in this method is preferred.
+
+    # Note: This function does not create realistic datasets. Instead, the datasets
+    # contain only the minimum elements required to be processed by
+    # _get_machine_type_from_mlc. For example, LeafPositionBoundaries for TrueBeam
+    # includes only what is needed to distinguish between HDMLC and Millennium,
+    # whereas for Halcyon it does not exist at all.
+
+    tolerance_table = Dataset()
+    tolerance_table.ToleranceTableNumber = 1
+
+    from conjuror.plans.truebeam import TrueBeamMachine
+    from conjuror.plans.halcyon import HalcyonMachine
+
+    bld = Dataset()
+    if isinstance(machine, TrueBeamMachine):
+        sop = "1.2.840.10008.5.1.4.1.1.481.5"
+        bld.RTBeamLimitingDeviceType = "MLCX"
+        bld.LeafPositionBoundaries = 2 * [-110 if machine.mlc_is_hd else -200]
+    elif isinstance(machine, HalcyonMachine):
+        sop = "1.2.246.352.70.1.70"
+        bld.RTBeamLimitingDeviceType = "MLCX1"
+    else:
+        raise ValueError("Unknown machine type")
+
+    beam = Dataset()
+    beam.BeamLimitingDeviceSequence = (bld,)
+
+    return sop, beam, tolerance_table
