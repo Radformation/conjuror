@@ -46,6 +46,16 @@ definitions:
           - uv pip install .[developer] --system
           - uv run pytest --junitxml=./test-reports/conjuror_results.xml
 
+    - step: &push-to-github
+        name: Push to Github
+        <<: *bb-runner
+        clone:
+          depth: full
+        script:
+          - apt update
+          - apt install git -y
+          - git push git@github.com:Radformation/conjuror.git $BITBUCKET_BRANCH
+
 pipelines:
 
   custom:
@@ -64,3 +74,7 @@ pipelines:
       - parallel:
           - step: *build-docs
           - step: *run-tests
+
+  branches:
+    master:
+      - step: *push-to-github
