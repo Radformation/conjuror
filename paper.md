@@ -1,5 +1,5 @@
 ---
-title: 'Conjuror: An RT DICOM QA plan generator'
+title: 'Conjuror: A DICOM RT Plan generator for Linac QA'
 tags:
   - medical physics
   - radiotherapy
@@ -43,15 +43,16 @@ such as multileaf collimator (MLC) positioning, imaging isocenter coincidence, a
 Guidelines such as AAPM Task Group 142 [@TG142] prescribe many of these tests.
 
 In current practice, generating these QA plans typically involves either (1) manual construction within
-proprietary treatment planning systems (TPSs), or (2) relying on vendor-provided test plans which may not be
+proprietary treatment planning systems (TPS), or (2) relying on vendor-provided test plans which may not be
 adaptable to institution-specific protocols or research needs. Additionally, QA plans are often distributed
 across multiple files, making it cumbersome to assemble all required beams in a single cohesive plan and
 hindering streamlined, automated workflows.
 
 Conjuror addresses this gap by offering an open-source, Python-based framework for generating DICOM RT Plans
 specifically for Varian linacs. The library enables:
-* Customization and reproducibility of commonly used QA plans based on pre-prepared procedures.
-* Aggregation of multiple procedures into a single RT plan, enabling a streamlined QA workflow.
+
+* Customization of commonly used QA plans based on pre-prepared procedures.
+* Aggregation of multiple procedures into a single RT plan file, enabling a streamlined QA workflow.
 * Visualization of the expected fluence and the sequence of control points of each beam.
 * Integration with Python QA ecosystems (e.g. Pylinac [@Kerns2023]), supporting automated analysis and research into novel QA strategies.
 * Built on established Python packages such as pydicom [@Mason2022], ensuring compatibility with the broader medical imaging software ecosystem.
