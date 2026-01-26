@@ -59,6 +59,8 @@ definitions:
 pipelines:
 
   custom:
+    push-to-github:
+      - step: *push-to-github
     publish-package:
       - step:
           name: Build & Push to PYPI
