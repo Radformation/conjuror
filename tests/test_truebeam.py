@@ -20,6 +20,7 @@ from conjuror.plans.truebeam import (
     GantrySpeed,
     VMATDRGS,
     VMATDRMLC,
+    DosimetricLeafGap,
 )
 from tests.utils import get_file_from_cloud_test_repo
 
@@ -316,6 +317,27 @@ class TestWinstonLutz:
         jaw_y = procedure.beams[0].beam_limiting_device_positions["ASYMY"]
         assert jaw_y[0, 0] == y1
         assert jaw_y[1, 0] == y2
+
+
+class TestDLG:
+    def test_dlg(self):
+        gap_sizes = (2, 4, 6)
+        start_position = -50
+        final_position = 50
+        procedure = DosimetricLeafGap(
+            gap_sizes=gap_sizes,
+            start_position=start_position,
+            final_position=final_position,
+        )
+        procedure.compute(DEFAULT_TRUEBEAM_HD120)
+        assert len(procedure.beams) == len(gap_sizes)
+
+        for idx, gap_size in enumerate(gap_sizes):
+            mlc = procedure.beams[idx].beam_limiting_device_positions["MLCX"]
+            assert all(mlc[:60, 0] == start_position - gap_size / 2)
+            assert all(mlc[60:, 0] == start_position + gap_size / 2)
+            assert all(mlc[:60, 1] == final_position - gap_size / 2)
+            assert all(mlc[60:, 1] == final_position + gap_size / 2)
 
 
 class TestDoseRate:

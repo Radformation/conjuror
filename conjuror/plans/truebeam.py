@@ -703,6 +703,107 @@ class WinstonLutz(QAProcedure):
 
 
 @dataclass
+class DosimetricLeafGap(QAProcedure):
+    """Add beams to measure the Dosimetric Leaf Gap (DLG).
+
+    Parameters
+    ----------
+    gap_sizes : tuple
+        The gap size in mm for the MLC sweeps.
+    start_position: int
+        The start position of the MLC gap in mm.
+    final_position: int
+        The final position of the MLC gap in mm
+    mu : int
+        The monitor units of each beam.
+    energy : float
+        The energy of the beam.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
+    dose_rate : int
+        The dose rate of the beam.
+    gantry_angle : float
+        The gantry angle of the beam.
+    coll_angle : float
+        The collimator angle of the beam.
+    couch_vrt : float
+        The couch vertical position.
+    couch_lat : float
+        The couch lateral position.
+    couch_lng : float
+        The couch longitudinal position.
+    couch_rot : float
+        The couch rotation.
+    x1 : float | None
+        The left edge position. If None, the jaws are placed next to
+        ``start_sweep_position`` or ``end_sweep_position``
+    x2 : float| None
+        The right edge position. If None, the jaws are placed next to
+        ``start_sweep_position`` or ``end_sweep_position``
+    y1 : float| None
+        The bottom edge position. If None, the jaws are fully open.
+    y2 : float| None
+        The top edge position. If None, the jaws are fully open.
+    """
+
+    gap_sizes: Sequence[float] = (2, 4, 6, 8, 10)
+    start_position: float = -50
+    final_position: float = 50
+    mu: int = 100
+    energy: float = 6
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
+    dose_rate: int = 600
+    gantry_angle: float = 0
+    coll_angle: float = 0
+    couch_vrt: float = 0
+    couch_lat: float = 0
+    couch_lng: float = 1000
+    couch_rot: float = 0
+    x1: float | None = None
+    x2: float | None = None
+    y1: float | None = None
+    y2: float | None = None
+
+    def compute(self, machine: TrueBeamMachine) -> None:
+        # Determine jaw positions
+        min_pos = min(self.start_position, self.final_position)
+        max_pos = max(self.start_position, self.final_position)
+        x1 = min_pos if self.x1 is None else self.x1
+        x2 = max_pos if self.x2 is None else self.x2
+        y1 = machine.mlc_boundaries[0] if self.y1 is None else self.y1
+        y2 = machine.mlc_boundaries[-1] if self.y2 is None else self.y2
+
+        shaper = Beam.create_shaper(machine)
+        for gap_size in self.gap_sizes:
+            mlc_start = shaper.get_shape(Strip(self.start_position, gap_size))
+            mlc_final = shaper.get_shape(Strip(self.final_position, gap_size))
+            mlc_positions = [mlc_start] + [mlc_final]
+            metersets = [0, self.mu]
+            beam_name = f"DLG {gap_size:00d}mm"
+
+            beam = Beam(
+                mlc_is_hd=machine.mlc_is_hd,
+                beam_name=beam_name,
+                energy=self.energy,
+                fluence_mode=self.fluence_mode,
+                dose_rate=self.dose_rate,
+                x1=x1,
+                x2=x2,
+                y1=y1,
+                y2=y2,
+                gantry_angles=self.gantry_angle,
+                coll_angle=self.coll_angle,
+                couch_vrt=self.couch_vrt,
+                couch_lat=self.couch_lat,
+                couch_lng=self.couch_lng,
+                couch_rot=self.couch_rot,
+                mlc_positions=mlc_positions,
+                metersets=metersets,
+            )
+            self.beams.append(beam)
+
+
+@dataclass
 class DoseRate(QAProcedure):
     """Create a single-image dose rate test. Multiple ROIs are generated. A reference beam is also
     created where all ROIs are delivered at the default dose rate for comparison.

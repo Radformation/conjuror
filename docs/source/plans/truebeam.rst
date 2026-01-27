@@ -23,6 +23,11 @@ Winston-Lutz
 
 .. autoclass:: conjuror.plans.truebeam.WinstonLutz
 
+Dosimetric Leaf Gap
+-------------------
+
+.. autoclass:: conjuror.plans.truebeam.DosimetricLeafGap
+
 Dose Rate
 ---------
 
