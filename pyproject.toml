@@ -1,7 +1,7 @@
 [project]
 name = "conjuror"
 requires-python = ">=3.11,<3.12" # match RM
-version = "0.1.1"
+version = "0.1.2"
 description = "Medical Physics Synthetic Image generator and RT Plan generator"
 authors = [
     {name = "Joao Silveira", email = "jsilveira@radformation.com"},
@@ -43,4 +43,4 @@ target-version = "py311"
 
 
 [tool.setuptools.packages.find]
-include = ["conjuror"]
+include = ["conjuror*"]
