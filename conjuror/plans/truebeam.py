@@ -746,7 +746,7 @@ class DosimetricLeafGap(QAProcedure):
         The top edge position. If None, the jaws are fully open.
     """
 
-    gap_sizes: Sequence[float] = (2, 4, 6, 8, 10)
+    gap_sizes: Sequence[float] = (2, 4, 6, 10, 14, 16, 20)
     start_position: float = -50
     final_position: float = 50
     mu: int = 100
