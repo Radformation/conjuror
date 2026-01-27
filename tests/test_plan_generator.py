@@ -271,4 +271,4 @@ class TestPlanGeneratorBeams:
 
     def test_list_procedure(self):
         procedures = self.pg.list_procedures()
-        assert len(procedures) == 9
+        assert len(procedures) == 10
