@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Self
 
 import numpy as np
-from matplotlib import pyplot as plt
+from plotly import graph_objects as go
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 from scipy.interpolate import make_interp_spline
@@ -1545,7 +1545,7 @@ class VMATDRGS(QAProcedure):
         self.reference_beam.plot_fluence(imager, show)
         self.dynamic_beam.plot_fluence(imager, show)
 
-    def plot_fluence_profile(self, imager: Imager, zoom: float = 10):
+    def plot_fluence_profile(self, imager: Imager, zoom: float = 10) -> go.Figure:
         """Plot the fluence profile for the dynamic beam
 
         Parameters
@@ -1554,14 +1554,38 @@ class VMATDRGS(QAProcedure):
             The target imager.
         zoom: float
             The zoom factor in % around the max value, i.e. ylim = 1 + [-1, 1] * zoom/100
+
+        Returns
+        -------
+        go.Figure
+            The Plotly figure containing the fluence profile plot.
         """
         beam = self.dynamic_beam
         fluence = beam.generate_fluence(imager)
         profile = fluence[imager.shape[0] // 2, :]
         profile_max = profile.max()
-        plt.plot(profile)
-        plt.ylim((1 - zoom / 100) * profile_max, (1 + zoom / 100) * profile_max)
-        plt.show()
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=np.arange(len(profile)),
+                y=profile,
+                mode="lines",
+                name="Fluence Profile",
+            )
+        )
+        fig.update_layout(
+            yaxis_range=[
+                (1 - zoom / 100) * profile_max,
+                (1 + zoom / 100) * profile_max,
+            ],
+            title="Fluence Profile",
+            xaxis_title="Position",
+            yaxis_title="Fluence",
+        )
+        fig.show()
+
+        return fig
 
 
 @dataclass
@@ -1840,7 +1864,7 @@ class VMATDRMLC(QAProcedure):
         self.reference_beam.plot_fluence(imager, show)
         self.dynamic_beam.plot_fluence(imager, show)
 
-    def plot_fluence_profile(self, imager: Imager, zoom: float = 10):
+    def plot_fluence_profile(self, imager: Imager, zoom: float = 10) -> go.Figure:
         """Plot the fluence profile for the dynamic beam
 
         Parameters
@@ -1849,11 +1873,35 @@ class VMATDRMLC(QAProcedure):
             The target imager.
         zoom: float
             The zoom factor in % around the max value, i.e. ylim = 1 + [-1, 1] * zoom/100
+
+        Returns
+        -------
+        go.Figure
+            The Plotly figure containing the fluence profile plot.
         """
         beam = self.dynamic_beam
         fluence = beam.generate_fluence(imager)
         profile = fluence[imager.shape[0] // 2, :]
         profile_max = profile.max()
-        plt.plot(profile)
-        plt.ylim((1 - zoom / 100) * profile_max, (1 + zoom / 100) * profile_max)
-        plt.show()
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=np.arange(len(profile)),
+                y=profile,
+                mode="lines",
+                name="Fluence Profile",
+            )
+        )
+        fig.update_layout(
+            yaxis_range=[
+                (1 - zoom / 100) * profile_max,
+                (1 + zoom / 100) * profile_max,
+            ],
+            title="Fluence Profile",
+            xaxis_title="Position",
+            yaxis_title="Fluence",
+        )
+        fig.show()
+
+        return fig
