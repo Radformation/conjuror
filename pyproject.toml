@@ -16,7 +16,6 @@ dependencies = [
     "numpy~=1.23.0", # match RM
     "plotly~=5.8", # match RM
     "scikit-image~=0.20.0", # match RM
-    "matplotlib~=3.6.0", # match RM
 ]
 
 [project.optional-dependencies]
