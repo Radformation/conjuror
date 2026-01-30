@@ -50,7 +50,7 @@ VMAT Dose Rate & Gantry Speed
    :members: from_varian_reference
 
 VMAT MLC Speed
-------------------------------
+--------------
 
 .. autoclass:: conjuror.plans.truebeam.VMATDRMLC
    :members: from_varian_reference

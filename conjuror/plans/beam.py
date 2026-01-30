@@ -2,10 +2,10 @@ from abc import ABC
 from dataclasses import dataclass
 from typing import Generic, Sequence, Iterable
 
-from matplotlib.figure import Figure
-from matplotlib import pyplot as plt
 import numpy as np
+import plotly.io as pio
 from plotly import graph_objects as go
+from plotly import subplots
 from pydicom import Sequence as DicomSequence, Dataset
 from scipy.interpolate import make_interp_spline
 
@@ -277,7 +277,7 @@ class BeamVisualizationMixin:
 
     def plot_control_points(
         self: "Beam", specs: MachineSpecs, show: bool = True
-    ) -> Figure:
+    ) -> go.Figure:
         """Plot the control points from dynamic beam
         Rows: Absolute position, relative motion, time to deliver, speed
         Cols: Dose, Gantry, MLC
@@ -290,37 +290,49 @@ class BeamVisualizationMixin:
         def _plot(
             as_line: bool,
             data: np.ndarray,
-            increment: bool = True,
+            reuse_axis: bool = False,
             title: str = "",
             y_label: str = "",
         ) -> None:
             """helper function for plotting"""
-            if increment:
+            if not reuse_axis:
                 idx[0] += 1
-            plt.subplot(num_rows, num_cols, idx[0])
-            if as_line:
-                plt.plot(self.metersets, data)
-            else:
-                plt.step(self.metersets[:-1], data, where="post")
-            if increment:
-                plt.title(title)
-                plt.ylabel(y_label)
 
-        idx = [0]
+            r, c = np.unravel_index(idx[0], (num_rows, num_cols))
+            row, col = int(r) + 1, int(c) + 1  # Plotly subplots are 1-based
+            x_data = self.metersets if as_line else self.metersets[:-1]
+            shape = "linear" if as_line else "hv"
+            color = colorway[1] if reuse_axis else colorway[0]
+            trace = go.Scatter(
+                x=x_data,
+                y=data,
+                mode="lines",
+                line={"shape": shape, "color": color},
+            )
+            fig.add_trace(trace, row=row, col=col)
+
+            if not reuse_axis:
+                fig.layout.annotations[idx[0]].text = title
+                fig.update_yaxes(title_text=y_label, row=row, col=col)
+
+        colorway = pio.templates[pio.templates.default].layout.colorway
+        idx = [-1]
         num_rows, num_cols = 4, 3
-        fig, _ = plt.subplots(num_rows, num_cols)
+        spt = [" "] * (num_rows * num_cols)
+        fig = subplots.make_subplots(rows=num_rows, cols=num_cols, subplot_titles=spt)
+        fig.update_layout(showlegend=False)
 
         # Positions
         _plot(True, self.metersets, title="MU", y_label="Absolute")
         _plot(True, self.gantry_angles, title="Gantry")
         _plot(True, self.beam_limiting_device_positions["MLCX"][0, :], title="MLC")
-        _plot(True, self.beam_limiting_device_positions["MLCX"][-1, :], increment=False)
+        _plot(True, self.beam_limiting_device_positions["MLCX"][-1, :], reuse_axis=True)
 
         # Motions
         _plot(False, self.dose_motions, y_label="Motion")
         _plot(False, self.gantry_motions)
         _plot(False, self.mlc_motions[0, :])
-        _plot(False, self.mlc_motions[-1, :], increment=False)
+        _plot(False, self.mlc_motions[-1, :], reuse_axis=True)
 
         # Time to deliver
         _plot(False, self.time_to_deliver, y_label="Delivery time")
@@ -331,10 +343,10 @@ class BeamVisualizationMixin:
         _plot(False, self.dose_speeds * 60, y_label="Speed")
         _plot(False, self.gantry_speeds)
         _plot(False, self.mlc_speeds[0, :])
-        _plot(False, self.mlc_speeds[-1, :], increment=False)
+        _plot(False, self.mlc_speeds[-1, :], reuse_axis=True)
 
         if show:
-            plt.show()
+            fig.show()
 
         return fig
 
