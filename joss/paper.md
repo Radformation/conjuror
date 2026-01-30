@@ -14,7 +14,7 @@ authors:
     orcid: 0000-0002-2019-7627
     affiliation: 1
   - name: Hasan Ammar
-    orcid: TBD
+    orcid: 0009-0000-4962-8091
     affiliation: 1
 affiliations:
   - name: Radformation, New York, NY, United States of America
