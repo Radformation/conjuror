@@ -215,4 +215,4 @@ class TestVisualizations:
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         beam = procedure.dynamic_beam
         fig = beam.plot_control_points(DEFAULT_SPECS_TB)
-        assert len(fig.axes) == 12
+        assert len(fig.data) == 15
