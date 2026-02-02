@@ -321,23 +321,23 @@ class TestWinstonLutz:
 
 class TestDLG:
     def test_dlg(self):
-        gap_sizes = (2, 4, 6)
+        gap_widths = (2, 4, 6)
         start_position = -50
         final_position = 50
         procedure = DosimetricLeafGap(
-            gap_sizes=gap_sizes,
+            gap_widths=gap_widths,
             start_position=start_position,
             final_position=final_position,
         )
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
-        assert len(procedure.beams) == len(gap_sizes)
+        assert len(procedure.beams) == len(gap_widths)
 
-        for idx, gap_size in enumerate(gap_sizes):
+        for idx, gap_width in enumerate(gap_widths):
             mlc = procedure.beams[idx].beam_limiting_device_positions["MLCX"]
-            assert all(mlc[:60, 0] == start_position - gap_size / 2)
-            assert all(mlc[60:, 0] == start_position + gap_size / 2)
-            assert all(mlc[:60, 1] == final_position - gap_size / 2)
-            assert all(mlc[60:, 1] == final_position + gap_size / 2)
+            assert all(mlc[:60, 0] == start_position - gap_width / 2)
+            assert all(mlc[60:, 0] == start_position + gap_width / 2)
+            assert all(mlc[:60, 1] == final_position - gap_width / 2)
+            assert all(mlc[60:, 1] == final_position + gap_width / 2)
 
 
 class TestDoseRate:

@@ -708,8 +708,8 @@ class DosimetricLeafGap(QAProcedure):
 
     Parameters
     ----------
-    gap_sizes : tuple
-        The gap size in mm for the MLC sweeps.
+    gap_widths : tuple
+        The gap widths in mm for the MLC sweeps.
     start_position: int
         The start position of the MLC gap in mm.
     final_position: int
@@ -746,7 +746,7 @@ class DosimetricLeafGap(QAProcedure):
         The top edge position. If None, the jaws are fully open.
     """
 
-    gap_sizes: Sequence[float] = (2, 4, 6, 10, 14, 16, 20)
+    gap_widths: Sequence[float] = (2, 4, 6, 10, 14, 16, 20)
     start_position: float = -50
     final_position: float = 50
     mu: int = 100
@@ -774,12 +774,12 @@ class DosimetricLeafGap(QAProcedure):
         y2 = machine.mlc_boundaries[-1] if self.y2 is None else self.y2
 
         shaper = Beam.create_shaper(machine)
-        for gap_size in self.gap_sizes:
-            mlc_start = shaper.get_shape(Strip(self.start_position, gap_size))
-            mlc_final = shaper.get_shape(Strip(self.final_position, gap_size))
+        for gap_width in self.gap_widths:
+            mlc_start = shaper.get_shape(Strip(self.start_position, gap_width))
+            mlc_final = shaper.get_shape(Strip(self.final_position, gap_width))
             mlc_positions = [mlc_start] + [mlc_final]
             metersets = [0, self.mu]
-            beam_name = f"DLG {gap_size:00d}mm"
+            beam_name = f"DLG {gap_width:00d}mm"
 
             beam = Beam(
                 mlc_is_hd=machine.mlc_is_hd,
