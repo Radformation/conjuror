@@ -2,7 +2,7 @@ import math
 from abc import ABC
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Self
 
 import numpy as np
@@ -42,14 +42,14 @@ DEFAULT_SPECS_TB = MachineSpecs(
 )
 
 
-class OpenFieldMLCMode(Enum):
+class OpenFieldMLCMode(StrEnum):
     EXACT = RectangleMode.EXACT
     ROUND = RectangleMode.ROUND
     INWARD = RectangleMode.INWARD
     OUTWARD = RectangleMode.OUTWARD
 
 
-class WinstonLutzMLCMode(Enum):
+class WinstonLutzMLCMode(StrEnum):
     EXACT = RectangleMode.EXACT
     ROUND = RectangleMode.ROUND
     INWARD = RectangleMode.INWARD

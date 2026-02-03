@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass, replace
-from enum import Enum
+from enum import StrEnum
 from typing import Self, TypeVar
 
 
@@ -39,18 +39,18 @@ class MachineBase(ABC):
 TMachine = TypeVar("TMachine", bound=MachineBase)
 
 
-class GantryDirection(Enum):
+class GantryDirection(StrEnum):
     CLOCKWISE = "CW"
     COUNTER_CLOCKWISE = "CC"
     NONE = "NONE"
 
 
-class GantrySpeedTransition(Enum):
+class GantrySpeedTransition(StrEnum):
     LEADING = "leading"
     TRAILING = "trailing"
 
 
-class FluenceMode(Enum):
+class FluenceMode(StrEnum):
     STANDARD = "STANDARD"
     FFF = "FFF"
     SRS = "SRS"
