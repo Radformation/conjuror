@@ -339,6 +339,18 @@ class TestDLG:
             assert all(mlc[:60, 1] == final_position - gap_width / 2)
             assert all(mlc[60:, 1] == final_position + gap_width / 2)
 
+    def test_warning_if_bad_config(self):
+        gap_widths = (20,)
+        start_position = -50
+        final_position = 50
+        procedure = DosimetricLeafGap(
+            gap_widths=gap_widths,
+            start_position=start_position,
+            final_position=final_position,
+        )
+        with pytest.warns(UserWarning):
+            procedure.compute(DEFAULT_TRUEBEAM_HD120)
+
 
 class TestDoseRate:
     @pytest.fixture(autouse=True)

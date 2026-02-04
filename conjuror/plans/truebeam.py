@@ -1,4 +1,5 @@
 import math
+import warnings
 from abc import ABC
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -734,21 +735,19 @@ class DosimetricLeafGap(QAProcedure):
         The couch longitudinal position.
     couch_rot : float
         The couch rotation.
-    x1 : float | None
-        The left edge position. If None, the jaws are placed next to
-        ``start_sweep_position`` or ``end_sweep_position``
-    x2 : float| None
-        The right edge position. If None, the jaws are placed next to
-        ``start_sweep_position`` or ``end_sweep_position``
-    y1 : float| None
-        The bottom edge position. If None, the jaws are fully open.
-    y2 : float| None
-        The top edge position. If None, the jaws are fully open.
+    x1 : float
+        The left edge position.
+    x2 : float
+        The right edge position.
+    y1 : float
+        The bottom edge position.
+    y2 : float
+        The top edge position.
     """
 
     gap_widths: Sequence[float] = (2, 4, 6, 10, 14, 16, 20)
-    start_position: float = -50
-    final_position: float = 50
+    start_position: float = -60
+    final_position: float = 60
     mu: int = 100
     energy: float = 6
     fluence_mode: FluenceMode = FluenceMode.STANDARD
@@ -759,19 +758,22 @@ class DosimetricLeafGap(QAProcedure):
     couch_lat: float = 0
     couch_lng: float = 1000
     couch_rot: float = 0
-    x1: float | None = None
-    x2: float | None = None
-    y1: float | None = None
-    y2: float | None = None
+    x1: float = -50
+    x2: float = 50
+    y1: float = -50
+    y2: float = 50
 
     def compute(self, machine: TrueBeamMachine) -> None:
-        # Determine jaw positions
+        # validate x_jaw positions
         min_pos = min(self.start_position, self.final_position)
         max_pos = max(self.start_position, self.final_position)
-        x1 = min_pos if self.x1 is None else self.x1
-        x2 = max_pos if self.x2 is None else self.x2
-        y1 = machine.mlc_boundaries[0] if self.y1 is None else self.y1
-        y2 = machine.mlc_boundaries[-1] if self.y2 is None else self.y2
+        max_gap = max(self.gap_widths)
+        if min_pos + max_gap / 2.0 > self.x1 or max_pos - max_gap / 2.0 < self.x2:
+            warnings.warn(
+                "Invalid configuration: the MLC must start and end with the gap fully "
+                "occluded by the jaws. Failure to do so introduces additional transmission "
+                "that can bias the DLG calculation."
+            )
 
         shaper = Beam.create_shaper(machine)
         for gap_width in self.gap_widths:
@@ -787,10 +789,10 @@ class DosimetricLeafGap(QAProcedure):
                 energy=self.energy,
                 fluence_mode=self.fluence_mode,
                 dose_rate=self.dose_rate,
-                x1=x1,
-                x2=x2,
-                y1=y1,
-                y2=y2,
+                x1=self.x1,
+                x2=self.x2,
+                y1=self.y1,
+                y2=self.y2,
                 gantry_angles=self.gantry_angle,
                 coll_angle=self.coll_angle,
                 couch_vrt=self.couch_vrt,
