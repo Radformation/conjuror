@@ -22,8 +22,6 @@ sys.path.insert(0, os.path.abspath("../.."))
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = []
-
 templates_path = ["_templates"]
 extensions = [
     "sphinx.ext.autodoc",
@@ -31,6 +29,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx_copybutton",
     "sphinx_design",
+    "sphinx_plotly_directive",
 ]
 
 autoclass_content = "both"
