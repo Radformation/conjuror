@@ -10,8 +10,6 @@ commonly used for output calibration, flatness, and symmetry measurements.
 The field can be defined either by MLC positions or by jaw positions, with
 automatic padding applied to ensure proper field coverage.
 
-**Note:** All position values (``x1``, ``x2``, ``y1``, ``y2``, ``padding``,
-etc.) are specified in millimeters.
 
 Basic Usage
 ^^^^^^^^^^^
@@ -40,7 +38,6 @@ field:
             :iframe-width: 100%
             :iframe-height: 500px
 
-            from conjuror.images.simulators import IMAGER_AS1200
             from conjuror.plans.truebeam import OpenField, TrueBeamMachine
 
             # Create and compute the open field
@@ -76,17 +73,25 @@ Field Definition Modes
 
 By default, fields are defined by MLC positions (``defined_by_mlc=True``),
 which means the MLCs form the field edges and the jaws are opened with
-padding. Alternatively, you can define the field by jaw positions:
+padding. Alternatively, you can define the field by jaw positions.
+
+In both modes, ``padding`` is applied to the *non-defining* device to avoid
+clipping:
+
+- **MLC-defined** (``defined_by_mlc=True``): the jaws open to
+  ``(x1, x2, y1, y2)`` plus ``padding`` on each side.
+- **Jaw-defined** (``defined_by_mlc=False``): the MLC opens to
+  ``(x1, x2, y1, y2)`` plus ``padding`` on each side.
 
 .. code-block:: python
 
     # Field defined by MLCs (default)
     procedure_mlc = OpenField(x1=-50, x2=50, y1=-100, y2=100, defined_by_mlc=True, padding=20)
-    # MLCs form the field edges, jaws are opened 20mm beyond
+    # MLCs form the field edges; jaws open 20 mm beyond on each side.
 
     # Field defined by jaws
     procedure_jaws = OpenField(x1=-50, x2=50, y1=-100, y2=100, defined_by_mlc=False, padding=20)
-    # Jaws form the field edges, MLCs are opened 20mm beyond
+    # Jaws form the field edges; MLC opens 20 mm beyond on each side.
 
 The following visualizations show the MLC positions for each field definition mode:
 
@@ -171,13 +176,11 @@ The following alignment modes apply to MLC-defined fields:
 
 .. warning::
 
-   If you are using this procedure for any application that requires exact
-   field sizes (such as output calibration or field size verification), you
-   should select ``EXACT`` mode. Other modes (``ROUND``, ``INWARD``,
-   ``OUTWARD``) may change the field size if the specified field edges do not
-   align exactly with MLC leaf boundaries, due to discrete MLC leaf widths.
-   This could affect the accuracy of measurements or procedures that depend on
-   precise field dimensions.
+   If you are using this procedure for an application that requires **exact**
+   y-dimensions (for example output calibration or field-size verification),
+   select ``EXACT`` mode. The other modes (``ROUND``, ``INWARD``, ``OUTWARD``)
+   can change the delivered y-size whenever the requested edges do not align
+   with MLC leaf boundaries.
 
 .. code-block:: python
 
