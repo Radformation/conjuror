@@ -1,7 +1,7 @@
 from abc import ABC
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 import numpy as np
 from pydicom.dataset import Dataset
@@ -32,7 +32,7 @@ class HalcyonMachine(MachineBase):
         self.mlc_boundaries_prox = MLC_BOUNDARIES_HAL_PROX
 
 
-class Stack(Enum):
+class Stack(StrEnum):
     DISTAL = "distal"
     PROXIMAL = "proximal"
     BOTH = "both"

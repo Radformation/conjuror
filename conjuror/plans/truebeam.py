@@ -1,12 +1,13 @@
 import math
+import warnings
 from abc import ABC
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Self
 
 import numpy as np
-from matplotlib import pyplot as plt
+from plotly import graph_objects as go
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 from scipy.interpolate import make_interp_spline
@@ -42,14 +43,14 @@ DEFAULT_SPECS_TB = MachineSpecs(
 )
 
 
-class OpenFieldMLCMode(Enum):
+class OpenFieldMLCMode(StrEnum):
     EXACT = RectangleMode.EXACT
     ROUND = RectangleMode.ROUND
     INWARD = RectangleMode.INWARD
     OUTWARD = RectangleMode.OUTWARD
 
 
-class WinstonLutzMLCMode(Enum):
+class WinstonLutzMLCMode(StrEnum):
     EXACT = RectangleMode.EXACT
     ROUND = RectangleMode.ROUND
     INWARD = RectangleMode.INWARD
@@ -698,6 +699,108 @@ class WinstonLutz(QAProcedure):
                 metersets=[0, self.mu],
                 fluence_mode=self.fluence_mode,
                 mlc_is_hd=machine.mlc_is_hd,
+            )
+            self.beams.append(beam)
+
+
+@dataclass
+class DosimetricLeafGap(QAProcedure):
+    """Add beams to measure the Dosimetric Leaf Gap (DLG).
+
+    Parameters
+    ----------
+    gap_widths : tuple
+        The gap widths in mm for the MLC sweeps.
+    start_position: int
+        The start position of the MLC gap in mm.
+    final_position: int
+        The final position of the MLC gap in mm
+    mu : int
+        The monitor units of each beam.
+    energy : float
+        The energy of the beam.
+    fluence_mode : FluenceMode
+        The fluence mode of the beam.
+    dose_rate : int
+        The dose rate of the beam.
+    gantry_angle : float
+        The gantry angle of the beam.
+    coll_angle : float
+        The collimator angle of the beam.
+    couch_vrt : float
+        The couch vertical position.
+    couch_lat : float
+        The couch lateral position.
+    couch_lng : float
+        The couch longitudinal position.
+    couch_rot : float
+        The couch rotation.
+    x1 : float
+        The left edge position.
+    x2 : float
+        The right edge position.
+    y1 : float
+        The bottom edge position.
+    y2 : float
+        The top edge position.
+    """
+
+    gap_widths: Sequence[float] = (2, 4, 6, 10, 14, 16, 20)
+    start_position: float = -60
+    final_position: float = 60
+    mu: int = 100
+    energy: float = 6
+    fluence_mode: FluenceMode = FluenceMode.STANDARD
+    dose_rate: int = 600
+    gantry_angle: float = 0
+    coll_angle: float = 0
+    couch_vrt: float = 0
+    couch_lat: float = 0
+    couch_lng: float = 1000
+    couch_rot: float = 0
+    x1: float = -50
+    x2: float = 50
+    y1: float = -50
+    y2: float = 50
+
+    def compute(self, machine: TrueBeamMachine) -> None:
+        # validate x_jaw positions
+        min_pos = min(self.start_position, self.final_position)
+        max_pos = max(self.start_position, self.final_position)
+        max_gap = max(self.gap_widths)
+        if min_pos + max_gap / 2.0 > self.x1 or max_pos - max_gap / 2.0 < self.x2:
+            warnings.warn(
+                "Invalid configuration: the MLC must start and end with the gap fully "
+                "occluded by the jaws. Failure to do so introduces additional transmission "
+                "that can bias the DLG calculation."
+            )
+
+        shaper = Beam.create_shaper(machine)
+        for gap_width in self.gap_widths:
+            mlc_start = shaper.get_shape(Strip(self.start_position, gap_width))
+            mlc_final = shaper.get_shape(Strip(self.final_position, gap_width))
+            mlc_positions = [mlc_start] + [mlc_final]
+            metersets = [0, self.mu]
+            beam_name = f"DLG {gap_width:00d}mm"
+
+            beam = Beam(
+                mlc_is_hd=machine.mlc_is_hd,
+                beam_name=beam_name,
+                energy=self.energy,
+                fluence_mode=self.fluence_mode,
+                dose_rate=self.dose_rate,
+                x1=self.x1,
+                x2=self.x2,
+                y1=self.y1,
+                y2=self.y2,
+                gantry_angles=self.gantry_angle,
+                coll_angle=self.coll_angle,
+                couch_vrt=self.couch_vrt,
+                couch_lat=self.couch_lat,
+                couch_lng=self.couch_lng,
+                couch_rot=self.couch_rot,
+                mlc_positions=mlc_positions,
+                metersets=metersets,
             )
             self.beams.append(beam)
 
@@ -1545,7 +1648,7 @@ class VMATDRGS(QAProcedure):
         self.reference_beam.plot_fluence(imager, show)
         self.dynamic_beam.plot_fluence(imager, show)
 
-    def plot_fluence_profile(self, imager: Imager, zoom: float = 10):
+    def plot_fluence_profile(self, imager: Imager, zoom: float = 10) -> go.Figure:
         """Plot the fluence profile for the dynamic beam
 
         Parameters
@@ -1554,14 +1657,38 @@ class VMATDRGS(QAProcedure):
             The target imager.
         zoom: float
             The zoom factor in % around the max value, i.e. ylim = 1 + [-1, 1] * zoom/100
+
+        Returns
+        -------
+        go.Figure
+            The Plotly figure containing the fluence profile plot.
         """
         beam = self.dynamic_beam
         fluence = beam.generate_fluence(imager)
         profile = fluence[imager.shape[0] // 2, :]
         profile_max = profile.max()
-        plt.plot(profile)
-        plt.ylim((1 - zoom / 100) * profile_max, (1 + zoom / 100) * profile_max)
-        plt.show()
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=np.arange(len(profile)),
+                y=profile,
+                mode="lines",
+                name="Fluence Profile",
+            )
+        )
+        fig.update_layout(
+            yaxis_range=[
+                (1 - zoom / 100) * profile_max,
+                (1 + zoom / 100) * profile_max,
+            ],
+            title="Fluence Profile",
+            xaxis_title="Position",
+            yaxis_title="Fluence",
+        )
+        fig.show()
+
+        return fig
 
 
 @dataclass
@@ -1840,7 +1967,7 @@ class VMATDRMLC(QAProcedure):
         self.reference_beam.plot_fluence(imager, show)
         self.dynamic_beam.plot_fluence(imager, show)
 
-    def plot_fluence_profile(self, imager: Imager, zoom: float = 10):
+    def plot_fluence_profile(self, imager: Imager, zoom: float = 10) -> go.Figure:
         """Plot the fluence profile for the dynamic beam
 
         Parameters
@@ -1849,11 +1976,35 @@ class VMATDRMLC(QAProcedure):
             The target imager.
         zoom: float
             The zoom factor in % around the max value, i.e. ylim = 1 + [-1, 1] * zoom/100
+
+        Returns
+        -------
+        go.Figure
+            The Plotly figure containing the fluence profile plot.
         """
         beam = self.dynamic_beam
         fluence = beam.generate_fluence(imager)
         profile = fluence[imager.shape[0] // 2, :]
         profile_max = profile.max()
-        plt.plot(profile)
-        plt.ylim((1 - zoom / 100) * profile_max, (1 + zoom / 100) * profile_max)
-        plt.show()
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=np.arange(len(profile)),
+                y=profile,
+                mode="lines",
+                name="Fluence Profile",
+            )
+        )
+        fig.update_layout(
+            yaxis_range=[
+                (1 - zoom / 100) * profile_max,
+                (1 + zoom / 100) * profile_max,
+            ],
+            title="Fluence Profile",
+            xaxis_title="Position",
+            yaxis_title="Fluence",
+        )
+        fig.show()
+
+        return fig

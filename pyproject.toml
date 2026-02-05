@@ -1,7 +1,7 @@
 [project]
 name = "conjuror"
 requires-python = ">=3.11,<3.12" # match RM
-version = "0.1.0"
+version = "0.1.2"
 description = "Medical Physics Synthetic Image generator and RT Plan generator"
 authors = [
     {name = "Joao Silveira", email = "jsilveira@radformation.com"},
@@ -16,8 +16,6 @@ dependencies = [
     "numpy~=1.23.0", # match RM
     "plotly~=5.8", # match RM
     "scikit-image~=0.20.0", # match RM
-    "matplotlib~=3.6.0", # match RM
-    "pre-commit>=4.3.0",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +34,7 @@ developer = [
     "pytest-xdist>=3.8.0",
     "google-cloud-storage>=3.4.0",
     "py-linq~=1.4.0",
+    "pre-commit>=4.3.0",
 ]
 
 [tool.ruff]
@@ -43,4 +42,4 @@ target-version = "py311"
 
 
 [tool.setuptools.packages.find]
-include = ["conjuror"]
+include = ["conjuror*"]

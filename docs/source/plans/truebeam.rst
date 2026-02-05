@@ -23,6 +23,11 @@ Winston-Lutz
 
 .. autoclass:: conjuror.plans.truebeam.WinstonLutz
 
+Dosimetric Leaf Gap
+-------------------
+
+.. autoclass:: conjuror.plans.truebeam.DosimetricLeafGap
+
 Dose Rate
 ---------
 
@@ -45,7 +50,7 @@ VMAT Dose Rate & Gantry Speed
    :members: from_varian_reference
 
 VMAT MLC Speed
-------------------------------
+--------------
 
 .. autoclass:: conjuror.plans.truebeam.VMATDRMLC
    :members: from_varian_reference
