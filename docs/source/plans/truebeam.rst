@@ -133,7 +133,15 @@ MLC Alignment Modes
 ^^^^^^^^^^^^^^^^^^^
 
 When using MLC-defined fields, the ``mlc_mode`` parameter controls how the
-field edges align with MLC leaf boundaries along the y-axis. The following modes are available:
+field edges align with MLC leaf boundaries along the y-axis.
+
+.. note::
+
+   When ``defined_by_mlc=False`` (jaw-defined fields), the MLC mode is
+   automatically set to ``OUTWARD`` regardless of the ``mlc_mode`` parameter
+   value. The ``mlc_mode`` parameter only applies when ``defined_by_mlc=True``.
+
+The following modes are available:
 
 **OUTWARD** (default)
    If ``y1`` or ``y2`` falls between MLC leaf boundaries, the intermediate
