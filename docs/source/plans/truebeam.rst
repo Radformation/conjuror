@@ -133,7 +133,32 @@ MLC Alignment Modes
 ^^^^^^^^^^^^^^^^^^^
 
 When using MLC-defined fields, the ``mlc_mode`` parameter controls how the
-field edges align with MLC leaf boundaries along the y-axis:
+field edges align with MLC leaf boundaries along the y-axis. The following modes are available:
+
+**OUTWARD** (default)
+   If ``y1`` or ``y2`` falls between MLC leaf boundaries, the intermediate
+   leaf band is treated as "infield" and included in the field. This results
+   in a larger field size in the y-direction. This is the default mode and is
+   suitable for most general-purpose applications where slight field size
+   variations are acceptable.
+
+**INWARD**
+   If ``y1`` or ``y2`` falls between MLC leaf boundaries, the intermediate
+   leaf band is treated as "outfield" and excluded from the field. This
+   results in a smaller field size in the y-direction. Use this mode when you
+   want to ensure the field does not exceed the specified dimensions.
+
+**ROUND**
+   If ``y1`` or ``y2`` falls between MLC leaf boundaries, the field edges are
+   rounded to the nearest MLC boundary. This provides a balanced approach
+   that minimizes field size deviation.
+
+**EXACT**
+   Both ``y1`` and ``y2`` must coincide exactly with an MLC leaf boundary.
+   If either edge does not align exactly, a ``ValueError`` is raised. This
+   mode ensures precise field size matching and is required for applications
+   that depend on exact field dimensions, such as output calibration or field
+   size verification measurements.
 
 .. warning::
 
@@ -159,7 +184,6 @@ field edges align with MLC leaf boundaries along the y-axis:
     procedure_round = OpenField(..., mlc_mode=OpenFieldMLCMode.ROUND)
 
     # EXACT: Field edges must align exactly with MLC boundaries
-    # If the field edges do not align exactly, an error is raised
     procedure_exact = OpenField(..., mlc_mode=OpenFieldMLCMode.EXACT)
 
 The following visualizations show the MLC positions for each alignment mode using y2=51:
