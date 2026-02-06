@@ -2,6 +2,8 @@
 QA Procedures - TrueBeam
 ========================
 
+.. _truebeam-open-field:
+
 Open Field
 ----------
 
@@ -635,16 +637,84 @@ angles, and couch positions.
         couch_rot=0,
     )
 
+Winston-Lutz
+------------
+
+The ``WinstonLutz`` procedure generates a **set of open rectangular fields**
+(one beam per axis position: gantry, collimator, couch) to support
+Winston-Lutz imaging and analysis.
+
+Conceptually, this is a thin wrapper around ``OpenField``. For each
+``WinstonLutzField`` it creates one open field beam using the same beam
+parameters you set on the procedure. The only values that vary per beam are
+the axis angles (and optional name) provided via ``WinstonLutzField``.
+
+Basic Usage
+^^^^^^^^^^^
+
+.. code-block:: python
+
+    import pydicom
+    from conjuror.plans.plan_generator import PlanGenerator
+    from conjuror.plans.truebeam import WinstonLutz, WinstonLutzField
+
+    base_plan = pydicom.dcmread(r"C:\path\to\base_plan.dcm")
+    generator = PlanGenerator(base_plan, plan_name="Winston-Lutz", plan_label="WL")
+
+    fields = [
+        WinstonLutzField(0, 0, 0),
+        WinstonLutzField(90, 0, 0),
+        WinstonLutzField(180, 0, 0),
+        WinstonLutzField(270, 0, 0),
+    ]
+    procedure = WinstonLutz(fields=fields)
+    generator.add_procedure(procedure)
+
+    generator.to_file("winston_lutz_plan.dcm")
+
+Customizing Parameters
+^^^^^^^^^^^^^^^^^^^^^^
+
+You can adjust the field size/position (``x1``, ``x2``, ``y1``, ``y2``), MU
+(``mu``), whether the field is defined by the MLC or jaws (``defined_by_mlc``),
+padding (``padding``), MLC y-edge alignment (``mlc_mode``), and the list of
+axis positions (``fields``).
+
+See :ref:`truebeam-open-field` for additional context on open field geometry.
+
+.. code-block:: python
+
+    from conjuror.plans.machine import FluenceMode
+    from conjuror.plans.truebeam import (
+        MLCLeafBoundaryAlignmentMode,
+        WinstonLutz,
+        WinstonLutzField,
+    )
+
+    procedure = WinstonLutz(
+        x1=-10, x2=10, y1=-10, y2=10,  # mm
+        mu=10,
+        defined_by_mlc=True,
+        mlc_mode=MLCLeafBoundaryAlignmentMode.OUTWARD,
+        padding=5,
+        fields=[
+            WinstonLutzField(0, 0, 0, name="Iso"),
+            WinstonLutzField(0, 0, 90),
+            WinstonLutzField(0, 0, 270),
+        ],
+        energy=6,
+        fluence_mode=FluenceMode.STANDARD,
+        dose_rate=600,
+        couch_vrt=0,
+        couch_lng=1000,
+        couch_lat=0,
+    )
+
 Picket Fence
 ------------
 
 .. autoclass:: conjuror.plans.truebeam.PicketFence
    :members: from_varian_reference
-
-Winston-Lutz
-------------
-
-.. autoclass:: conjuror.plans.truebeam.WinstonLutz
 
 Dose Rate
 ---------
@@ -679,3 +749,4 @@ API Reference
 .. autoclass:: conjuror.plans.truebeam.OpenField
 .. autoclass:: conjuror.plans.truebeam.MLCTransmission
 .. autoclass:: conjuror.plans.truebeam.DosimetricLeafGap
+.. autoclass:: conjuror.plans.truebeam.WinstonLutz
