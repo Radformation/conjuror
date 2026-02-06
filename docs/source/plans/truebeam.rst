@@ -514,6 +514,127 @@ angles, and couch positions.
     )
     generator.add_procedure(procedure)
 
+Dosimetric Leaf Gap
+-------------------
+
+The ``DosimetricLeafGap`` procedure creates a set of fields with sliding
+MLC gaps beams for measuring the **dosimetric leaf gap (DLG)**. For each gap width in
+``gap_widths``, it generates one beam with two control points: the gap starts
+at ``start_position`` and ends at ``final_position`` (both in mm).
+
+.. warning::
+
+   For a clean DLG measurement, ensure the sweeping gap is **fully occluded by
+   the X jaws** at both the start and end positions for the **largest** gap
+   width. The procedure will emit a warning if:
+
+   - ``min(start_position, final_position) + max(gap_widths)/2 > x1`` or
+   - ``max(start_position, final_position) - max(gap_widths)/2 < x2``
+
+   If the gap is not fully occluded at the endpoints, extra transmission can
+   bias the DLG calculation.
+
+Basic Usage
+^^^^^^^^^^^
+
+.. code-block:: python
+
+    import pydicom
+    from conjuror.plans.plan_generator import PlanGenerator
+    from conjuror.plans.truebeam import DosimetricLeafGap
+
+    base_plan = pydicom.dcmread(r"C:\path\to\base_plan.dcm")
+    generator = PlanGenerator(base_plan, plan_name="DLG", plan_label="DLG")
+
+    procedure = DosimetricLeafGap()
+    generator.add_procedure(procedure)
+
+    generator.to_file("dlg_plan.dcm")
+
+The following visualizations show example MLC motion for two different gap
+widths:
+
+.. grid:: 2
+    :gutter: 2
+
+    .. grid-item::
+        :columns: 6
+
+        .. plotly::
+            :iframe-width: 100%
+            :iframe-height: 400px
+
+            from conjuror.plans.truebeam import DosimetricLeafGap, TrueBeamMachine
+
+            procedure = DosimetricLeafGap(gap_widths=(2, 20))
+            machine = TrueBeamMachine(mlc_is_hd=False)
+            procedure.compute(machine)
+
+            beam = procedure.beams[0]  # 2 mm gap
+            fig = beam.animate_mlc(show=False)
+            pad = 30
+            fig.update_layout(
+                xaxis_scaleanchor="y",
+                xaxis_range=[procedure.x1 - pad, procedure.x2 + pad],
+                yaxis_range=[procedure.y1 - pad, procedure.y2 + pad],
+                margin=dict(l=10, r=10, t=30, b=10),
+            )
+            fig
+
+    .. grid-item::
+        :columns: 6
+
+        .. plotly::
+            :iframe-width: 100%
+            :iframe-height: 400px
+
+            from conjuror.plans.truebeam import DosimetricLeafGap, TrueBeamMachine
+
+            procedure = DosimetricLeafGap(gap_widths=(2, 20))
+            machine = TrueBeamMachine(mlc_is_hd=False)
+            procedure.compute(machine)
+
+            beam = procedure.beams[1]  # 20 mm gap
+            fig = beam.animate_mlc(show=False)
+            pad = 30
+            fig.update_layout(
+                xaxis_scaleanchor="y",
+                xaxis_range=[procedure.x1 - pad, procedure.x2 + pad],
+                yaxis_range=[procedure.y1 - pad, procedure.y2 + pad],
+                margin=dict(l=10, r=10, t=30, b=10),
+            )
+            fig
+
+Customizing Parameters
+^^^^^^^^^^^^^^^^^^^^^
+
+You can adjust gap widths and sweep extent (``gap_widths``, ``start_position``,
+``final_position``), MU (``mu``), jaw size (``x1``, ``x2``, ``y1``, ``y2``),
+and beam settings such as energy, fluence mode, dose rate, gantry/collimator
+angles, and couch positions.
+
+.. code-block:: python
+
+    from conjuror.plans.machine import FluenceMode
+    from conjuror.plans.truebeam import DosimetricLeafGap
+
+    procedure = DosimetricLeafGap(
+        gap_widths=(2, 4, 6, 10, 14, 16, 20),
+        start_position=-60,
+        final_position=60,
+        mu=100,
+        x1=-50, x2=50, y1=-50, y2=50,
+        energy=6,
+        fluence_mode=FluenceMode.STANDARD,
+        dose_rate=600,
+        gantry_angle=0,
+        coll_angle=0,
+        couch_vrt=0,
+        couch_lng=1000,
+        couch_lat=0,
+        couch_rot=0,
+    )
+
 Picket Fence
 ------------
 
@@ -524,11 +645,6 @@ Winston-Lutz
 ------------
 
 .. autoclass:: conjuror.plans.truebeam.WinstonLutz
-
-Dosimetric Leaf Gap
--------------------
-
-.. autoclass:: conjuror.plans.truebeam.DosimetricLeafGap
 
 Dose Rate
 ---------
@@ -562,3 +678,4 @@ API Reference
 
 .. autoclass:: conjuror.plans.truebeam.OpenField
 .. autoclass:: conjuror.plans.truebeam.MLCTransmission
+.. autoclass:: conjuror.plans.truebeam.DosimetricLeafGap
