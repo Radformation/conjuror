@@ -299,11 +299,12 @@ The following visualizations show the MLC positions for each alignment mode usin
                 )
                 fig
 
-Customizing Beam Parameters
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Customizing Parameters
+^^^^^^^^^^^^^^^^^^^^^^
 
-You can customize monitor units, energy, fluence mode, dose rate, gantry
-angle, collimator angle, couch positions, and beam name:
+You can adjust the field size/position (``x1``, ``x2``, ``y1``, ``y2``) along
+with beam settings such as monitor units, energy, fluence mode, dose rate,
+gantry/collimator angles, couch positions, and beam naming.
 
 .. code-block:: python
 
@@ -352,15 +353,166 @@ Complete Example
     # Export plan
     generator.to_file("output_calibration_plan.dcm")
 
-API Reference
-^^^^^^^^^^^^^
-
-.. autoclass:: conjuror.plans.truebeam.OpenField
-
 MLC Transmission
 ----------------
 
-.. autoclass:: conjuror.plans.truebeam.MLCTransmission
+The ``MLCTransmission`` procedure generates a small set of beams intended to
+support **MLC transmission** measurements. It adds:
+
+- **Reference**: a jaw-defined open field.
+- **Bank A**: a transmission beam configured to isolate Bank A transmission
+  under a jaw-defined opening.
+- **Bank B**: a transmission beam configured to isolate Bank B transmission
+  under a jaw-defined opening.
+
+This construction allows you to measure transmission from each bank separately
+by comparing the transmission images to the reference image.
+
+Basic Usage
+^^^^^^^^^^^
+
+To include an MLC transmission test in a generated plan, add
+``MLCTransmission`` to your ``PlanGenerator``:
+
+.. code-block:: python
+
+    import pydicom
+    from conjuror.plans.plan_generator import PlanGenerator
+    from conjuror.plans.truebeam import MLCTransmission
+
+    base_plan = pydicom.dcmread(r"C:\path\to\base_plan.dcm")
+    generator = PlanGenerator(base_plan, plan_name="MLC Transmission", plan_label="Tx")
+
+    # Default: 10x10 cm reference, 100 MU reference, 1000 MU per bank
+    procedure = MLCTransmission()
+    generator.add_procedure(procedure)
+
+    generator.to_file("mlc_transmission_plan.dcm")
+
+The following visualizations show the MLC positions for the **reference**, **Bank A**,
+and **Bank B** beams:
+
+.. grid:: 3
+    :gutter: 2
+
+    .. grid-item::
+        :columns: 4
+
+        .. plotly::
+            :iframe-width: 100%
+            :iframe-height: 400px
+
+            from conjuror.plans.truebeam import MLCTransmission, TrueBeamMachine
+
+            # Create and compute the MLC transmission procedure
+            procedure = MLCTransmission()
+            machine = TrueBeamMachine(mlc_is_hd=False)
+            procedure.compute(machine)
+
+            # Reference beam
+            beam = procedure.beams[0]
+            fig = beam.animate_mlc(show=False)
+            # Zoom around the jaw-defined open field
+            pad = 30  # mm margin
+            x1, x2 = -procedure.width / 2 - pad, procedure.width / 2 + pad
+            y1, y2 = -procedure.height / 2 - pad, procedure.height / 2 + pad
+            fig.update_layout(
+                xaxis_scaleanchor="y",
+                xaxis_range=[x1, x2],
+                yaxis_range=[y1, y2],
+                margin=dict(l=10, r=10, t=30, b=10),
+            )
+            fig
+
+    .. grid-item::
+        :columns: 4
+
+        .. plotly::
+            :iframe-width: 100%
+            :iframe-height: 400px
+
+            from conjuror.plans.truebeam import MLCTransmission, TrueBeamMachine
+
+            # Create and compute the MLC transmission procedure
+            procedure = MLCTransmission()
+            machine = TrueBeamMachine(mlc_is_hd=False)
+            procedure.compute(machine)
+
+            # Bank A transmission beam
+            beam = procedure.beams[1]
+            fig = beam.animate_mlc(show=False)
+            # Zoom around the jaw-defined open field
+            pad = 30  # mm margin
+            x1, x2 = -procedure.width / 2 - pad, procedure.width / 2 + pad
+            y1, y2 = -procedure.height / 2 - pad, procedure.height / 2 + pad
+            fig.update_layout(
+                xaxis_scaleanchor="y",
+                xaxis_range=[x1, x2],
+                yaxis_range=[y1, y2],
+                margin=dict(l=10, r=10, t=30, b=10),
+            )
+            fig
+
+    .. grid-item::
+        :columns: 4
+
+        .. plotly::
+            :iframe-width: 100%
+            :iframe-height: 400px
+
+            from conjuror.plans.truebeam import MLCTransmission, TrueBeamMachine
+
+            # Create and compute the MLC transmission procedure
+            procedure = MLCTransmission()
+            machine = TrueBeamMachine(mlc_is_hd=False)
+            procedure.compute(machine)
+
+            # Bank B transmission beam
+            beam = procedure.beams[2]
+            fig = beam.animate_mlc(show=False)
+            # Zoom around the jaw-defined open field
+            pad = 30  # mm margin
+            x1, x2 = -procedure.width / 2 - pad, procedure.width / 2 + pad
+            y1, y2 = -procedure.height / 2 - pad, procedure.height / 2 + pad
+            fig.update_layout(
+                xaxis_scaleanchor="y",
+                xaxis_range=[x1, x2],
+                yaxis_range=[y1, y2],
+                margin=dict(l=10, r=10, t=30, b=10),
+            )
+            fig
+
+Customizing Parameters
+^^^^^^^^^^^^^^^^^^^^^^
+
+You can adjust the reference field size (``width``, ``height``), MU per beam
+(``mu_per_ref``, ``mu_per_bank``), bank ``overreach``, and beam names, along
+with beam settings such as energy, fluence mode, dose rate, gantry/collimator
+angles, and couch positions.
+
+.. code-block:: python
+
+    from conjuror.plans.machine import FluenceMode
+    from conjuror.plans.truebeam import MLCTransmission
+
+    procedure = MLCTransmission(
+        width=200,          # mm (20 cm)
+        height=200,         # mm (20 cm)
+        mu_per_ref=200,     # reference open field MU
+        mu_per_bank=2000,   # MU for each bank transmission beam
+        overreach=10,       # mm; shifts the closed MLC bank further under the jaw
+        beam_names=["Tx Ref", "Tx Bank-A", "Tx Bank-B"],
+        energy=15,                          # 15 MV
+        fluence_mode=FluenceMode.FFF,       # Flattening filter free
+        dose_rate=600,                      # MU/min
+        gantry_angle=0,
+        coll_angle=0,
+        couch_vrt=0,
+        couch_lng=1000,
+        couch_lat=0,
+        couch_rot=0,
+    )
+    generator.add_procedure(procedure)
 
 Picket Fence
 ------------
@@ -404,3 +556,9 @@ VMAT MLC Speed
 
 .. autoclass:: conjuror.plans.truebeam.VMATDRMLC
    :members: from_varian_reference
+
+API Reference
+-------------
+
+.. autoclass:: conjuror.plans.truebeam.OpenField
+.. autoclass:: conjuror.plans.truebeam.MLCTransmission
