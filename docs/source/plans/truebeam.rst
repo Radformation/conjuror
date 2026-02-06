@@ -606,7 +606,7 @@ widths:
             fig
 
 Customizing Parameters
-^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
 
 You can adjust gap widths and sweep extent (``gap_widths``, ``start_position``,
 ``final_position``), MU (``mu``), jaw size (``x1``, ``x2``, ``y1``, ``y2``),
