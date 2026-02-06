@@ -84,11 +84,13 @@ strategies. The library enables:
 * Aggregation of multiple procedures into a single RT plan file, enabling a
   streamlined QA workflow.
 * Visualization of the expected fluence and the sequence of control points of
-  each beam.
+  each beam (\autoref{fig:open_field}).
 * Integration with Python QA ecosystems (e.g. Pylinac [@Kerns2023]), supporting
   automated analysis and research into novel QA strategies.
 * Built on established Python packages such as pydicom [@Mason2022], ensuring
   compatibility with the broader medical imaging software ecosystem.
+
+![MLC leaf positions (left) and the expected fluence map (right) for a 10×10 cm open field generated with Conjuror.\label{fig:open_field}](open_field_mlc_and_fluence.png)
 
 # State of the field
 
