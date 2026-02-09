@@ -363,7 +363,7 @@ class MLCTransmission(QAProcedure):
         The couch rotation in degrees.
     """
 
-    mu_per_bank: int = 1000
+    mu_per_bank: int = 100
     mu_per_ref: int = 100
     overreach: float = 10
     beam_names: list[str] = field(
