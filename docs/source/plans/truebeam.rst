@@ -25,7 +25,6 @@ millimeters:
 
     # Create a 10x20 cm field centered at isocenter
     procedure = OpenField(x1=-50, x2=50, y1=-100, y2=100, mu=100)
-    generator.add_procedure(procedure)
 
 The following visualizations show the MLC animation and fluence map for an open
 field:
@@ -200,7 +199,7 @@ The following alignment modes apply to MLC-defined fields:
     # EXACT: Field edges must align exactly with MLC boundaries
     procedure_exact = OpenField(..., mlc_mode=MLCLeafBoundaryAlignmentMode.EXACT)
 
-The following visualizations show the MLC positions for each alignment mode using y2=51:
+The following visualizations show the MLC positions for each alignment mode using ``y2=51``:
 
 .. grid:: 2
     :gutter: 2
@@ -222,7 +221,7 @@ The following visualizations show the MLC positions for each alignment mode usin
 
             # Generate MLC animation and zoom in on top edge
             fig = beam.animate_mlc(show=False)
-            fig.update_layout(xaxis_range=[-80, 80], yaxis_range=[40, 60])
+            fig.update_layout(xaxis_range=[-20, 20], yaxis_range=[40, 60])
             fig
 
     .. grid-item::
@@ -235,14 +234,14 @@ The following visualizations show the MLC positions for each alignment mode usin
             from conjuror.plans.truebeam import OpenField, MLCLeafBoundaryAlignmentMode, TrueBeamMachine
 
             # INWARD: Exclude intermediate boundaries from the field
-            procedure = OpenField(x1=-50, x2=50, y1=-51, y2=51, mlc_mode=MLCLeafBoundaryAlignmentMode.INWARD, beam_name="INWARD")
+            procedure = OpenField(x1=-10, x2=10, y1=-51, y2=51, mlc_mode=MLCLeafBoundaryAlignmentMode.INWARD, beam_name="INWARD")
             machine = TrueBeamMachine(mlc_is_hd=False)
             procedure.compute(machine)
             beam = procedure.beams[0]
 
             # Generate MLC animation and zoom in on top edge
             fig = beam.animate_mlc(show=False)
-            fig.update_layout(xaxis_range=[-80, 80], yaxis_range=[40, 60])
+            fig.update_layout(xaxis_range=[-20, 20], yaxis_range=[40, 60])
             fig
 
     .. grid-item::
@@ -255,14 +254,14 @@ The following visualizations show the MLC positions for each alignment mode usin
             from conjuror.plans.truebeam import OpenField, MLCLeafBoundaryAlignmentMode, TrueBeamMachine
 
             # ROUND: Round to nearest MLC boundary
-            procedure = OpenField(x1=-50, x2=50, y1=-51, y2=51, mlc_mode=MLCLeafBoundaryAlignmentMode.ROUND, beam_name="ROUND")
+            procedure = OpenField(x1=-10, x2=10, y1=-51, y2=51, mlc_mode=MLCLeafBoundaryAlignmentMode.ROUND, beam_name="ROUND")
             machine = TrueBeamMachine(mlc_is_hd=False)
             procedure.compute(machine)
             beam = procedure.beams[0]
 
             # Generate MLC animation and zoom in on top edge
             fig = beam.animate_mlc(show=False)
-            fig.update_layout(xaxis_range=[-80, 80], yaxis_range=[40, 60])
+            fig.update_layout(xaxis_range=[-20, 20], yaxis_range=[40, 60])
             fig
 
     .. grid-item::
@@ -278,7 +277,7 @@ The following visualizations show the MLC positions for each alignment mode usin
             # EXACT: Field edges must align exactly with MLC boundaries
             # This will raise an error since y1=-51, y2=51 don't align with MLC boundaries
             try:
-                procedure = OpenField(x1=-50, x2=50, y1=-51, y2=51, mlc_mode=MLCLeafBoundaryAlignmentMode.EXACT, beam_name="EXACT")
+                procedure = OpenField(x1=-10, x2=10, y1=-51, y2=51, mlc_mode=MLCLeafBoundaryAlignmentMode.EXACT, beam_name="EXACT")
                 machine = TrueBeamMachine(mlc_is_hd=False)
                 procedure.compute(machine)
             except ValueError as e:
