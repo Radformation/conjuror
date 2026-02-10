@@ -139,6 +139,7 @@ class BeamVisualizationMixin:
         fig.update_layout(
             title=f"Fluence Map - {self.beam_name}",
         )
+        fig.update_yaxes(scaleanchor="x", scaleratio=1)
         if show:
             fig.show()
         return fig
@@ -152,6 +153,8 @@ class BeamVisualizationMixin:
             Whether to show the plot. Default is True.
         """
         _leaf_length = 200
+        jaw_line_width = 2
+        mlc_line_width = 2
         blds = {
             bld.RTBeamLimitingDeviceType: bld
             for bld in self.beam_limiting_device_sequence
@@ -160,38 +163,39 @@ class BeamVisualizationMixin:
 
         frames = []
         for cp_idx in range(self.number_of_control_points):
-            shapes = []
+            mlc_shapes = []
+            jaw_shapes = []
             for key, positions in self.beam_limiting_device_positions.items():
                 if key in ["X", "ASYMX"]:
                     x1 = go.Scatter(
                         x=2 * [positions[0, cp_idx]],
                         y=[-1000, 1000],
                         mode="lines",
-                        line=dict(width=2, color="orange"),
+                        line=dict(width=jaw_line_width, color="orange"),
                     )
                     x2 = go.Scatter(
                         x=2 * [positions[1, cp_idx]],
                         y=[-1000, 1000],
                         mode="lines",
-                        line=dict(width=2, color="orange"),
+                        line=dict(width=jaw_line_width, color="orange"),
                     )
-                    shapes.append(x1)
-                    shapes.append(x2)
+                    jaw_shapes.append(x1)
+                    jaw_shapes.append(x2)
                 if key in ["Y", "ASYMY"]:
                     y1 = go.Scatter(
                         x=[-1000, 1000],
                         y=2 * [positions[0, cp_idx]],
                         mode="lines",
-                        line=dict(width=2, color="orange"),
+                        line=dict(width=jaw_line_width, color="orange"),
                     )
                     y2 = go.Scatter(
                         x=[-1000, 1000],
                         y=2 * [positions[1, cp_idx]],
                         mode="lines",
-                        line=dict(width=2, color="orange"),
+                        line=dict(width=jaw_line_width, color="orange"),
                     )
-                    shapes.append(y1)
-                    shapes.append(y2)
+                    jaw_shapes.append(y1)
+                    jaw_shapes.append(y2)
                 if "MLC" not in key:
                     continue
 
@@ -205,32 +209,39 @@ class BeamVisualizationMixin:
                     pos_b = positions[leaf, cp_idx]
                     x_b = pos_b + _leaf_length * np.array([-1, 0, 0, -1, -1])
                     rect_b = go.Scatter(
-                        x=x_b, y=y, mode="lines", line=dict(width=2, color="blue")
+                        x=x_b,
+                        y=y,
+                        mode="lines",
+                        line=dict(width=mlc_line_width, color="blue"),
                     )
 
                     pos_a = positions[leaf + num_leaf_pairs, cp_idx]
                     x_a = pos_a + _leaf_length * np.array([0, 1, 1, 0, 0])
                     rect_a = go.Scatter(
-                        x=x_a, y=y, mode="lines", line=dict(width=2, color="blue")
+                        x=x_a,
+                        y=y,
+                        mode="lines",
+                        line=dict(width=mlc_line_width, color="blue"),
                     )
 
-                    shapes.append(rect_b)
-                    shapes.append(rect_a)
+                    mlc_shapes.append(rect_b)
+                    mlc_shapes.append(rect_a)
 
-                frame = go.Frame(data=shapes, name=f"cp_{cp_idx}")
-                frames.append(frame)
+            shapes = mlc_shapes + jaw_shapes
+            frame = go.Frame(data=shapes, name=f"cp_{cp_idx}")
+            frames.append(frame)
         data = frames[0].data
         layout = go.Layout(
             showlegend=False,
             title=f"Beam: {self.beam_name}",
             xaxis=dict(range=[-200, 200]),
-            yaxis=dict(range=[-200, 200]),
+            yaxis=dict(range=[-200, 200], scaleanchor="x", scaleratio=1),
             updatemenus=[
                 {
                     "type": "buttons",
                     "buttons": [
                         {
-                            "label": "▶ Play",
+                            "label": "Play",
                             "method": "animate",
                             "args": [
                                 None,
