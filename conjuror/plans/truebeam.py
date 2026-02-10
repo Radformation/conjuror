@@ -288,14 +288,14 @@ class OpenField(QAProcedure):
     outside_strip_width: float = 5
 
     def compute(self, machine: TrueBeamMachine) -> None:
-        y_mode = self.mlc_mode.value
         if self.defined_by_mlc:
             mlc_padding = 0
             jaw_padding = self.padding
+            y_mode = self.mlc_mode
         else:
             mlc_padding = self.padding
             jaw_padding = 0
-            y_mode = OpenFieldMLCMode.OUTWARD.value
+            y_mode = OpenFieldMLCMode.OUTWARD
 
         shaper = Beam.create_shaper(machine)
         shape = Rectangle(
@@ -303,7 +303,7 @@ class OpenField(QAProcedure):
             x_max=self.x2 + mlc_padding,
             y_min=self.y1 - mlc_padding,
             y_max=self.y2 + mlc_padding,
-            y_mode=y_mode,
+            y_mode=RectangleMode(y_mode),
             outer_strip_width=self.outside_strip_width,
             x_outfield_position=self.x1 - jaw_padding - 20,
         )
@@ -657,20 +657,20 @@ class WinstonLutz(QAProcedure):
     padding: float = 5
 
     def compute(self, machine: TrueBeamMachine) -> None:
-        y_mode = self.mlc_mode.value
         if self.defined_by_mlc:
             mlc_padding = 0
             jaw_padding = self.padding
+            y_mode = self.mlc_mode
         else:
             mlc_padding = self.padding
             jaw_padding = 0
-            y_mode = OpenFieldMLCMode.OUTWARD.value
+            y_mode = OpenFieldMLCMode.OUTWARD
         shape = Rectangle(
             x_min=self.x1 - mlc_padding,
             x_max=self.x2 + mlc_padding,
             y_min=self.y1 - mlc_padding,
             y_max=self.y2 + mlc_padding,
-            y_mode=y_mode,
+            y_mode=RectangleMode(y_mode),
             outer_strip_width=5,
             x_outfield_position=self.x1 - jaw_padding - 20,
         )
