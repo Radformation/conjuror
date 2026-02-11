@@ -43,14 +43,7 @@ DEFAULT_SPECS_TB = MachineSpecs(
 )
 
 
-class OpenFieldMLCMode(StrEnum):
-    EXACT = RectangleMode.EXACT
-    ROUND = RectangleMode.ROUND
-    INWARD = RectangleMode.INWARD
-    OUTWARD = RectangleMode.OUTWARD
-
-
-class WinstonLutzMLCMode(StrEnum):
+class MLCLeafBoundaryAlignmentMode(StrEnum):
     EXACT = RectangleMode.EXACT
     ROUND = RectangleMode.ROUND
     INWARD = RectangleMode.INWARD
@@ -226,11 +219,11 @@ class OpenField(QAProcedure):
         The bottom edge position.
     y2 : float
         The top edge position.
-    mu : int
+    mu : float
         The monitor units of the beam.
     defined_by_mlc : bool
         Whether the field edges are defined by the MLCs or the jaws.
-    mlc_mode : OpenFieldMLCMode
+    mlc_mode : MLCLeafBoundaryAlignmentMode
         Controls how the open field aligns with MLC leaf boundaries along the y-axis.
 
         * EXACT -- Both ``y1`` and ``y2`` must coincide with an MLC leaf boundary.
@@ -271,9 +264,9 @@ class OpenField(QAProcedure):
     x2: float
     y1: float
     y2: float
-    mu: int = 100
+    mu: float = 100.0
     defined_by_mlc: bool = True
-    mlc_mode: OpenFieldMLCMode = OpenFieldMLCMode.OUTWARD
+    mlc_mode: MLCLeafBoundaryAlignmentMode = MLCLeafBoundaryAlignmentMode.OUTWARD
     energy: float = 6
     fluence_mode: FluenceMode = FluenceMode.STANDARD
     dose_rate: int = 600
@@ -295,7 +288,7 @@ class OpenField(QAProcedure):
         else:
             mlc_padding = self.padding
             jaw_padding = 0
-            y_mode = OpenFieldMLCMode.OUTWARD
+            y_mode = MLCLeafBoundaryAlignmentMode.OUTWARD
 
         shaper = Beam.create_shaper(machine)
         shape = Rectangle(
@@ -414,7 +407,7 @@ class MLCTransmission(QAProcedure):
             self._y2,
             self.mu_per_ref,
             defined_by_mlc=False,
-            mlc_mode=OpenFieldMLCMode.OUTWARD,
+            mlc_mode=MLCLeafBoundaryAlignmentMode.OUTWARD,
             energy=self.energy,
             fluence_mode=self.fluence_mode,
             dose_rate=self.dose_rate,
@@ -608,11 +601,11 @@ class WinstonLutz(QAProcedure):
         The bottom edge position.
     y2 : float
         The top edge position.
-    mu : int
+    mu : float
         The monitor units of the beam.
     defined_by_mlc : bool
         Whether the field edges are defined by the MLCs or the jaws.
-    mlc_mode : WinstonLutzMLCMode
+    mlc_mode : MLCLeafBoundaryAlignmentMode
         Controls how the open field aligns with MLC leaf boundaries along the y-axis.
 
         * EXACT -- Both ``y1`` and ``y2`` must coincide with an MLC leaf boundary.
@@ -646,7 +639,7 @@ class WinstonLutz(QAProcedure):
     y2: float = 10.0
     mu: float = 10.0
     defined_by_mlc: bool = True
-    mlc_mode: WinstonLutzMLCMode = WinstonLutzMLCMode.OUTWARD
+    mlc_mode: MLCLeafBoundaryAlignmentMode = MLCLeafBoundaryAlignmentMode.OUTWARD
     fields: Iterable[WinstonLutzField] = (WinstonLutzField(0, 0, 0),)
     energy: float = 6
     fluence_mode: FluenceMode = FluenceMode.STANDARD
@@ -657,49 +650,32 @@ class WinstonLutz(QAProcedure):
     padding: float = 5
 
     def compute(self, machine: TrueBeamMachine) -> None:
-        if self.defined_by_mlc:
-            mlc_padding = 0
-            jaw_padding = self.padding
-            y_mode = self.mlc_mode
-        else:
-            mlc_padding = self.padding
-            jaw_padding = 0
-            y_mode = OpenFieldMLCMode.OUTWARD
-        shape = Rectangle(
-            x_min=self.x1 - mlc_padding,
-            x_max=self.x2 + mlc_padding,
-            y_min=self.y1 - mlc_padding,
-            y_max=self.y2 + mlc_padding,
-            y_mode=RectangleMode(y_mode),
-            outer_strip_width=5,
-            x_outfield_position=self.x1 - jaw_padding - 20,
-        )
-        shaper = Beam.create_shaper(machine)
-        mlc = shaper.get_shape(shape)
         for _field in self.fields:
             g = round(_field.gantry)
             c = round(_field.collimator)
             t = round(_field.couch)
             beam_name = _field.name or f"G{g:03d}C{c:03d}T{t:03d}"
-            beam = Beam(
-                beam_name=beam_name,
+            open_field_procedure = OpenField(
+                x1=self.x1,
+                x2=self.x2,
+                y1=self.y1,
+                y2=self.y2,
+                mu=self.mu,
+                defined_by_mlc=self.defined_by_mlc,
+                mlc_mode=self.mlc_mode,
                 energy=self.energy,
                 dose_rate=self.dose_rate,
-                x1=self.x1 - jaw_padding,
-                x2=self.x2 + jaw_padding,
-                y1=self.y1 - jaw_padding,
-                y2=self.y2 + jaw_padding,
-                gantry_angles=_field.gantry,
-                coll_angle=_field.collimator,
+                gantry_angle=_field.gantry,  # WL gantry
+                coll_angle=_field.collimator,  # WL collimator
                 couch_vrt=self.couch_vrt,
                 couch_lat=self.couch_lat,
                 couch_lng=self.couch_lng,
-                couch_rot=_field.couch,
-                mlc_positions=2 * [mlc],
-                metersets=[0, self.mu],
-                fluence_mode=self.fluence_mode,
-                mlc_is_hd=machine.mlc_is_hd,
+                couch_rot=_field.couch,  # WL couch
+                padding=self.padding,
+                beam_name=beam_name,
             )
+            open_field_procedure.compute(machine)
+            beam = open_field_procedure.beams[0]
             self.beams.append(beam)
 
 

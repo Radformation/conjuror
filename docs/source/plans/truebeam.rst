@@ -183,19 +183,19 @@ The following alignment modes apply to MLC-defined fields:
 
 .. code-block:: python
 
-    from conjuror.plans.truebeam import OpenField, OpenFieldMLCMode
+    from conjuror.plans.truebeam import OpenField, MLCLeafBoundaryAlignmentMode
 
     # OUTWARD: Include intermediate boundaries in the field (larger field, default)
-    procedure_outward = OpenField(..., mlc_mode=OpenFieldMLCMode.OUTWARD)
+    procedure_outward = OpenField(..., mlc_mode=MLCLeafBoundaryAlignmentMode.OUTWARD)
 
     # INWARD: Exclude intermediate boundaries from the field (smaller field)
-    procedure_inward = OpenField(..., mlc_mode=OpenFieldMLCMode.INWARD)
+    procedure_inward = OpenField(..., mlc_mode=MLCLeafBoundaryAlignmentMode.INWARD)
 
     # ROUND: Round to nearest MLC boundary
-    procedure_round = OpenField(..., mlc_mode=OpenFieldMLCMode.ROUND)
+    procedure_round = OpenField(..., mlc_mode=MLCLeafBoundaryAlignmentMode.ROUND)
 
     # EXACT: Field edges must align exactly with MLC boundaries
-    procedure_exact = OpenField(..., mlc_mode=OpenFieldMLCMode.EXACT)
+    procedure_exact = OpenField(..., mlc_mode=MLCLeafBoundaryAlignmentMode.EXACT)
 
 The following visualizations show the MLC positions for each alignment mode using ``y2=51``:
 
@@ -209,10 +209,10 @@ The following visualizations show the MLC positions for each alignment mode usin
             :iframe-width: 100%
             :iframe-height: 500px
 
-            from conjuror.plans.truebeam import OpenField, OpenFieldMLCMode, TrueBeamMachine
+            from conjuror.plans.truebeam import OpenField, MLCLeafBoundaryAlignmentMode, TrueBeamMachine
 
             # OUTWARD: Include intermediate boundaries in the field
-            procedure = OpenField(x1=-10, x2=10, y1=-51, y2=51, mlc_mode=OpenFieldMLCMode.OUTWARD, beam_name="OUTWARD")
+            procedure = OpenField(x1=-50, x2=50, y1=-51, y2=51, mlc_mode=MLCLeafBoundaryAlignmentMode.OUTWARD, beam_name="OUTWARD")
             machine = TrueBeamMachine(mlc_is_hd=False)
             procedure.compute(machine)
             beam = procedure.beams[0]
@@ -229,10 +229,10 @@ The following visualizations show the MLC positions for each alignment mode usin
             :iframe-width: 100%
             :iframe-height: 500px
 
-            from conjuror.plans.truebeam import OpenField, OpenFieldMLCMode, TrueBeamMachine
+            from conjuror.plans.truebeam import OpenField, MLCLeafBoundaryAlignmentMode, TrueBeamMachine
 
             # INWARD: Exclude intermediate boundaries from the field
-            procedure = OpenField(x1=-10, x2=10, y1=-51, y2=51, mlc_mode=OpenFieldMLCMode.INWARD, beam_name="INWARD")
+            procedure = OpenField(x1=-10, x2=10, y1=-51, y2=51, mlc_mode=MLCLeafBoundaryAlignmentMode.INWARD, beam_name="INWARD")
             machine = TrueBeamMachine(mlc_is_hd=False)
             procedure.compute(machine)
             beam = procedure.beams[0]
@@ -249,10 +249,10 @@ The following visualizations show the MLC positions for each alignment mode usin
             :iframe-width: 100%
             :iframe-height: 500px
 
-            from conjuror.plans.truebeam import OpenField, OpenFieldMLCMode, TrueBeamMachine
+            from conjuror.plans.truebeam import OpenField, MLCLeafBoundaryAlignmentMode, TrueBeamMachine
 
             # ROUND: Round to nearest MLC boundary
-            procedure = OpenField(x1=-10, x2=10, y1=-51, y2=51, mlc_mode=OpenFieldMLCMode.ROUND, beam_name="ROUND")
+            procedure = OpenField(x1=-10, x2=10, y1=-51, y2=51, mlc_mode=MLCLeafBoundaryAlignmentMode.ROUND, beam_name="ROUND")
             machine = TrueBeamMachine(mlc_is_hd=False)
             procedure.compute(machine)
             beam = procedure.beams[0]
@@ -269,13 +269,13 @@ The following visualizations show the MLC positions for each alignment mode usin
             :iframe-width: 100%
             :iframe-height: 500px
 
-            from conjuror.plans.truebeam import OpenField, OpenFieldMLCMode, TrueBeamMachine
+            from conjuror.plans.truebeam import OpenField, MLCLeafBoundaryAlignmentMode, TrueBeamMachine
             from plotly import graph_objects as go
 
             # EXACT: Field edges must align exactly with MLC boundaries
             # This will raise an error since y1=-51, y2=51 don't align with MLC boundaries
             try:
-                procedure = OpenField(x1=-10, x2=10, y1=-51, y2=51, mlc_mode=OpenFieldMLCMode.EXACT, beam_name="EXACT")
+                procedure = OpenField(x1=-10, x2=10, y1=-51, y2=51, mlc_mode=MLCLeafBoundaryAlignmentMode.EXACT, beam_name="EXACT")
                 machine = TrueBeamMachine(mlc_is_hd=False)
                 procedure.compute(machine)
             except ValueError as e:
@@ -332,7 +332,7 @@ Complete Example
 
     import pydicom
     from conjuror.plans.plan_generator import PlanGenerator
-    from conjuror.plans.truebeam import OpenField, OpenFieldMLCMode
+    from conjuror.plans.truebeam import OpenField, MLCLeafBoundaryAlignmentMode
 
     # Create generator from base plan
     base_plan = pydicom.dcmread(r"C:\path\to\base_plan.dcm")
@@ -344,7 +344,7 @@ Complete Example
             x1=-100, x2=100, y1=-100, y2=100,
             energy=energy,
             mu=100,
-            mlc_mode=OpenFieldMLCMode.EXACT,
+            mlc_mode=MLCLeafBoundaryAlignmentMode.EXACT,
             beam_name=f"Open {energy}MV"
         )
         generator.add_procedure(procedure)
