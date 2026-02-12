@@ -12,6 +12,7 @@ license = "MIT"
 keywords = ["medical", "physics", "image", "analysis", "RT Plan"]
 
 dependencies = [
+    "pydantic>=2.0",
     "pydicom~=2.4.0", # match RM
     "numpy~=1.23.0", # match RM
     "plotly~=5.8", # match RM

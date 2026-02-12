@@ -1,7 +1,8 @@
 from abc import ABC
 from collections.abc import Sequence
-from dataclasses import dataclass
 from enum import StrEnum
+
+from pydantic import Field
 
 import numpy as np
 from pydicom.dataset import Dataset
@@ -138,7 +139,6 @@ class QAProcedure(QAProcedureBase[HalcyonMachine], ABC):
     pass
 
 
-@dataclass
 class PicketFence(QAProcedure):
     """Add a picket fence beam to the plan. The beam will be delivered with the MLCs stacked on top of each other.
 
@@ -166,16 +166,51 @@ class PicketFence(QAProcedure):
         The name of the beam.
     """
 
-    stack: Stack
-    strip_width_mm: float = 3
-    strip_positions_mm: tuple[float, ...] = (-45, -30, -15, 0, 15, 30, 45)
-    gantry_angle: float = 0
-    coll_angle: float = 0
-    couch_vrt: float = 0
-    couch_lng: float = 1000
-    couch_lat: float = 0
-    mu: int = 200
-    beam_name: str = "PF"
+    stack: Stack = Field(
+        title="Stack",
+        description="Which MLC stack to use for the beam. The other stack will be parked.",
+    )
+    strip_width_mm: float = Field(
+        default=3,
+        title="Strip Width",
+        description="The width of the strips.",
+        json_schema_extra={"units": "mm"},
+    )
+    strip_positions_mm: tuple[float, ...] = Field(
+        default=(-45, -30, -15, 0, 15, 30, 45),
+        title="Strip Positions",
+        description="The positions of the strips.",
+        json_schema_extra={"units": "mm"},
+    )
+    gantry_angle: float = Field(
+        default=0,
+        title="Gantry Angle",
+        description="The gantry angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    coll_angle: float = Field(
+        default=0,
+        title="Collimator Angle",
+        description="The collimator angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    couch_vrt: float = Field(
+        default=0, title="Couch Vertical", description="The couch vertical position."
+    )
+    couch_lng: float = Field(
+        default=1000,
+        title="Couch Longitudinal",
+        description="The couch longitudinal position.",
+    )
+    couch_lat: float = Field(
+        default=0, title="Couch Lateral", description="The couch lateral position."
+    )
+    mu: int = Field(
+        default=200, title="Monitor Units", description="The monitor units of the beam."
+    )
+    beam_name: str = Field(
+        default="PF", title="Beam Name", description="The name of the beam."
+    )
 
     def compute(self, machine: HalcyonMachine) -> None:
         prox_mlc, dist_mlc = Beam.create_mlc(machine)

@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Self, Generic
 
 from plotly import graph_objects as go
+from pydantic import BaseModel, Field, ConfigDict
+from pydantic.json_schema import SkipJsonSchema
 import pydicom
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
@@ -18,13 +20,12 @@ from conjuror.plans.machine import TMachine, MachineSpecs, MachineBase
 from conjuror.plans.visualization import plot_fluences
 
 
-class QAProcedureBase(Generic[TMachine], ABC):
+class QAProcedureBase(BaseModel, Generic[TMachine], ABC):
     """An abstract base class for generic QA procedures."""
 
-    beams: list[Beam[TMachine]]
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def __post_init__(self):
-        self.beams = []
+    beams: SkipJsonSchema[list[Beam[TMachine]]] = Field(default_factory=list)
 
     @abstractmethod
     def compute(self, machine: TMachine):
