@@ -219,58 +219,7 @@ class QAProcedure(QAProcedureBase[TrueBeamMachine], ABC):
 
 
 class OpenField(QAProcedure):
-    """Create an open field beam.
-
-    Parameters
-    ----------
-    x1 : float
-        The left edge position.
-    x2 : float
-        The right edge position.
-    y1 : float
-        The bottom edge position.
-    y2 : float
-        The top edge position.
-    mu : float
-        The monitor units of the beam.
-    defined_by_mlc : bool
-        Whether the field edges are defined by the MLCs or the jaws.
-    mlc_mode : MLCLeafBoundaryAlignmentMode
-        Controls how the open field aligns with MLC leaf boundaries along the y-axis.
-
-        * EXACT -- Both ``y1`` and ``y2`` must coincide with an MLC leaf boundary.
-          If either edge does not align exactly, an error is raised.
-        * ROUND -- If ``y1`` or ``y2`` falls between boundaries, the limits are rounded to the nearest boundary.
-        * INWARD -- If ``y1`` or ``y2`` falls between boundaries, the leaf band is treated as "outfield."
-          This results in a smaller field in the y-direction.
-        * OUTWARD -- If ``y1`` or ``y2`` falls between boundaries, the leaf band is treated as "infield."
-          This results in a larger field in the y-direction.
-    energy : float
-        The energy of the beam.
-    fluence_mode : FluenceMode
-        The fluence mode of the beam.
-    dose_rate : int
-        The dose rate of the beam.
-    gantry_angle : float
-        The gantry angle of the beam.
-    coll_angle : float
-        The collimator angle of the beam.
-    couch_vrt : float
-        The couch vertical position.
-    couch_lng : float
-        The couch longitudinal position.
-    couch_lat : float
-        The couch lateral position.
-    couch_rot : float
-        The couch rotation.
-    padding : float
-        The padding to add to the jaws or MLCs.
-    beam_name : str
-        The name of the beam.
-    outside_strip_width : float
-        The width of the strip of MLCs outside the field. The MLCs will be placed to the
-        left, under the X1 jaw by 20mm.
-    """
+    """Create an open field beam."""
 
     x1: float = Field(title="X1", description="The left edge position.")
     x2: float = Field(title="X2", description="The right edge position.")
@@ -289,7 +238,13 @@ class OpenField(QAProcedure):
     mlc_mode: MLCLeafBoundaryAlignmentMode = Field(
         default=MLCLeafBoundaryAlignmentMode.OUTWARD,
         title="MLC Mode",
-        description="Controls how the open field aligns with MLC leaf boundaries along the y-axis.",
+        description=(
+            "Controls how the open field aligns with MLC leaf boundaries along the y-axis. "
+            "EXACT: Both y1 and y2 must coincide with an MLC leaf boundary; raises an error otherwise. "
+            "ROUND: Limits are rounded to the nearest boundary. "
+            "INWARD: Non-aligned leaf bands are treated as outfield, resulting in a smaller field in y. "
+            "OUTWARD: Non-aligned leaf bands are treated as infield, resulting in a larger field in y."
+        ),
     )
     energy: float = Field(
         default=6, title="Energy", description="The energy of the beam."
@@ -394,40 +349,6 @@ class OpenField(QAProcedure):
 class MLCTransmission(QAProcedure):
     """Add MLC transmission beams to the plan.
     The beam is delivered with the MLCs closed and moved to one side underneath the jaws.
-
-    Parameters
-    ----------
-    mu_per_bank : int
-        The monitor units to deliver for each bank transmission test.
-    mu_per_ref : int
-        The monitor units to deliver for the reference open field.
-    overreach : float
-        The amount to tuck the MLCs under the jaws in mm.
-    beam_names : list[str]
-        A list containing the names of the beams to use in the following order:
-        reference beam, transmission beam bank A, transmission beam bank B
-    energy : int
-        The energy of the beam.
-    fluence_mode : FluenceMode
-        The fluence mode of the beam.
-    dose_rate : int
-        The dose rate of the beam.
-    width : float
-        The width of the reference field in mm.
-    height : float
-        The height of the reference field in mm.
-    gantry_angle : float
-        The gantry angle of the beam in degrees.
-    coll_angle : float
-        The collimator angle of the beam in degrees.
-    couch_vrt : float
-        The couch vertical position.
-    couch_lat : float
-        The couch lateral position.
-    couch_lng : float
-        The couch longitudinal position.
-    couch_rot : float
-        The couch rotation in degrees.
     """
 
     mu_per_bank: int = Field(
@@ -586,43 +507,7 @@ class MLCTransmission(QAProcedure):
 
 
 class PicketFence(QAProcedure):
-    """Add a picket fence beam to the plan.
-
-    Parameters
-    ----------
-    picket_width : float
-        The width of the pickets in mm.
-    picket_positions : tuple
-        The positions of the pickets in mm relative to the center of the image.
-    mu_per_picket : int
-        The monitor units for each picket.
-    mu_per_transition : int
-        The monitor units for MLC transitions between pickets.
-    skip_first_picket: bool
-        Whether to skip the first picket.
-    energy : float
-        The energy of the beam.
-    fluence_mode : FluenceMode
-        The fluence mode of the beam.
-    dose_rate : int
-        The dose rate of the beam.
-    gantry_angle : float
-        The gantry angle of the beam.
-    coll_angle : float
-        The collimator angle of the beam.
-    couch_vrt : float
-        The couch vertical position.
-    couch_lng : float
-        The couch longitudinal position.
-    couch_lat : float
-        The couch lateral position.
-    couch_rot : float
-        The couch rotation.
-    jaw_padding : float
-        The padding to add to the X jaws.
-    beam_name : str
-        The name of the beam.
-    """
+    """Add a picket fence beam to the plan."""
 
     picket_width: float = Field(
         default=1,
@@ -774,47 +659,6 @@ class PicketFence(QAProcedure):
 class WinstonLutz(QAProcedure):
     """Add Winston-Lutz beams to the plan. Will create a beam for each set of axes positions.
     Field names are generated automatically based on the axes positions.
-
-    Parameters
-    ----------
-    x1 : float
-        The left edge position.
-    x2 : float
-        The right edge position.
-    y1 : float
-        The bottom edge position.
-    y2 : float
-        The top edge position.
-    mu : float
-        The monitor units of the beam.
-    defined_by_mlc : bool
-        Whether the field edges are defined by the MLCs or the jaws.
-    mlc_mode : MLCLeafBoundaryAlignmentMode
-        Controls how the open field aligns with MLC leaf boundaries along the y-axis.
-
-        * EXACT -- Both ``y1`` and ``y2`` must coincide with an MLC leaf boundary.
-          If either edge does not align exactly, an error is raised.
-        * ROUND -- If ``y1`` or ``y2`` falls between boundaries, the limits are rounded to the nearest boundary.
-        * INWARD -- If ``y1`` or ``y2`` falls between boundaries, the leaf band is treated as "outfield."
-          This results in a smaller field in the y-direction.
-        * OUTWARD -- If ``y1`` or ``y2`` falls between boundaries, the leaf band is treated as "infield."
-          This results in a larger field in the y-direction.
-    fields : Iterable[WinstonLutzField]
-        The positions of the axes.
-    energy : float
-        The energy of the beam.
-    fluence_mode : FluenceMode
-        The fluence mode of the beam.
-    dose_rate : int
-        The dose rate of the beam.
-    couch_vrt : float
-        The couch vertical position.
-    couch_lng : float
-        The couch longitudinal position.
-    couch_lat : float
-        The couch lateral position.
-    padding : float
-        The padding to add to the jaws or MLCs.
     """
 
     x1: float = Field(default=-10.0, title="X1", description="The left edge position.")
@@ -836,7 +680,13 @@ class WinstonLutz(QAProcedure):
     mlc_mode: MLCLeafBoundaryAlignmentMode = Field(
         default=MLCLeafBoundaryAlignmentMode.OUTWARD,
         title="MLC Mode",
-        description="Controls how the open field aligns with MLC leaf boundaries along the y-axis.",
+        description=(
+            "Controls how the open field aligns with MLC leaf boundaries along the y-axis. "
+            "EXACT: Both y1 and y2 must coincide with an MLC leaf boundary; raises an error otherwise. "
+            "ROUND: Limits are rounded to the nearest boundary. "
+            "INWARD: Non-aligned leaf bands are treated as outfield, resulting in a smaller field in y. "
+            "OUTWARD: Non-aligned leaf bands are treated as infield, resulting in a larger field in y."
+        ),
     )
     fields: Iterable[WinstonLutzField] = Field(
         default_factory=lambda: (WinstonLutzField(gantry=0, collimator=0, couch=0),),
@@ -902,45 +752,7 @@ class WinstonLutz(QAProcedure):
 
 
 class DosimetricLeafGap(QAProcedure):
-    """Add beams to measure the Dosimetric Leaf Gap (DLG).
-
-    Parameters
-    ----------
-    gap_widths : tuple
-        The gap widths in mm for the MLC sweeps.
-    start_position: int
-        The start position of the MLC gap in mm.
-    final_position: int
-        The final position of the MLC gap in mm
-    mu : int
-        The monitor units of each beam.
-    energy : float
-        The energy of the beam.
-    fluence_mode : FluenceMode
-        The fluence mode of the beam.
-    dose_rate : int
-        The dose rate of the beam.
-    gantry_angle : float
-        The gantry angle of the beam.
-    coll_angle : float
-        The collimator angle of the beam.
-    couch_vrt : float
-        The couch vertical position.
-    couch_lat : float
-        The couch lateral position.
-    couch_lng : float
-        The couch longitudinal position.
-    couch_rot : float
-        The couch rotation.
-    x1 : float
-        The left edge position.
-    x2 : float
-        The right edge position.
-    y1 : float
-        The bottom edge position.
-    y2 : float
-        The top edge position.
-    """
+    """Add beams to measure the Dosimetric Leaf Gap (DLG)."""
 
     gap_widths: Sequence[float] = Field(
         default=(2, 4, 6, 10, 14, 16, 20),
@@ -1059,45 +871,6 @@ class DoseRate(QAProcedure):
     """Create a single-image dose rate test. Multiple ROIs are generated. A reference beam is also
     created where all ROIs are delivered at the default dose rate for comparison.
     The field names are generated automatically based on the min and max dose rates tested.
-
-    Parameters
-    ----------
-    dose_rates : tuple
-        The dose rates to test in MU/min. Each dose rate will have its own ROI.
-    default_dose_rate : int
-        The default dose rate. Typically, this is the clinical default. The reference beam
-        will be delivered at this dose rate for all ROIs.
-    gantry_angle : float
-        The gantry angle of the beam.
-    desired_mu : int
-        The desired monitor units to deliver. It can be that based on the dose rates asked for,
-        the MU required might be higher than this value.
-    energy : float
-        The energy of the beam.
-    fluence_mode : FluenceMode
-        The fluence mode of the beam.
-    coll_angle : float
-        The collimator angle of the beam.
-    couch_vrt : float
-        The couch vertical position.
-    couch_lat : float
-        The couch lateral position.
-    couch_lng : float
-        The couch longitudinal position.
-    couch_rot : float
-        The couch rotation.
-    jaw_padding_mm : float
-        The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.
-    roi_size_mm : float
-        The width of the ROIs in mm.
-    y1 : float
-        The bottom jaw position. Usually negative. More negative is lower.
-    y2 : float
-        The top jaw position. Usually positive. More positive is higher.
-    max_sacrificial_move_mm : float
-        The maximum distance the sacrificial leaves can move in a given control point.
-        Smaller values generate more control points and more back-and-forth movement.
-        Too large of values may cause deliverability issues.
     """
 
     dose_rates: tuple[int, ...] = Field(
@@ -1109,7 +882,10 @@ class DoseRate(QAProcedure):
     default_dose_rate: int = Field(
         default=600,
         title="Default Dose Rate",
-        description="The default dose rate. Typically, this is the clinical default.",
+        description=(
+            "The default dose rate. Typically, this is the clinical default. "
+            "The reference beam will be delivered at this dose rate for all ROIs."
+        ),
         json_schema_extra={"units": "MU/min"},
     )
     gantry_angle: float = Field(
@@ -1121,7 +897,10 @@ class DoseRate(QAProcedure):
     desired_mu: int = Field(
         default=50,
         title="Desired MU",
-        description="The desired monitor units to deliver.",
+        description=(
+            "The desired monitor units to deliver. Based on the dose rates requested, "
+            "the actual MU required might be higher than this value."
+        ),
     )
     energy: float = Field(
         default=6, title="Energy", description="The energy of the beam."
@@ -1179,7 +958,11 @@ class DoseRate(QAProcedure):
     max_sacrificial_move_mm: float = Field(
         default=50,
         title="Max Sacrificial Move",
-        description="The maximum distance the sacrificial leaves can move in a given control point.",
+        description=(
+            "The maximum distance the sacrificial leaves can move in a given control point. "
+            "Smaller values generate more control points and more back-and-forth movement. "
+            "Too large of values may cause deliverability issues."
+        ),
         json_schema_extra={"units": "mm"},
     )
 
@@ -1307,46 +1090,6 @@ class MLCSpeed(QAProcedure):
     """Create a single-image MLC speed test. Multiple speeds are generated. A reference beam is also
     generated. The reference beam is delivered at the maximum MLC speed.
 
-    Parameters
-    ----------
-    speeds : tuple[float]
-        The speeds to test in mm/s. Each speed will have its own ROI.
-    roi_size_mm : float
-        The width of the ROIs in mm.
-    mu : int
-        The monitor units to deliver.
-    default_dose_rate : int
-        The dose rate used for the reference beam.
-    gantry_angle : float
-        The gantry angle of the beam.
-    energy : int
-        The energy of the beam.
-    coll_angle : float
-        The collimator angle of the beam.
-    couch_vrt : float
-        The couch vertical position.
-    couch_lat : float
-        The couch lateral position.
-    couch_lng : float
-        The couch longitudinal position.
-    couch_rot : float
-        The couch rotation.
-    fluence_mode : FluenceMode
-        The fluence mode of the beam.
-    jaw_padding_mm : float
-        The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.
-    y1 : float
-        The bottom jaw position. Usually negative. More negative is lower.
-    y2 : float
-        The top jaw position. Usually positive. More positive is higher.
-    beam_name : str
-        The name of the beam. The reference beam will be called "MLC Sp Ref".
-    max_sacrificial_move_mm : float
-        The maximum distance the sacrificial leaves can move in a given control point.
-        Smaller values generate more control points and more back-and-forth movement.
-        Too large of values may cause deliverability issues.
-
-
     Notes
     -----
 
@@ -1438,12 +1181,18 @@ class MLCSpeed(QAProcedure):
         description="The top jaw position. Usually positive. More positive is higher.",
     )
     beam_name: str = Field(
-        default="MLC Speed", title="Beam Name", description="The name of the beam."
+        default="MLC Speed",
+        title="Beam Name",
+        description="The name of the beam. The reference beam will be named '{beam_name} Ref'.",
     )
     max_sacrificial_move_mm: float = Field(
         default=50,
         title="Max Sacrificial Move",
-        description="The maximum distance the sacrificial leaves can move in a given control point.",
+        description=(
+            "The maximum distance the sacrificial leaves can move in a given control point. "
+            "Smaller values generate more control points and more back-and-forth movement. "
+            "Too large of values may cause deliverability issues."
+        ),
         json_schema_extra={"units": "mm"},
     )
 
@@ -1569,46 +1318,6 @@ class GantrySpeed(QAProcedure):
     """Create a single-image gantry speed test. Multiple speeds are generated. A reference beam is also
     generated. The reference beam is delivered without gantry movement.
 
-    Parameters
-    ----------
-    speeds : tuple
-        The gantry speeds to test. Each speed will have its own ROI.
-    max_dose_rate : int
-        The max dose rate clinically allowed for the energy.
-    start_gantry_angle : float
-        The starting gantry angle. The gantry will rotate around this point. It is up to the user
-        to know what the machine's limitations are. (i.e. don't go through 180 for Varian machines).
-        The ending gantry angle will be the starting angle + the sum of the gantry deltas generated
-        by the speed ROIs. Slower speeds require more gantry angle to reach the same MU.
-    energy : float
-        The energy of the beam.
-    fluence_mode : FluenceMode
-        The fluence mode of the beam.
-    coll_angle : float
-        The collimator angle of the beam.
-    couch_vrt : float
-        The couch vertical position.
-    couch_lat : float
-        The couch lateral position.
-    couch_lng : float
-        The couch longitudinal position.
-    couch_rot : float
-        The couch rotation.
-    beam_name : str
-        The name of the beam.
-    gantry_rot_dir : GantryDirection
-        The direction of gantry rotation.
-    jaw_padding_mm : float
-        The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.
-    roi_size_mm : float
-        The width of the ROIs in mm.
-    y1 : float
-        The bottom jaw position. Usually negative. More negative is lower.
-    y2 : float
-        The top jaw position. Usually positive. More positive is higher.
-    mu : int
-        The monitor units of the beam.
-
     Notes
     -----
 
@@ -1637,7 +1346,13 @@ class GantrySpeed(QAProcedure):
     start_gantry_angle: float = Field(
         default=179,
         title="Start Gantry Angle",
-        description="The starting gantry angle. The gantry will rotate around this point.",
+        description=(
+            "The starting gantry angle. The gantry will rotate around this point. "
+            "It is up to the user to know the machine's limitations (e.g. don't go through "
+            "180 for Varian machines). The ending gantry angle will be the starting angle "
+            "plus the sum of the gantry deltas generated by the speed ROIs. Slower speeds "
+            "require more gantry angle to reach the same MU."
+        ),
         json_schema_extra={"units": "degrees"},
     )
     energy: float = Field(
@@ -1805,55 +1520,7 @@ class GantrySpeed(QAProcedure):
 
 
 class VMATDRGS(QAProcedure):
-    """Create beams like Clif Ling VMAT DRGS tests. The defaults use an optimized selection for a TrueBeam.
-
-    Parameters
-    ----------
-    dose_rates : tuple
-        The dose rates to test in MU/min. Each dose rate will have its own ROI.
-    gantry_speeds : tuple
-        The gantry speeds to tests in deg/sec. Each gantry speed will have its own ROI.
-    mu_per_segment : float
-        The number of MUs to deliver to each ROI
-    mu_per_transition : float
-        The number of MUs to deliver during while the MLCs move from one ROI to the next.
-    correct_fluence : bool
-        The original DRGS plans have an incorrect fluence on the initial and final transitions.
-        Use False to replicate the original plans, otherwise use True to have a more uniform fluence.
-    gantry_motion_per_transition : float
-        The number of degrees that the gantry should rotate while the MLCs move from one ROI to the next.
-    gantry_rotation_clockwise : bool
-        The direction of the gantry rotation. If True, the gantry will rotate clockwise
-    initial_gantry_offset : float
-        The initial gantry offset in degrees. E.g. If initial_gantry_offset=1 and gantry_rotation_clockwise=True,
-        then start angle = 181 IEC. If gantry_rotation_clockwise=False, then start angle = 179 IEC
-    mlc_span : float
-        The total size of the field in mm. Initial/final MLC position = +/- mlc_span/2
-    mlc_motion_reverse : bool
-        The direction of MLC motion. If False, the leaves move in positive direction (IEC)
-        from -mlc_span/2 to +mlc_span/2. If True, the leaves move in negative direction (IEC)
-        from +mlc_span/2 to -mlc_span/2.
-    mlc_gap : float
-        The MLC gap between ROIs in mm. This creates a darker region to help visualize the ROIs boundaries.
-    jaw_padding : float
-        The added jaw position in mm with respect to the initial/final MLC positions
-    energy : float
-        The energy of the beam.
-    fluence_mode : FluenceMode
-        The fluence mode of the beam.
-    max_dose_rate : int
-        The max dose rate in MU/min. This is used to compute the control point sequence to achieve the test dose_rates
-    reference_beam_mu : float
-        The number of MU's to be delivered in the reference beam (static beam)
-    reference_beam_add_before : bool
-        Whether to add the reference_beam before or after the dynamic beam. If True, the gantry angle is set to
-        the initial gantry angle of the dynamic beam. If False, the gantry angle is set to the final gantry angle
-        of the dynamic beam.
-    dynamic_delivery_at_static_gantry : tuple
-        There is one beam created for each static gantry angle. These beams contain the same control point sequence
-        as the dynamic beam, but the gantry angle is replaced by a single value. There will be no modulation of
-        dose rate and gantry speeds, and can be used as an alternative reference beam.
-    """
+    """Create beams like Clif Ling VMAT DRGS tests. The defaults use an optimized selection for a TrueBeam."""
 
     dose_rates: tuple[float, ...] = Field(
         default=(600, 600, 600, 600, 500, 400, 200),
@@ -1896,7 +1563,11 @@ class VMATDRGS(QAProcedure):
     initial_gantry_offset: float = Field(
         default=1.0,
         title="Initial Gantry Offset",
-        description="The initial gantry offset.",
+        description=(
+            "The initial gantry offset. E.g. if initial_gantry_offset=1 and "
+            "gantry_rotation_clockwise=True, then start angle = 181 IEC. "
+            "If gantry_rotation_clockwise=False, then start angle = 179 IEC."
+        ),
         json_schema_extra={"units": "degrees"},
     )
     mlc_span: float = Field(
@@ -1944,12 +1615,21 @@ class VMATDRGS(QAProcedure):
     reference_beam_add_before: bool = Field(
         default=False,
         title="Reference Beam Add Before",
-        description="Whether to add the reference_beam before or after the dynamic beam.",
+        description=(
+            "Whether to add the reference_beam before or after the dynamic beam. "
+            "If True, the gantry angle is set to the initial gantry angle of the dynamic beam. "
+            "If False, the gantry angle is set to the final gantry angle of the dynamic beam."
+        ),
     )
     dynamic_delivery_at_static_gantry: tuple[float, ...] = Field(
         default=(),
         title="Dynamic Delivery At Static Gantry",
-        description="There is one beam created for each static gantry angle. These beams contain the same control point sequence as the dynamic beam, but the gantry angle is replaced by a single value.",
+        description=(
+            "There is one beam created for each static gantry angle. These beams contain the same "
+            "control point sequence as the dynamic beam, but the gantry angle is replaced by a single "
+            "value. There will be no modulation of dose rate and gantry speeds, and can be used as an "
+            "alternative reference beam."
+        ),
     )
 
     # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.
@@ -2215,44 +1895,6 @@ class VMATDRGS(QAProcedure):
 class VMATDRMLC(QAProcedure):
     """Create beams like Clif Ling VMAT DRMLC tests. The defaults use an optimized
     selection for a TrueBeam.
-
-    Parameters
-    ----------
-    mlc_speeds : tuple
-        The mlc speeds rates to test in mm/sec. Each dose rate will have its own ROI.
-    gantry_speeds: tuple | None
-        The gantry speeds. When None it will default to max gantry speed for all segments.
-    segment_width : tuple
-        The width of each exposed segment in mm.
-    gantry_rotation_clockwise : bool
-        The direction of the gantry rotation. If True, the gantry will rotate clockwise
-    initial_gantry_offset : float
-        The initial gantry offset in degrees. E.g. If initial_gantry_offset=1 and gantry_rotation_clockwise=True,
-        then start angle = 181 IEC. If gantry_rotation_clockwise=False, then start angle = 179 IEC
-    mlc_motion_reverse : bool
-        The direction of MLC motion. If False, the leaves move in positive direction (IEC)
-        from -mlc_span/2 to +mlc_span/2. If True, the leaves move in negative direction (IEC)
-        from +mlc_span/2 to -mlc_span/2.
-    interpolation_factor : int
-        Interpolation factor to create control points with finer resolution.
-    jaw_padding : float
-        The added jaw position in mm with respect to the initial/final MLC positions
-    energy : float
-        The energy of the beam.
-    fluence_mode : FluenceMode
-        The fluence mode of the beam.
-    max_dose_rate : int
-        The max dose rate in MU/min. This is used to compute the control point sequence to achieve the test dose_rates
-    reference_beam_mu : float
-        The number of MU's to be delivered in the reference beam (static beam)
-    reference_beam_add_before : bool
-        Whether to add the reference_beam before or after the dynamic beam. If True, the gantry angle is set to
-        the initial gantry angle of the dynamic beam. If False, the gantry angle is set to the final gantry angle
-        of the dynamic beam.
-    dynamic_delivery_at_static_gantry : tuple
-        There is one beam created for each static gantry angle. These beams contain the same control point sequence
-        as the dynamic beam, but the gantry angle is replaced by a single value. There will be no modulation of
-        dose rate and gantry speeds, and can be used as an alternative reference beam.
     """
 
     mlc_speeds: tuple[float, ...] = Field(
@@ -2281,7 +1923,11 @@ class VMATDRMLC(QAProcedure):
     initial_gantry_offset: float = Field(
         default=10.0,
         title="Initial Gantry Offset",
-        description="The initial gantry offset.",
+        description=(
+            "The initial gantry offset. E.g. if initial_gantry_offset=1 and "
+            "gantry_rotation_clockwise=True, then start angle = 181 IEC. "
+            "If gantry_rotation_clockwise=False, then start angle = 179 IEC."
+        ),
         json_schema_extra={"units": "degrees"},
     )
     mlc_motion_reverse: bool = Field(
@@ -2322,12 +1968,21 @@ class VMATDRMLC(QAProcedure):
     reference_beam_add_before: bool = Field(
         default=False,
         title="Reference Beam Add Before",
-        description="Whether to add the reference_beam before or after the dynamic beam.",
+        description=(
+            "Whether to add the reference_beam before or after the dynamic beam. "
+            "If True, the gantry angle is set to the initial gantry angle of the dynamic beam. "
+            "If False, the gantry angle is set to the final gantry angle of the dynamic beam."
+        ),
     )
     dynamic_delivery_at_static_gantry: tuple[float, ...] = Field(
         default=(),
         title="Dynamic Delivery At Static Gantry",
-        description="There is one beam created for each static gantry angle. These beams contain the same control point sequence as the dynamic beam, but the gantry angle is replaced by a single value.",
+        description=(
+            "There is one beam created for each static gantry angle. These beams contain the same "
+            "control point sequence as the dynamic beam, but the gantry angle is replaced by a single "
+            "value. There will be no modulation of dose rate and gantry speeds, and can be used as an "
+            "alternative reference beam."
+        ),
     )
 
     # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.

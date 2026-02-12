@@ -140,31 +140,7 @@ class QAProcedure(QAProcedureBase[HalcyonMachine], ABC):
 
 
 class PicketFence(QAProcedure):
-    """Add a picket fence beam to the plan. The beam will be delivered with the MLCs stacked on top of each other.
-
-    Parameters
-    ----------
-    stack: Stack
-        Which MLC stack to use for the beam. The other stack will be parked.
-    strip_width_mm : float
-        The width of the strips in mm.
-    strip_positions_mm : tuple
-        The positions of the strips in mm.
-    gantry_angle : float
-        The gantry angle of the beam.
-    coll_angle : float
-        The collimator angle of the beam.
-    couch_vrt : float
-        The couch vertical position.
-    couch_lng : float
-        The couch longitudinal position.
-    couch_lat : float
-        The couch lateral position.
-    mu : int
-        The monitor units of the beam.
-    beam_name : str
-        The name of the beam.
-    """
+    """Add a picket fence beam to the plan. The beam will be delivered with the MLCs stacked on top of each other."""
 
     stack: Stack = Field(
         title="Stack",
