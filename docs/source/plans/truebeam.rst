@@ -712,40 +712,53 @@ See :ref:`truebeam-open-field` for additional context on open field geometry.
 Picket Fence
 ------------
 
-.. autoclass:: conjuror.plans.truebeam.PicketFence
-   :members: from_varian_reference
+.. autopydantic_model:: conjuror.plans.truebeam.PicketFence
+   :show-inheritance:
+
+.. automethod:: conjuror.plans.truebeam.PicketFence.from_varian_reference
 
 Dose Rate
 ---------
 
-.. autoclass:: conjuror.plans.truebeam.DoseRate
+.. autopydantic_model:: conjuror.plans.truebeam.DoseRate
+   :show-inheritance:
 
 MLC Speed
 ---------
 
-.. autoclass:: conjuror.plans.truebeam.MLCSpeed
+.. autopydantic_model:: conjuror.plans.truebeam.MLCSpeed
+   :show-inheritance:
 
 Gantry Speed
 ------------
 
-.. autoclass:: conjuror.plans.truebeam.GantrySpeed
+.. autopydantic_model:: conjuror.plans.truebeam.GantrySpeed
+   :show-inheritance:
 
 VMAT Dose Rate & Gantry Speed
 ------------------------------
 
-.. autoclass:: conjuror.plans.truebeam.VMATDRGS
-   :members: from_varian_reference
+.. autopydantic_model:: conjuror.plans.truebeam.VMATDRGS
+   :show-inheritance:
+
+.. automethod:: conjuror.plans.truebeam.VMATDRGS.from_varian_reference
 
 VMAT MLC Speed
 --------------
 
-.. autoclass:: conjuror.plans.truebeam.VMATDRMLC
-   :members: from_varian_reference
+.. autopydantic_model:: conjuror.plans.truebeam.VMATDRMLC
+   :show-inheritance:
+
+.. automethod:: conjuror.plans.truebeam.VMATDRMLC.from_varian_reference
 
 API Reference
 -------------
 
-.. autoclass:: conjuror.plans.truebeam.OpenField
-.. autoclass:: conjuror.plans.truebeam.MLCTransmission
-.. autoclass:: conjuror.plans.truebeam.DosimetricLeafGap
-.. autoclass:: conjuror.plans.truebeam.WinstonLutz
+.. autopydantic_model:: conjuror.plans.truebeam.OpenField
+   :show-inheritance:
+.. autopydantic_model:: conjuror.plans.truebeam.MLCTransmission
+   :show-inheritance:
+.. autopydantic_model:: conjuror.plans.truebeam.DosimetricLeafGap
+   :show-inheritance:
+.. autopydantic_model:: conjuror.plans.truebeam.WinstonLutz
+   :show-inheritance:
