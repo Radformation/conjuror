@@ -499,19 +499,19 @@ angles, and couch positions.
     procedure = MLCTransmission(
         width=200,          # mm (20 cm)
         height=200,         # mm (20 cm)
-        mu_per_ref=200,     # reference open field MU
-        mu_per_bank=2000,   # MU for each bank transmission beam
+        mu_per_ref=100,     # reference open field MU
+        mu_per_bank=500 ,   # MU for each bank transmission beam
         overreach=10,       # mm; shifts the closed MLC bank further under the jaw
         beam_names=["Tx Ref", "Tx Bank-A", "Tx Bank-B"],
         energy=15,                          # 15 MV
         fluence_mode=FluenceMode.FFF,       # Flattening filter free
         dose_rate=600,                      # MU/min
-        gantry_angle=0,
-        coll_angle=0,
-        couch_vrt=0,
-        couch_lng=1000,
-        couch_lat=0,
-        couch_rot=0,
+        gantry_angle=0,                     # Gantry angle
+        coll_angle=0,                       # Collimator angle
+        couch_vrt=0,                        # Couch vertical
+        couch_lng=1000,                     # Couch longitudinal
+        couch_lat=0,                        # Couch lateral
+        couch_rot=0,                        # Couch rotation
     )
     generator.add_procedure(procedure)
 
