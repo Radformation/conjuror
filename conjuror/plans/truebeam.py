@@ -2,7 +2,7 @@ import math
 import warnings
 from abc import ABC
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from pydantic import BaseModel, Field, PrivateAttr
 from enum import StrEnum
 from typing import Self
 
@@ -50,12 +50,25 @@ class MLCLeafBoundaryAlignmentMode(StrEnum):
     OUTWARD = RectangleMode.OUTWARD
 
 
-@dataclass
-class WinstonLutzField:
-    gantry: float
-    collimator: float
-    couch: float
-    name: str | None = None
+class WinstonLutzField(BaseModel):
+    gantry: float = Field(
+        title="Gantry",
+        description="Gantry angle.",
+        json_schema_extra={"units": "degrees"},
+    )
+    collimator: float = Field(
+        title="Collimator",
+        description="Collimator angle.",
+        json_schema_extra={"units": "degrees"},
+    )
+    couch: float = Field(
+        title="Couch",
+        description="Couch rotation angle.",
+        json_schema_extra={"units": "degrees"},
+    )
+    name: str | None = Field(
+        default=None, title="Name", description="Optional name for this field."
+    )
 
 
 class TrueBeamMachine(MachineBase):
@@ -205,7 +218,6 @@ class QAProcedure(QAProcedureBase[TrueBeamMachine], ABC):
     pass
 
 
-@dataclass
 class OpenField(QAProcedure):
     """Create an open field beam.
 
@@ -260,25 +272,81 @@ class OpenField(QAProcedure):
         left, under the X1 jaw by 20mm.
     """
 
-    x1: float
-    x2: float
-    y1: float
-    y2: float
-    mu: float = 100.0
-    defined_by_mlc: bool = True
-    mlc_mode: MLCLeafBoundaryAlignmentMode = MLCLeafBoundaryAlignmentMode.OUTWARD
-    energy: float = 6
-    fluence_mode: FluenceMode = FluenceMode.STANDARD
-    dose_rate: int = 600
-    gantry_angle: float = 0
-    coll_angle: float = 0
-    couch_vrt: float = 0
-    couch_lng: float = 1000
-    couch_lat: float = 0
-    couch_rot: float = 0
-    padding: float = 5
-    beam_name: str = "Open"
-    outside_strip_width: float = 5
+    x1: float = Field(title="X1", description="The left edge position.")
+    x2: float = Field(title="X2", description="The right edge position.")
+    y1: float = Field(title="Y1", description="The bottom edge position.")
+    y2: float = Field(title="Y2", description="The top edge position.")
+    mu: float = Field(
+        default=100.0,
+        title="Monitor Units",
+        description="The monitor units of the beam.",
+    )
+    defined_by_mlc: bool = Field(
+        default=True,
+        title="Defined By MLC",
+        description="Whether the field edges are defined by the MLCs or the jaws.",
+    )
+    mlc_mode: MLCLeafBoundaryAlignmentMode = Field(
+        default=MLCLeafBoundaryAlignmentMode.OUTWARD,
+        title="MLC Mode",
+        description="Controls how the open field aligns with MLC leaf boundaries along the y-axis.",
+    )
+    energy: float = Field(
+        default=6, title="Energy", description="The energy of the beam."
+    )
+    fluence_mode: FluenceMode = Field(
+        default=FluenceMode.STANDARD,
+        title="Fluence Mode",
+        description="The fluence mode of the beam.",
+    )
+    dose_rate: int = Field(
+        default=600,
+        title="Dose Rate",
+        description="The dose rate of the beam.",
+        json_schema_extra={"units": "MU/min"},
+    )
+    gantry_angle: float = Field(
+        default=0,
+        title="Gantry Angle",
+        description="The gantry angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    coll_angle: float = Field(
+        default=0,
+        title="Collimator Angle",
+        description="The collimator angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    couch_vrt: float = Field(
+        default=0, title="Couch Vertical", description="The couch vertical position."
+    )
+    couch_lng: float = Field(
+        default=1000,
+        title="Couch Longitudinal",
+        description="The couch longitudinal position.",
+    )
+    couch_lat: float = Field(
+        default=0, title="Couch Lateral", description="The couch lateral position."
+    )
+    couch_rot: float = Field(
+        default=0,
+        title="Couch Rotation",
+        description="The couch rotation.",
+        json_schema_extra={"units": "degrees"},
+    )
+    padding: float = Field(
+        default=5,
+        title="Padding",
+        description="The padding to add to the jaws or MLCs.",
+    )
+    beam_name: str = Field(
+        default="Open", title="Beam Name", description="The name of the beam."
+    )
+    outside_strip_width: float = Field(
+        default=5,
+        title="Outside Strip Width",
+        description="The width of the strip of MLCs outside the field. The MLCs will be placed to the left, under the X1 jaw by 20mm.",
+    )
 
     def compute(self, machine: TrueBeamMachine) -> None:
         if self.defined_by_mlc:
@@ -323,7 +391,6 @@ class OpenField(QAProcedure):
         self.beams.append(beam)
 
 
-@dataclass
 class MLCTransmission(QAProcedure):
     """Add MLC transmission beams to the plan.
     The beam is delivered with the MLCs closed and moved to one side underneath the jaws.
@@ -363,30 +430,89 @@ class MLCTransmission(QAProcedure):
         The couch rotation in degrees.
     """
 
-    mu_per_bank: int = 100
-    mu_per_ref: int = 100
-    overreach: float = 10
-    beam_names: list[str] = field(
-        default_factory=lambda: ["MLC Tx - Ref", "MLC Tx - Bank-A", "MLC Tx - Bank-B"]
+    mu_per_bank: int = Field(
+        default=100,
+        title="MU Per Bank",
+        description="The monitor units to deliver for each bank transmission test.",
     )
-    energy: int = 6
-    fluence_mode: FluenceMode = FluenceMode.STANDARD
-    dose_rate: int = 600
-    width: float = 100
-    height: float = 100
-    gantry_angle: float = 0
-    coll_angle: float = 0
-    couch_vrt: float = 0
-    couch_lat: float = 0
-    couch_lng: float = 1000
-    couch_rot: float = 0
+    mu_per_ref: int = Field(
+        default=100,
+        title="MU Per Ref",
+        description="The monitor units to deliver for the reference open field.",
+    )
+    overreach: float = Field(
+        default=10,
+        title="Overreach",
+        description="The amount to tuck the MLCs under the jaws.",
+        json_schema_extra={"units": "mm"},
+    )
+    beam_names: list[str] = Field(
+        default_factory=lambda: ["MLC Tx - Ref", "MLC Tx - Bank-A", "MLC Tx - Bank-B"],
+        title="Beam Names",
+        description="A list containing the names of the beams to use in the following order: reference beam, transmission beam bank A, transmission beam bank B.",
+    )
+    energy: int = Field(
+        default=6, title="Energy", description="The energy of the beam."
+    )
+    fluence_mode: FluenceMode = Field(
+        default=FluenceMode.STANDARD,
+        title="Fluence Mode",
+        description="The fluence mode of the beam.",
+    )
+    dose_rate: int = Field(
+        default=600,
+        title="Dose Rate",
+        description="The dose rate of the beam.",
+        json_schema_extra={"units": "MU/min"},
+    )
+    width: float = Field(
+        default=100,
+        title="Width",
+        description="The width of the reference field.",
+        json_schema_extra={"units": "mm"},
+    )
+    height: float = Field(
+        default=100,
+        title="Height",
+        description="The height of the reference field.",
+        json_schema_extra={"units": "mm"},
+    )
+    gantry_angle: float = Field(
+        default=0,
+        title="Gantry Angle",
+        description="The gantry angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    coll_angle: float = Field(
+        default=0,
+        title="Collimator Angle",
+        description="The collimator angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    couch_vrt: float = Field(
+        default=0, title="Couch Vertical", description="The couch vertical position."
+    )
+    couch_lat: float = Field(
+        default=0, title="Couch Lateral", description="The couch lateral position."
+    )
+    couch_lng: float = Field(
+        default=1000,
+        title="Couch Longitudinal",
+        description="The couch longitudinal position.",
+    )
+    couch_rot: float = Field(
+        default=0,
+        title="Couch Rotation",
+        description="The couch rotation.",
+        json_schema_extra={"units": "degrees"},
+    )
 
     # private attributes: common to all beams to facilitate creation
-    _x1: float = field(init=False)
-    _x2: float = field(init=False)
-    _y1: float = field(init=False)
-    _y2: float = field(init=False)
-    _mlc_is_hd: bool = field(init=False)
+    _x1: float = PrivateAttr()
+    _x2: float = PrivateAttr()
+    _y1: float = PrivateAttr()
+    _y2: float = PrivateAttr()
+    _mlc_is_hd: bool = PrivateAttr()
 
     def compute(self, machine: TrueBeamMachine) -> None:
         self._x1 = -self.width / 2
@@ -401,11 +527,11 @@ class MLCTransmission(QAProcedure):
 
         # Reference field
         ref = OpenField(
-            self._x1,
-            self._x2,
-            self._y1,
-            self._y2,
-            self.mu_per_ref,
+            x1=self._x1,
+            x2=self._x2,
+            y1=self._y1,
+            y2=self._y2,
+            mu=self.mu_per_ref,
             defined_by_mlc=False,
             mlc_mode=MLCLeafBoundaryAlignmentMode.OUTWARD,
             energy=self.energy,
@@ -459,7 +585,6 @@ class MLCTransmission(QAProcedure):
         )
 
 
-@dataclass
 class PicketFence(QAProcedure):
     """Add a picket fence beam to the plan.
 
@@ -499,22 +624,82 @@ class PicketFence(QAProcedure):
         The name of the beam.
     """
 
-    picket_width: float = 1
-    picket_positions: Sequence[float] = (-75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75)
-    mu_per_picket: float = 10
-    mu_per_transition: float = 2
-    skip_first_picket: bool = True
-    energy: float = 6
-    fluence_mode: FluenceMode = FluenceMode.STANDARD
-    dose_rate: int = 600
-    gantry_angle: float = 0
-    coll_angle: float = 0
-    couch_vrt: float = 0
-    couch_lng: float = 1000
-    couch_lat: float = 0
-    couch_rot: float = 0
-    jaw_padding: float = 10
-    beam_name: str = "Picket fence"
+    picket_width: float = Field(
+        default=1,
+        title="Picket Width",
+        description="The width of the pickets.",
+        json_schema_extra={"units": "mm"},
+    )
+    picket_positions: Sequence[float] = Field(
+        default=(-75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75),
+        title="Picket Positions",
+        description="The positions of the pickets relative to the center of the image.",
+        json_schema_extra={"units": "mm"},
+    )
+    mu_per_picket: float = Field(
+        default=10,
+        title="MU Per Picket",
+        description="The monitor units for each picket.",
+    )
+    mu_per_transition: float = Field(
+        default=2,
+        title="MU Per Transition",
+        description="The monitor units for MLC transitions between pickets.",
+    )
+    skip_first_picket: bool = Field(
+        default=True,
+        title="Skip First Picket",
+        description="Whether to skip the first picket.",
+    )
+    energy: float = Field(
+        default=6, title="Energy", description="The energy of the beam."
+    )
+    fluence_mode: FluenceMode = Field(
+        default=FluenceMode.STANDARD,
+        title="Fluence Mode",
+        description="The fluence mode of the beam.",
+    )
+    dose_rate: int = Field(
+        default=600,
+        title="Dose Rate",
+        description="The dose rate of the beam.",
+        json_schema_extra={"units": "MU/min"},
+    )
+    gantry_angle: float = Field(
+        default=0,
+        title="Gantry Angle",
+        description="The gantry angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    coll_angle: float = Field(
+        default=0,
+        title="Collimator Angle",
+        description="The collimator angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    couch_vrt: float = Field(
+        default=0, title="Couch Vertical", description="The couch vertical position."
+    )
+    couch_lng: float = Field(
+        default=1000,
+        title="Couch Longitudinal",
+        description="The couch longitudinal position.",
+    )
+    couch_lat: float = Field(
+        default=0, title="Couch Lateral", description="The couch lateral position."
+    )
+    couch_rot: float = Field(
+        default=0,
+        title="Couch Rotation",
+        description="The couch rotation.",
+        json_schema_extra={"units": "degrees"},
+    )
+    jaw_padding: float = Field(
+        default=10, title="Jaw Padding", description="The padding to add to the X jaws."
+    )
+    beam_name: str = Field(
+        default="Picket fence", title="Beam Name", description="The name of the beam."
+    )
 
     @classmethod
     def from_varian_reference(cls) -> Self:
@@ -528,7 +713,7 @@ class PicketFence(QAProcedure):
         # doesn't hide any leafs, whereas in the Varian plan, the last top/bottom leaves are hidden.
         return cls(
             picket_width=1,
-            picket_positions=np.arange(-74.5, 76, 15),
+            picket_positions=tuple(np.arange(-74.5, 76, 15)),
             mu_per_picket=8.125,
             mu_per_transition=1.875,
             skip_first_picket=True,
@@ -586,7 +771,6 @@ class PicketFence(QAProcedure):
         self.beams.append(beam)
 
 
-@dataclass
 class WinstonLutz(QAProcedure):
     """Add Winston-Lutz beams to the plan. Will create a beam for each set of axes positions.
     Field names are generated automatically based on the axes positions.
@@ -633,21 +817,59 @@ class WinstonLutz(QAProcedure):
         The padding to add to the jaws or MLCs.
     """
 
-    x1: float = -10.0
-    x2: float = 10.0
-    y1: float = -10.0
-    y2: float = 10.0
-    mu: float = 10.0
-    defined_by_mlc: bool = True
-    mlc_mode: MLCLeafBoundaryAlignmentMode = MLCLeafBoundaryAlignmentMode.OUTWARD
-    fields: Iterable[WinstonLutzField] = (WinstonLutzField(0, 0, 0),)
-    energy: float = 6
-    fluence_mode: FluenceMode = FluenceMode.STANDARD
-    dose_rate: int = 600
-    couch_vrt: float = 0
-    couch_lng: float = 1000
-    couch_lat: float = 0
-    padding: float = 5
+    x1: float = Field(default=-10.0, title="X1", description="The left edge position.")
+    x2: float = Field(default=10.0, title="X2", description="The right edge position.")
+    y1: float = Field(
+        default=-10.0, title="Y1", description="The bottom edge position."
+    )
+    y2: float = Field(default=10.0, title="Y2", description="The top edge position.")
+    mu: float = Field(
+        default=10.0,
+        title="Monitor Units",
+        description="The monitor units of the beam.",
+    )
+    defined_by_mlc: bool = Field(
+        default=True,
+        title="Defined By MLC",
+        description="Whether the field edges are defined by the MLCs or the jaws.",
+    )
+    mlc_mode: MLCLeafBoundaryAlignmentMode = Field(
+        default=MLCLeafBoundaryAlignmentMode.OUTWARD,
+        title="MLC Mode",
+        description="Controls how the open field aligns with MLC leaf boundaries along the y-axis.",
+    )
+    fields: Iterable[WinstonLutzField] = Field(
+        default_factory=lambda: (WinstonLutzField(gantry=0, collimator=0, couch=0),),
+        title="Fields",
+        description="The positions of the axes.",
+    )
+    energy: float = Field(
+        default=6, title="Energy", description="The energy of the beam."
+    )
+    fluence_mode: FluenceMode = Field(
+        default=FluenceMode.STANDARD,
+        title="Fluence Mode",
+        description="The fluence mode of the beam.",
+    )
+    dose_rate: int = Field(
+        default=600, title="Dose Rate", description="The dose rate of the beam."
+    )
+    couch_vrt: float = Field(
+        default=0, title="Couch Vertical", description="The couch vertical position."
+    )
+    couch_lng: float = Field(
+        default=1000,
+        title="Couch Longitudinal",
+        description="The couch longitudinal position.",
+    )
+    couch_lat: float = Field(
+        default=0, title="Couch Lateral", description="The couch lateral position."
+    )
+    padding: float = Field(
+        default=5,
+        title="Padding",
+        description="The padding to add to the jaws or MLCs.",
+    )
 
     def compute(self, machine: TrueBeamMachine) -> None:
         for _field in self.fields:
@@ -679,7 +901,6 @@ class WinstonLutz(QAProcedure):
             self.beams.append(beam)
 
 
-@dataclass
 class DosimetricLeafGap(QAProcedure):
     """Add beams to measure the Dosimetric Leaf Gap (DLG).
 
@@ -721,23 +942,76 @@ class DosimetricLeafGap(QAProcedure):
         The top edge position.
     """
 
-    gap_widths: Sequence[float] = (2, 4, 6, 10, 14, 16, 20)
-    start_position: float = -60
-    final_position: float = 60
-    mu: int = 100
-    energy: float = 6
-    fluence_mode: FluenceMode = FluenceMode.STANDARD
-    dose_rate: int = 600
-    gantry_angle: float = 0
-    coll_angle: float = 0
-    couch_vrt: float = 0
-    couch_lat: float = 0
-    couch_lng: float = 1000
-    couch_rot: float = 0
-    x1: float = -50
-    x2: float = 50
-    y1: float = -50
-    y2: float = 50
+    gap_widths: Sequence[float] = Field(
+        default=(2, 4, 6, 10, 14, 16, 20),
+        title="Gap Widths",
+        description="The gap widths for the MLC sweeps.",
+        json_schema_extra={"units": "mm"},
+    )
+    start_position: float = Field(
+        default=-60,
+        title="Start Position",
+        description="The start position of the MLC gap.",
+        json_schema_extra={"units": "mm"},
+    )
+    final_position: float = Field(
+        default=60,
+        title="Final Position",
+        description="The final position of the MLC gap.",
+        json_schema_extra={"units": "mm"},
+    )
+    mu: int = Field(
+        default=100,
+        title="Monitor Units",
+        description="The monitor units of each beam.",
+    )
+    energy: float = Field(
+        default=6, title="Energy", description="The energy of the beam."
+    )
+    fluence_mode: FluenceMode = Field(
+        default=FluenceMode.STANDARD,
+        title="Fluence Mode",
+        description="The fluence mode of the beam.",
+    )
+    dose_rate: int = Field(
+        default=600,
+        title="Dose Rate",
+        description="The dose rate of the beam.",
+        json_schema_extra={"units": "MU/min"},
+    )
+    gantry_angle: float = Field(
+        default=0,
+        title="Gantry Angle",
+        description="The gantry angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    coll_angle: float = Field(
+        default=0,
+        title="Collimator Angle",
+        description="The collimator angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    couch_vrt: float = Field(
+        default=0, title="Couch Vertical", description="The couch vertical position."
+    )
+    couch_lat: float = Field(
+        default=0, title="Couch Lateral", description="The couch lateral position."
+    )
+    couch_lng: float = Field(
+        default=1000,
+        title="Couch Longitudinal",
+        description="The couch longitudinal position.",
+    )
+    couch_rot: float = Field(
+        default=0,
+        title="Couch Rotation",
+        description="The couch rotation.",
+        json_schema_extra={"units": "degrees"},
+    )
+    x1: float = Field(default=-50, title="X1", description="The left edge position.")
+    x2: float = Field(default=50, title="X2", description="The right edge position.")
+    y1: float = Field(default=-50, title="Y1", description="The bottom edge position.")
+    y2: float = Field(default=50, title="Y2", description="The top edge position.")
 
     def compute(self, machine: TrueBeamMachine) -> None:
         # validate x_jaw positions
@@ -757,7 +1031,7 @@ class DosimetricLeafGap(QAProcedure):
             mlc_final = shaper.get_shape(Strip(self.final_position, gap_width))
             mlc_positions = [mlc_start] + [mlc_final]
             metersets = [0, self.mu]
-            beam_name = f"DLG {gap_width:00d}mm"
+            beam_name = f"DLG {gap_width:00.0f}mm"
 
             beam = Beam(
                 mlc_is_hd=machine.mlc_is_hd,
@@ -781,7 +1055,6 @@ class DosimetricLeafGap(QAProcedure):
             self.beams.append(beam)
 
 
-@dataclass
 class DoseRate(QAProcedure):
     """Create a single-image dose rate test. Multiple ROIs are generated. A reference beam is also
     created where all ROIs are delivered at the default dose rate for comparison.
@@ -827,22 +1100,88 @@ class DoseRate(QAProcedure):
         Too large of values may cause deliverability issues.
     """
 
-    dose_rates: tuple[int, ...] = (100, 300, 500, 600)
-    default_dose_rate: int = 600
-    gantry_angle: float = 0
-    desired_mu: int = 50
-    energy: float = 6
-    fluence_mode: FluenceMode = FluenceMode.STANDARD
-    coll_angle: float = 0
-    couch_vrt: float = 0
-    couch_lat: float = 0
-    couch_lng: float = 1000
-    couch_rot: float = 0
-    jaw_padding_mm: float = 5
-    roi_size_mm: float = 25
-    y1: float = -100
-    y2: float = 100
-    max_sacrificial_move_mm: float = 50
+    dose_rates: tuple[int, ...] = Field(
+        default=(100, 300, 500, 600),
+        title="Dose Rates",
+        description="The dose rates to test. Each dose rate will have its own ROI.",
+        json_schema_extra={"units": "MU/min"},
+    )
+    default_dose_rate: int = Field(
+        default=600,
+        title="Default Dose Rate",
+        description="The default dose rate. Typically, this is the clinical default.",
+        json_schema_extra={"units": "MU/min"},
+    )
+    gantry_angle: float = Field(
+        default=0,
+        title="Gantry Angle",
+        description="The gantry angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    desired_mu: int = Field(
+        default=50,
+        title="Desired MU",
+        description="The desired monitor units to deliver.",
+    )
+    energy: float = Field(
+        default=6, title="Energy", description="The energy of the beam."
+    )
+    fluence_mode: FluenceMode = Field(
+        default=FluenceMode.STANDARD,
+        title="Fluence Mode",
+        description="The fluence mode of the beam.",
+    )
+    coll_angle: float = Field(
+        default=0,
+        title="Collimator Angle",
+        description="The collimator angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    couch_vrt: float = Field(
+        default=0, title="Couch Vertical", description="The couch vertical position."
+    )
+    couch_lat: float = Field(
+        default=0, title="Couch Lateral", description="The couch lateral position."
+    )
+    couch_lng: float = Field(
+        default=1000,
+        title="Couch Longitudinal",
+        description="The couch longitudinal position.",
+    )
+    couch_rot: float = Field(
+        default=0,
+        title="Couch Rotation",
+        description="The couch rotation.",
+        json_schema_extra={"units": "degrees"},
+    )
+    jaw_padding_mm: float = Field(
+        default=5,
+        title="Jaw Padding",
+        description="The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.",
+        json_schema_extra={"units": "mm"},
+    )
+    roi_size_mm: float = Field(
+        default=25,
+        title="ROI Size",
+        description="The width of the ROIs.",
+        json_schema_extra={"units": "mm"},
+    )
+    y1: float = Field(
+        default=-100,
+        title="Y1",
+        description="The bottom jaw position. Usually negative. More negative is lower.",
+    )
+    y2: float = Field(
+        default=100,
+        title="Y2",
+        description="The top jaw position. Usually positive. More positive is higher.",
+    )
+    max_sacrificial_move_mm: float = Field(
+        default=50,
+        title="Max Sacrificial Move",
+        description="The maximum distance the sacrificial leaves can move in a given control point.",
+        json_schema_extra={"units": "mm"},
+    )
 
     def compute(self, machine: TrueBeamMachine) -> None:
         if self.roi_size_mm * len(self.dose_rates) > machine.specs.max_mlc_overtravel:
@@ -964,7 +1303,6 @@ class DoseRate(QAProcedure):
         self.beams.append(beam)
 
 
-@dataclass
 class MLCSpeed(QAProcedure):
     """Create a single-image MLC speed test. Multiple speeds are generated. A reference beam is also
     generated. The reference beam is delivered at the maximum MLC speed.
@@ -1025,23 +1363,89 @@ class MLCSpeed(QAProcedure):
 
     """
 
-    speeds: tuple[float | int, ...] = (5, 10, 15, 20)
-    roi_size_mm: float = 20
-    mu: int = 50
-    default_dose_rate: int = 600
-    gantry_angle: float = 0
-    energy: float = 6
-    coll_angle: float = 0
-    couch_vrt: float = 0
-    couch_lat: float = 0
-    couch_lng: float = 1000
-    couch_rot: float = 0
-    fluence_mode: FluenceMode = FluenceMode.STANDARD
-    jaw_padding_mm: float = 5
-    y1: float = -100
-    y2: float = 100
-    beam_name: str = "MLC Speed"
-    max_sacrificial_move_mm: float = 50
+    speeds: tuple[float | int, ...] = Field(
+        default=(5, 10, 15, 20),
+        title="Speeds",
+        description="The speeds to test. Each speed will have its own ROI.",
+        json_schema_extra={"units": "mm/sec"},
+    )
+    roi_size_mm: float = Field(
+        default=20,
+        title="ROI Size",
+        description="The width of the ROIs.",
+        json_schema_extra={"units": "mm"},
+    )
+    mu: int = Field(
+        default=50, title="Monitor Units", description="The monitor units to deliver."
+    )
+    default_dose_rate: int = Field(
+        default=600,
+        title="Default Dose Rate",
+        description="The dose rate used for the reference beam.",
+        json_schema_extra={"units": "MU/min"},
+    )
+    gantry_angle: float = Field(
+        default=0,
+        title="Gantry Angle",
+        description="The gantry angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    energy: float = Field(
+        default=6, title="Energy", description="The energy of the beam."
+    )
+    coll_angle: float = Field(
+        default=0,
+        title="Collimator Angle",
+        description="The collimator angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    couch_vrt: float = Field(
+        default=0, title="Couch Vertical", description="The couch vertical position."
+    )
+    couch_lat: float = Field(
+        default=0, title="Couch Lateral", description="The couch lateral position."
+    )
+    couch_lng: float = Field(
+        default=1000,
+        title="Couch Longitudinal",
+        description="The couch longitudinal position.",
+    )
+    couch_rot: float = Field(
+        default=0,
+        title="Couch Rotation",
+        description="The couch rotation.",
+        json_schema_extra={"units": "degrees"},
+    )
+    fluence_mode: FluenceMode = Field(
+        default=FluenceMode.STANDARD,
+        title="Fluence Mode",
+        description="The fluence mode of the beam.",
+    )
+    jaw_padding_mm: float = Field(
+        default=5,
+        title="Jaw Padding",
+        description="The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.",
+        json_schema_extra={"units": "mm"},
+    )
+    y1: float = Field(
+        default=-100,
+        title="Y1",
+        description="The bottom jaw position. Usually negative. More negative is lower.",
+    )
+    y2: float = Field(
+        default=100,
+        title="Y2",
+        description="The top jaw position. Usually positive. More positive is higher.",
+    )
+    beam_name: str = Field(
+        default="MLC Speed", title="Beam Name", description="The name of the beam."
+    )
+    max_sacrificial_move_mm: float = Field(
+        default=50,
+        title="Max Sacrificial Move",
+        description="The maximum distance the sacrificial leaves can move in a given control point.",
+        json_schema_extra={"units": "mm"},
+    )
 
     def compute(self, machine: TrueBeamMachine) -> None:
         if max(self.speeds) > machine.specs.max_mlc_speed:
@@ -1161,7 +1565,6 @@ class MLCSpeed(QAProcedure):
         self.beams.append(beam)
 
 
-@dataclass
 class GantrySpeed(QAProcedure):
     """Create a single-image gantry speed test. Multiple speeds are generated. A reference beam is also
     generated. The reference beam is delivered without gantry movement.
@@ -1219,23 +1622,88 @@ class GantrySpeed(QAProcedure):
 
     """
 
-    speeds: tuple[float | int, ...] = (2, 3, 4, 4.8)
-    max_dose_rate: int = 600
-    start_gantry_angle: float = 179
-    energy: float = 6
-    fluence_mode: FluenceMode = FluenceMode.STANDARD
-    coll_angle: float = 0
-    couch_vrt: float = 0
-    couch_lat: float = 0
-    couch_lng: float = 1000
-    couch_rot: float = 0
-    beam_name: str = "GS"
-    gantry_rot_dir: GantryDirection = GantryDirection.CLOCKWISE
-    jaw_padding_mm: float = 5
-    roi_size_mm: float = 30
-    y1: float = -100
-    y2: float = 100
-    mu: int = 120
+    speeds: tuple[float | int, ...] = Field(
+        default=(2, 3, 4, 4.8),
+        title="Speeds",
+        description="The gantry speeds to test. Each speed will have its own ROI.",
+        json_schema_extra={"units": "deg/sec"},
+    )
+    max_dose_rate: int = Field(
+        default=600,
+        title="Max Dose Rate",
+        description="The max dose rate clinically allowed for the energy.",
+        json_schema_extra={"units": "MU/min"},
+    )
+    start_gantry_angle: float = Field(
+        default=179,
+        title="Start Gantry Angle",
+        description="The starting gantry angle. The gantry will rotate around this point.",
+        json_schema_extra={"units": "degrees"},
+    )
+    energy: float = Field(
+        default=6, title="Energy", description="The energy of the beam."
+    )
+    fluence_mode: FluenceMode = Field(
+        default=FluenceMode.STANDARD,
+        title="Fluence Mode",
+        description="The fluence mode of the beam.",
+    )
+    coll_angle: float = Field(
+        default=0,
+        title="Collimator Angle",
+        description="The collimator angle of the beam.",
+        json_schema_extra={"units": "degrees"},
+    )
+    couch_vrt: float = Field(
+        default=0, title="Couch Vertical", description="The couch vertical position."
+    )
+    couch_lat: float = Field(
+        default=0, title="Couch Lateral", description="The couch lateral position."
+    )
+    couch_lng: float = Field(
+        default=1000,
+        title="Couch Longitudinal",
+        description="The couch longitudinal position.",
+    )
+    couch_rot: float = Field(
+        default=0,
+        title="Couch Rotation",
+        description="The couch rotation.",
+        json_schema_extra={"units": "degrees"},
+    )
+    beam_name: str = Field(
+        default="GS", title="Beam Name", description="The name of the beam."
+    )
+    gantry_rot_dir: GantryDirection = Field(
+        default=GantryDirection.CLOCKWISE,
+        title="Gantry Rotation Direction",
+        description="The direction of gantry rotation.",
+    )
+    jaw_padding_mm: float = Field(
+        default=5,
+        title="Jaw Padding",
+        description="The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.",
+        json_schema_extra={"units": "mm"},
+    )
+    roi_size_mm: float = Field(
+        default=30,
+        title="ROI Size",
+        description="The width of the ROIs.",
+        json_schema_extra={"units": "mm"},
+    )
+    y1: float = Field(
+        default=-100,
+        title="Y1",
+        description="The bottom jaw position. Usually negative. More negative is lower.",
+    )
+    y2: float = Field(
+        default=100,
+        title="Y2",
+        description="The top jaw position. Usually positive. More positive is higher.",
+    )
+    mu: int = Field(
+        default=120, title="Monitor Units", description="The monitor units of the beam."
+    )
 
     def compute(self, machine: TrueBeamMachine) -> None:
         if max(self.speeds) > machine.specs.max_gantry_speed:
@@ -1336,7 +1804,6 @@ class GantrySpeed(QAProcedure):
         self.beams.append(ref_beam)
 
 
-@dataclass
 class VMATDRGS(QAProcedure):
     """Create beams like Clif Ling VMAT DRGS tests. The defaults use an optimized selection for a TrueBeam.
 
@@ -1388,47 +1855,125 @@ class VMATDRGS(QAProcedure):
         dose rate and gantry speeds, and can be used as an alternative reference beam.
     """
 
-    dose_rates: tuple[float, ...] = (600, 600, 600, 600, 500, 400, 200)
-    gantry_speeds: tuple[float, ...] = (3, 4, 5, 6, 6, 6, 6)
-    mu_per_segment: float = 48.0
-    mu_per_transition: float = 8.0
-    correct_fluence: bool = True
-    gantry_motion_per_transition: float = 10.0
-    gantry_rotation_clockwise: bool = True
-    initial_gantry_offset: float = 1.0
-    mlc_span: float = 138.0
-    mlc_motion_reverse: bool = True
-    mlc_gap: float = 2.0
-    jaw_padding: float = 0.0
-    energy: float = 6
-    fluence_mode: FluenceMode = FluenceMode.STANDARD
-    max_dose_rate: int = 600
-    reference_beam_mu: float = 100.0
-    reference_beam_add_before: bool = False
-    dynamic_delivery_at_static_gantry: tuple[float, ...] = ()
+    dose_rates: tuple[float, ...] = Field(
+        default=(600, 600, 600, 600, 500, 400, 200),
+        title="Dose Rates",
+        description="The dose rates to test. Each dose rate will have its own ROI.",
+        json_schema_extra={"units": "MU/min"},
+    )
+    gantry_speeds: tuple[float, ...] = Field(
+        default=(3, 4, 5, 6, 6, 6, 6),
+        title="Gantry Speeds",
+        description="The gantry speeds to test. Each gantry speed will have its own ROI.",
+        json_schema_extra={"units": "deg/sec"},
+    )
+    mu_per_segment: float = Field(
+        default=48.0,
+        title="MU Per Segment",
+        description="The number of MUs to deliver to each ROI.",
+    )
+    mu_per_transition: float = Field(
+        default=8.0,
+        title="MU Per Transition",
+        description="The number of MUs to deliver while the MLCs move from one ROI to the next.",
+    )
+    correct_fluence: bool = Field(
+        default=True,
+        title="Correct Fluence",
+        description="The original DRGS plans have an incorrect fluence on the initial and final transitions. Use False to replicate the original plans, otherwise use True to have a more uniform fluence.",
+    )
+    gantry_motion_per_transition: float = Field(
+        default=10.0,
+        title="Gantry Motion Per Transition",
+        description="The number of degrees that the gantry should rotate while the MLCs move from one ROI to the next.",
+        json_schema_extra={"units": "degrees"},
+    )
+    gantry_rotation_clockwise: bool = Field(
+        default=True,
+        title="Gantry Rotation Clockwise",
+        description="The direction of the gantry rotation. If True, the gantry will rotate clockwise.",
+    )
+    initial_gantry_offset: float = Field(
+        default=1.0,
+        title="Initial Gantry Offset",
+        description="The initial gantry offset.",
+        json_schema_extra={"units": "degrees"},
+    )
+    mlc_span: float = Field(
+        default=138.0,
+        title="MLC Span",
+        description="The total size of the field. Initial/final MLC position = +/- mlc_span/2.",
+        json_schema_extra={"units": "mm"},
+    )
+    mlc_motion_reverse: bool = Field(
+        default=True,
+        title="MLC Motion Reverse",
+        description="The direction of MLC motion. If False, the leaves move in positive direction (IEC) from -mlc_span/2 to +mlc_span/2. If True, the leaves move in negative direction (IEC) from +mlc_span/2 to -mlc_span/2.",
+    )
+    mlc_gap: float = Field(
+        default=2.0,
+        title="MLC Gap",
+        description="The MLC gap between ROIs. This creates a darker region to help visualize the ROIs boundaries.",
+        json_schema_extra={"units": "mm"},
+    )
+    jaw_padding: float = Field(
+        default=0.0,
+        title="Jaw Padding",
+        description="The added jaw position with respect to the initial/final MLC positions.",
+        json_schema_extra={"units": "mm"},
+    )
+    energy: float = Field(
+        default=6, title="Energy", description="The energy of the beam."
+    )
+    fluence_mode: FluenceMode = Field(
+        default=FluenceMode.STANDARD,
+        title="Fluence Mode",
+        description="The fluence mode of the beam.",
+    )
+    max_dose_rate: int = Field(
+        default=600,
+        title="Max Dose Rate",
+        description="The max dose rate. This is used to compute the control point sequence to achieve the test dose_rates.",
+        json_schema_extra={"units": "MU/min"},
+    )
+    reference_beam_mu: float = Field(
+        default=100.0,
+        title="Reference Beam MU",
+        description="The number of MU's to be delivered in the reference beam (static beam).",
+    )
+    reference_beam_add_before: bool = Field(
+        default=False,
+        title="Reference Beam Add Before",
+        description="Whether to add the reference_beam before or after the dynamic beam.",
+    )
+    dynamic_delivery_at_static_gantry: tuple[float, ...] = Field(
+        default=(),
+        title="Dynamic Delivery At Static Gantry",
+        description="There is one beam created for each static gantry angle. These beams contain the same control point sequence as the dynamic beam, but the gantry angle is replaced by a single value.",
+    )
 
     # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.
-    MIN_GANTRY_OFFSET: float = field(init=False, default=0.1)
+    _MIN_GANTRY_OFFSET: float = PrivateAttr(default=0.1)
     # The reference beam may be acquired prior to or following the dynamic beam
     # (as specified by the reference_beam_add_before argument).
     # These attributes record the indices of the respective beams.
-    dynamic_beam_idx: int = field(init=False)
-    reference_beam_idx: int = field(init=False)
+    _dynamic_beam_idx: int = PrivateAttr()
+    _reference_beam_idx: int = PrivateAttr()
 
     # private attributes: common to all beams to facilitate creation
-    _x1: float = field(init=False)
-    _x2: float = field(init=False)
-    _y1: float = field(init=False)
-    _y2: float = field(init=False)
-    machine: TrueBeamMachine = field(init=False)
+    _x1: float = PrivateAttr()
+    _x2: float = PrivateAttr()
+    _y1: float = PrivateAttr()
+    _y2: float = PrivateAttr()
+    _machine: TrueBeamMachine = PrivateAttr()
 
     @property
     def reference_beam(self) -> Beam:
-        return self.beams[self.reference_beam_idx]
+        return self.beams[self._reference_beam_idx]
 
     @property
     def dynamic_beam(self) -> Beam:
-        return self.beams[self.dynamic_beam_idx]
+        return self.beams[self._dynamic_beam_idx]
 
     @classmethod
     def from_varian_reference(cls) -> Self:
@@ -1462,7 +2007,7 @@ class VMATDRGS(QAProcedure):
         self._y2 = mlc_boundaries[-1]
         self._x1 = -(self.mlc_span / 2 + self.jaw_padding)
         self._x2 = self.mlc_span / 2 + self.jaw_padding
-        self.machine = machine
+        self._machine = machine
 
         # convert/cast variables
         gantry_speeds = np.array(self.gantry_speeds, dtype=float)
@@ -1474,8 +2019,8 @@ class VMATDRGS(QAProcedure):
         # Verify inputs:
         if len(gantry_speeds) != len(dose_rates):
             raise ValueError("gantry_speeds and dose_rates must have the same length")
-        if self.initial_gantry_offset < self.MIN_GANTRY_OFFSET:
-            msg = f"The initial gantry offset cannot be smaller than {self.MIN_GANTRY_OFFSET} deg. Using 180 deg can cause ambiguity in the rotation direction."
+        if self.initial_gantry_offset < self._MIN_GANTRY_OFFSET:
+            msg = f"The initial gantry offset cannot be smaller than {self._MIN_GANTRY_OFFSET} deg. Using 180 deg can cause ambiguity in the rotation direction."
             raise ValueError(msg)
 
         gantry_speeds_normalized = gantry_speeds / machine.specs.max_gantry_speed
@@ -1536,10 +2081,10 @@ class VMATDRGS(QAProcedure):
         mlc = mp
 
         # Extra verifications on gantry rotation
-        if gantry_angles_without_offset[-1] > 360 - 2 * self.MIN_GANTRY_OFFSET:
+        if gantry_angles_without_offset[-1] > 360 - 2 * self._MIN_GANTRY_OFFSET:
             msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
             raise ValueError(msg)
-        if gantry_angles_var[-1] > 360 - self.MIN_GANTRY_OFFSET:
+        if gantry_angles_var[-1] > 360 - self._MIN_GANTRY_OFFSET:
             msg = "The gantry rotation exceeds 360 degrees. Reduce the initial_gantry_offset"
             raise ValueError(msg)
 
@@ -1554,15 +2099,15 @@ class VMATDRGS(QAProcedure):
 
         # Append the dynamic and reference beams according to the order defined in init
         beams: list[Beam | None] = 2 * [None]
-        self.dynamic_beam_idx = 1 if self.reference_beam_add_before else 0
-        self.reference_beam_idx = 0 if self.reference_beam_add_before else 1
-        beams[self.dynamic_beam_idx] = dynamic_beam
-        beams[self.reference_beam_idx] = reference_beam
+        self._dynamic_beam_idx = 1 if self.reference_beam_add_before else 0
+        self._reference_beam_idx = 0 if self.reference_beam_add_before else 1
+        beams[self._dynamic_beam_idx] = dynamic_beam
+        beams[self._reference_beam_idx] = reference_beam
 
         # Add static beams
         for gantry_angle in self.dynamic_delivery_at_static_gantry:
             beam = self._beam(
-                f"VMAT-DRGS-G{gantry_angle:03d}", cumulative_mu, [gantry_angle], mlc
+                f"VMAT-DRGS-G{gantry_angle:03.0f}", cumulative_mu, [gantry_angle], mlc
             )
             beams.append(beam)
 
@@ -1580,7 +2125,7 @@ class VMATDRGS(QAProcedure):
         are passed as arguments to this method."""
 
         return Beam(
-            mlc_is_hd=self.machine.mlc_is_hd,
+            mlc_is_hd=self._machine.mlc_is_hd,
             beam_name=beam_name,
             energy=self.energy,
             fluence_mode=self.fluence_mode,
@@ -1607,7 +2152,7 @@ class VMATDRGS(QAProcedure):
         specs : MachineSpecs | None
             The machine specs used to compute speeds.
         """
-        specs = specs or self.machine.specs
+        specs = specs or self._machine.specs
         beam = self.dynamic_beam
         beam.plot_control_points(specs)
 
@@ -1667,7 +2212,6 @@ class VMATDRGS(QAProcedure):
         return fig
 
 
-@dataclass
 class VMATDRMLC(QAProcedure):
     """Create beams like Clif Ling VMAT DRMLC tests. The defaults use an optimized
     selection for a TrueBeam.
@@ -1711,43 +2255,103 @@ class VMATDRMLC(QAProcedure):
         dose rate and gantry speeds, and can be used as an alternative reference beam.
     """
 
-    mlc_speeds: tuple[float, ...] = (15.0, 20.0, 10.0, 5.0)
-    gantry_speeds: tuple[float, ...] | None = None
-    segment_width: float = 30.0
-    gantry_rotation_clockwise: bool = False
-    initial_gantry_offset: float = 10.0
-    mlc_motion_reverse: bool = False
-    interpolation_factor: int = 1
-    jaw_padding: float = 0.0
-    energy: float = 6
-    fluence_mode: FluenceMode = FluenceMode.STANDARD
-    max_dose_rate: int = 600
-    reference_beam_mu: float = 100.0
-    reference_beam_add_before: bool = False
-    dynamic_delivery_at_static_gantry: tuple[float, ...] = ()
+    mlc_speeds: tuple[float, ...] = Field(
+        default=(15.0, 20.0, 10.0, 5.0),
+        title="MLC Speeds",
+        description="The MLC speeds to test. Each speed will have its own ROI.",
+        json_schema_extra={"units": "mm/sec"},
+    )
+    gantry_speeds: tuple[float, ...] | None = Field(
+        default=None,
+        title="Gantry Speeds",
+        description="The gantry speeds. When None it will default to max gantry speed for all segments.",
+        json_schema_extra={"units": "deg/sec"},
+    )
+    segment_width: float = Field(
+        default=30.0,
+        title="Segment Width",
+        description="The width of each exposed segment.",
+        json_schema_extra={"units": "mm"},
+    )
+    gantry_rotation_clockwise: bool = Field(
+        default=False,
+        title="Gantry Rotation Clockwise",
+        description="The direction of the gantry rotation. If True, the gantry will rotate clockwise.",
+    )
+    initial_gantry_offset: float = Field(
+        default=10.0,
+        title="Initial Gantry Offset",
+        description="The initial gantry offset.",
+        json_schema_extra={"units": "degrees"},
+    )
+    mlc_motion_reverse: bool = Field(
+        default=False,
+        title="MLC Motion Reverse",
+        description="The direction of MLC motion. If False, the leaves move in positive direction (IEC) from -mlc_span/2 to +mlc_span/2. If True, the leaves move in negative direction (IEC) from +mlc_span/2 to -mlc_span/2.",
+    )
+    interpolation_factor: int = Field(
+        default=1,
+        title="Interpolation Factor",
+        description="Interpolation factor to create control points with finer resolution.",
+    )
+    jaw_padding: float = Field(
+        default=0.0,
+        title="Jaw Padding",
+        description="The added jaw position with respect to the initial/final MLC positions.",
+        json_schema_extra={"units": "mm"},
+    )
+    energy: float = Field(
+        default=6, title="Energy", description="The energy of the beam."
+    )
+    fluence_mode: FluenceMode = Field(
+        default=FluenceMode.STANDARD,
+        title="Fluence Mode",
+        description="The fluence mode of the beam.",
+    )
+    max_dose_rate: int = Field(
+        default=600,
+        title="Max Dose Rate",
+        description="The max dose rate. This is used to compute the control point sequence to achieve the test dose_rates.",
+        json_schema_extra={"units": "MU/min"},
+    )
+    reference_beam_mu: float = Field(
+        default=100.0,
+        title="Reference Beam MU",
+        description="The number of MU's to be delivered in the reference beam (static beam).",
+    )
+    reference_beam_add_before: bool = Field(
+        default=False,
+        title="Reference Beam Add Before",
+        description="Whether to add the reference_beam before or after the dynamic beam.",
+    )
+    dynamic_delivery_at_static_gantry: tuple[float, ...] = Field(
+        default=(),
+        title="Dynamic Delivery At Static Gantry",
+        description="There is one beam created for each static gantry angle. These beams contain the same control point sequence as the dynamic beam, but the gantry angle is replaced by a single value.",
+    )
 
     # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.
-    MIN_GANTRY_OFFSET: float = field(init=False, default=0.1)
+    _MIN_GANTRY_OFFSET: float = PrivateAttr(default=0.1)
     # The reference beam may be acquired prior to or following the dynamic beam
     # (as specified by the reference_beam_add_before argument).
     # These attributes record the indices of the respective beams.
-    dynamic_beam_idx: int = field(init=False)
-    reference_beam_idx: int = field(init=False)
+    _dynamic_beam_idx: int = PrivateAttr()
+    _reference_beam_idx: int = PrivateAttr()
 
     # private attributes: common to all beams to facilitate creation
-    _x1: float = field(init=False)
-    _x2: float = field(init=False)
-    _y1: float = field(init=False)
-    _y2: float = field(init=False)
-    machine: TrueBeamMachine = field(init=False)
+    _x1: float = PrivateAttr()
+    _x2: float = PrivateAttr()
+    _y1: float = PrivateAttr()
+    _y2: float = PrivateAttr()
+    _machine: TrueBeamMachine = PrivateAttr()
 
     @property
     def reference_beam(self) -> Beam:
-        return self.beams[self.reference_beam_idx]
+        return self.beams[self._reference_beam_idx]
 
     @property
     def dynamic_beam(self) -> Beam:
-        return self.beams[self.dynamic_beam_idx]
+        return self.beams[self._dynamic_beam_idx]
 
     @classmethod
     def from_varian_reference(cls) -> Self:
@@ -1784,8 +2388,8 @@ class VMATDRMLC(QAProcedure):
         mlc_speeds = np.array(np.repeat(self.mlc_speeds, 2), dtype=float)
 
         # Verify inputs:
-        if self.initial_gantry_offset < self.MIN_GANTRY_OFFSET:
-            msg = f"The initial gantry offset cannot be smaller than {self.MIN_GANTRY_OFFSET} deg. Using 180 deg can cause ambiguity in the rotation direction."
+        if self.initial_gantry_offset < self._MIN_GANTRY_OFFSET:
+            msg = f"The initial gantry offset cannot be smaller than {self._MIN_GANTRY_OFFSET} deg. Using 180 deg can cause ambiguity in the rotation direction."
             raise ValueError(msg)
         if any(mlc_speeds > machine.specs.max_mlc_speed):
             raise ValueError("Requested mlc_speeds cannot exceed max_mlc_speed")
@@ -1815,11 +2419,11 @@ class VMATDRMLC(QAProcedure):
 
         # Extra verifications on gantry rotation
         gantry_angles_without_offset = np.cumsum([0] + gantry_motion.tolist())
-        if gantry_angles_without_offset[-1] > 360 - 2 * self.MIN_GANTRY_OFFSET:
+        if gantry_angles_without_offset[-1] > 360 - 2 * self._MIN_GANTRY_OFFSET:
             msg = "The selected parameters require the gantry to rotate more than 360 degrees. Please select new parameters."
             raise ValueError(msg)
         gantry_angles_var = gantry_angles_without_offset + self.initial_gantry_offset
-        if gantry_angles_var[-1] > 360 - self.MIN_GANTRY_OFFSET:
+        if gantry_angles_var[-1] > 360 - self._MIN_GANTRY_OFFSET:
             msg = "The gantry rotation exceeds 360 degrees. Reduce the initial_gantry_offset"
             raise ValueError(msg)
 
@@ -1849,7 +2453,7 @@ class VMATDRMLC(QAProcedure):
         self._y2 = mlc_boundaries[-1]
         self._x1 = min(roi_limits) - self.jaw_padding
         self._x2 = max(roi_limits) + self.jaw_padding
-        self.machine = machine
+        self._machine = machine
 
         # Finalize values
         gantry_angles = (180 - gantry_angles_var) % 360
@@ -1874,15 +2478,15 @@ class VMATDRMLC(QAProcedure):
 
         # Append the dynamic and reference beams according to the order defined in init
         beams: list[Beam | None] = 2 * [None]
-        self.dynamic_beam_idx = 1 if self.reference_beam_add_before else 0
-        self.reference_beam_idx = 0 if self.reference_beam_add_before else 1
-        beams[self.dynamic_beam_idx] = dynamic_beam
-        beams[self.reference_beam_idx] = ref_beam
+        self._dynamic_beam_idx = 1 if self.reference_beam_add_before else 0
+        self._reference_beam_idx = 0 if self.reference_beam_add_before else 1
+        beams[self._dynamic_beam_idx] = dynamic_beam
+        beams[self._reference_beam_idx] = ref_beam
 
         # Add static beams
         for gantry_angle in self.dynamic_delivery_at_static_gantry:
             beam = self._beam(
-                f"VMAT-DRMLC-G{gantry_angle:03d}", cumulative_mu, [gantry_angle], mlc
+                f"VMAT-DRMLC-G{gantry_angle:03.0f}", cumulative_mu, [gantry_angle], mlc
             )
             beams.append(beam)
 
@@ -1899,7 +2503,7 @@ class VMATDRMLC(QAProcedure):
         Common parameters are stored as attributes, whereas the dynamic axes
         are passed as arguments to this method."""
         return Beam(
-            mlc_is_hd=self.machine.mlc_is_hd,
+            mlc_is_hd=self._machine.mlc_is_hd,
             beam_name=beam_name,
             energy=self.energy,
             fluence_mode=self.fluence_mode,
@@ -1926,7 +2530,7 @@ class VMATDRMLC(QAProcedure):
         specs : MachineSpecs | None
             The machine specs used to compute speeds.
         """
-        specs = specs or self.machine.specs
+        specs = specs or self._machine.specs
         beam = self.dynamic_beam
         beam.plot_control_points(specs)
 
