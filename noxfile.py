@@ -4,7 +4,7 @@ from nox import Session
 
 @nox.session(reuse_venv=True, venv_backend="uv|virtualenv")
 def serve_docs(session: Session):
-    session.install(".[docs]")
+    session.install("-r", "docs/requirements-rtd.txt")
     session.run(
         "sphinx-autobuild",
         "docs/source",
@@ -18,7 +18,7 @@ def serve_docs(session: Session):
 @nox.session(reuse_venv=True, venv_backend="uv|virtualenv")
 def build_docs(session: Session):
     """Build the docs; used in CI pipelines to test the build. Will always rebuild and will always fail if there are any warnings"""
-    session.install(".[docs]")
+    session.install("-r", "docs/requirements-rtd.txt")
     session.run(
         "sphinx-build",
         "docs/source",
