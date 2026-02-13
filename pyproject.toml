@@ -12,6 +12,7 @@ license = "MIT"
 keywords = ["medical", "physics", "image", "analysis", "RT Plan"]
 
 dependencies = [
+    "pydantic>=2.0",
     "pydicom~=2.4.0", # match RM
     "numpy~=1.23.0", # match RM
     "plotly~=5.8", # match RM
@@ -23,8 +24,10 @@ docs = [
     "sphinx-autobuild>=2025.8.25",
     "sphinx-copybutton>=0.5.2",
     "sphinx-design>=0.6.1",
+    "sphinx-plotly-directive>=0.1.3",
     "sphinx>=8.2.3",
     "furo>=2025.9.25",
+    "autodoc_pydantic>=2.2.0",
 ]
 developer = [
     "nox>=2025.5.1",

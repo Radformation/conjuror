@@ -9,11 +9,10 @@ from conjuror.plans.truebeam import (
     DEFAULT_SPECS_TB,
     TrueBeamMachine,
     OpenField,
-    OpenFieldMLCMode,
+    MLCLeafBoundaryAlignmentMode,
     MLCTransmission,
     PicketFence,
     WinstonLutz,
-    WinstonLutzMLCMode,
     WinstonLutzField,
     DoseRate,
     MLCSpeed,
@@ -37,7 +36,7 @@ class TestProcedures:
             plan_label="label",
             plan_name="my name",
         )
-        pg.add_procedure(OpenField(-10, 10, -10, 10))  # 1
+        pg.add_procedure(OpenField(x1=-10, x2=10, y1=-10, y2=10))  # 1
         pg.add_procedure(MLCTransmission())  # 3
         pg.add_procedure(PicketFence())  # 1
         pg.add_procedure(WinstonLutz())  # 1
@@ -54,16 +53,16 @@ class TestOpenField:
     # There is a significant portion of these tests that are copied in WinstonLutz.
 
     OPENFIELD_MLC_PARAM = [
-        (-2.5, 2.5, OpenFieldMLCMode.EXACT),
-        (-2.4, 2.6, OpenFieldMLCMode.ROUND),
-        (-2.6, 2.6, OpenFieldMLCMode.INWARD),
-        (-2.4, 2.4, OpenFieldMLCMode.OUTWARD),
+        (-2.5, 2.5, MLCLeafBoundaryAlignmentMode.EXACT),
+        (-2.4, 2.6, MLCLeafBoundaryAlignmentMode.ROUND),
+        (-2.6, 2.6, MLCLeafBoundaryAlignmentMode.INWARD),
+        (-2.4, 2.4, MLCLeafBoundaryAlignmentMode.OUTWARD),
     ]
 
     @pytest.mark.parametrize("y1,y2,mlc_mode", OPENFIELD_MLC_PARAM)
     def test_defined_by_mlc(self, y1, y2, mlc_mode):
         x1, x2 = -100, 100
-        procedure = OpenField(x1, x2, y1, y2, mlc_mode=mlc_mode)
+        procedure = OpenField(x1=x1, x2=x2, y1=y1, y2=y2, mlc_mode=mlc_mode)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
         bld = procedure.beams[0].beam_limiting_device_positions
@@ -89,16 +88,16 @@ class TestOpenField:
         assert jaw_y[1, 0] == y2 + 5
 
     OPEN_MLC_PARAM = [
-        OpenFieldMLCMode.EXACT,
-        OpenFieldMLCMode.ROUND,
-        OpenFieldMLCMode.INWARD,
-        OpenFieldMLCMode.OUTWARD,
+        MLCLeafBoundaryAlignmentMode.EXACT,
+        MLCLeafBoundaryAlignmentMode.ROUND,
+        MLCLeafBoundaryAlignmentMode.INWARD,
+        MLCLeafBoundaryAlignmentMode.OUTWARD,
     ]
 
     @pytest.mark.parametrize("mlc_mode", OPEN_MLC_PARAM)
     def test_open_mlc(self, mlc_mode):
         x1, x2, y1, y2 = -100, 100, -110, 110
-        procedure = OpenField(x1, x2, y1, y2, mlc_mode=mlc_mode)
+        procedure = OpenField(x1=x1, x2=x2, y1=y1, y2=y2, mlc_mode=mlc_mode)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
         bld = procedure.beams[0].beam_limiting_device_positions
@@ -111,7 +110,7 @@ class TestOpenField:
 
     def test_defined_by_jaws(self):
         x1, x2, y1, y2 = -100, 100, -110, 110
-        procedure = OpenField(x1, x2, y1, y2, defined_by_mlc=False)
+        procedure = OpenField(x1=x1, x2=x2, y1=y1, y2=y2, defined_by_mlc=False)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
         bld = procedure.beams[0].beam_limiting_device_positions
@@ -134,20 +133,27 @@ class TestOpenField:
 
     @pytest.mark.parametrize("x1,x2,y1,y2", [(2, 1, 0, 1), (0, 1, 2, 1)])
     def test_error_if_min_larger_than_max(self, x1, x2, y1, y2):
-        procedure = OpenField(x1, x2, y1, y2, 100)
+        procedure = OpenField(x1=x1, x2=x2, y1=y1, y2=y2, mu=100)
         with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     @pytest.mark.parametrize("y1,y2", [(-0.1, 0), (0, 0.1)])
     def test_error_if_mlc_exact_and_not_possible(self, y1, y2):
-        procedure = OpenField(0, 1, y1, y2, mlc_mode=OpenFieldMLCMode.EXACT)
+        procedure = OpenField(
+            x1=0, x2=1, y1=y1, y2=y2, mlc_mode=MLCLeafBoundaryAlignmentMode.EXACT
+        )
         with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     @pytest.mark.parametrize("y1,y2", [(-0.1, 0), (0, 0.1)])
     def test_exact_is_ignored_if_defined_by_jaws(self, y1, y2):
         procedure = OpenField(
-            0, 1, y1, y2, mlc_mode=OpenFieldMLCMode.EXACT, defined_by_mlc=False
+            x1=0,
+            x2=1,
+            y1=y1,
+            y2=y2,
+            mlc_mode=MLCLeafBoundaryAlignmentMode.EXACT,
+            defined_by_mlc=False,
         )
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
@@ -227,7 +233,10 @@ class TestWinstonLutz:
         assert len(procedure.beams) == 1
 
     def test_non_defaults(self):
-        fields = [WinstonLutzField(0, 0, 0, "name1"), WinstonLutzField(90.7, 0.7, 10.7)]
+        fields = [
+            WinstonLutzField(gantry=0, collimator=0, couch=0, name="name1"),
+            WinstonLutzField(gantry=90.7, collimator=0.7, couch=10.7),
+        ]
         names_nominal = ["name1", "G091C001T011"]
         procedure = WinstonLutz(fields=fields)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
@@ -239,16 +248,16 @@ class TestWinstonLutz:
             assert b.beam_name == n
 
     WL_MLC_PARAM = [
-        (-2.5, 2.5, WinstonLutzMLCMode.EXACT),
-        (-2.4, 2.6, WinstonLutzMLCMode.ROUND),
-        (-2.6, 2.6, WinstonLutzMLCMode.INWARD),
-        (-2.4, 2.4, WinstonLutzMLCMode.OUTWARD),
+        (-2.5, 2.5, MLCLeafBoundaryAlignmentMode.EXACT),
+        (-2.4, 2.6, MLCLeafBoundaryAlignmentMode.ROUND),
+        (-2.6, 2.6, MLCLeafBoundaryAlignmentMode.INWARD),
+        (-2.4, 2.4, MLCLeafBoundaryAlignmentMode.OUTWARD),
     ]
 
     @pytest.mark.parametrize("y1,y2,mlc_mode", WL_MLC_PARAM)
     def test_defined_by_mlc(self, y1, y2, mlc_mode):
         x1, x2 = -100, 100
-        procedure = WinstonLutz(x1, x2, y1, y2, mlc_mode=mlc_mode)
+        procedure = WinstonLutz(x1=x1, x2=x2, y1=y1, y2=y2, mlc_mode=mlc_mode)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
         bld = procedure.beams[0].beam_limiting_device_positions
@@ -275,7 +284,7 @@ class TestWinstonLutz:
 
     def test_defined_by_jaws(self):
         x1, x2, y1, y2 = -100, 100, -110, 110
-        procedure = WinstonLutz(x1, x2, y1, y2, defined_by_mlc=False)
+        procedure = WinstonLutz(x1=x1, x2=x2, y1=y1, y2=y2, defined_by_mlc=False)
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
         bld = procedure.beams[0].beam_limiting_device_positions
@@ -298,20 +307,27 @@ class TestWinstonLutz:
 
     @pytest.mark.parametrize("x1,x2,y1,y2", [(2, 1, 0, 1), (0, 1, 2, 1)])
     def test_error_if_min_larger_than_max(self, x1, x2, y1, y2):
-        procedure = WinstonLutz(x1, x2, y1, y2, 100)
+        procedure = WinstonLutz(x1=x1, x2=x2, y1=y1, y2=y2, mu=100)
         with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     @pytest.mark.parametrize("y1,y2", [(-0.1, 0), (0, 0.1)])
     def test_error_if_mlc_exact_and_not_possible(self, y1, y2):
-        procedure = WinstonLutz(0, 1, y1, y2, mlc_mode=WinstonLutzMLCMode.EXACT)
+        procedure = WinstonLutz(
+            x1=0, x2=1, y1=y1, y2=y2, mlc_mode=MLCLeafBoundaryAlignmentMode.EXACT
+        )
         with pytest.raises(ValueError):
             procedure.compute(DEFAULT_TRUEBEAM_HD120)
 
     @pytest.mark.parametrize("y1,y2", [(-0.1, 0), (0, 0.1)])
     def test_exact_is_ignored_if_defined_by_jaws(self, y1, y2):
         procedure = WinstonLutz(
-            0, 1, y1, y2, mlc_mode=WinstonLutzMLCMode.EXACT, defined_by_mlc=False
+            x1=0,
+            x2=1,
+            y1=y1,
+            y2=y2,
+            mlc_mode=MLCLeafBoundaryAlignmentMode.EXACT,
+            defined_by_mlc=False,
         )
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
         jaw_y = procedure.beams[0].beam_limiting_device_positions["ASYMY"]

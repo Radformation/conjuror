@@ -221,16 +221,19 @@ procedure creation without relying on a base plan, you can instantiate a
 
 .. code-block:: python
 
-    from conjuror.plans.plan_generator import PlanGenerator
-    from conjuror.plans.truebeam import QAProcedure
+    from pydantic import Field
+    from conjuror.plans.truebeam import QAProcedure, TrueBeamMachine
 
-    @dataclass
     class CircleProcedure(QAProcedure):
+        """Create a circular MLC aperture."""
 
-        # parameters
-        radius: float
+        radius: float = Field(
+            title="Radius",
+            description="The radius of the circle.",
+            json_schema_extra={"units": "mm"},
+        )
 
-        def compute(self):
+        def compute(self, machine):
             # business logic
             pass
 
@@ -240,8 +243,8 @@ procedure creation without relying on a base plan, you can instantiate a
 
     def test_circle():
         machine = TrueBeamMachine(mlc_is_hd=False)
-        circle = CircleProcedure(radius = 5.0)
-        circle.compute(machine) # This step is also done automatically in add_procedure
+        circle = CircleProcedure(radius=5.0)
+        circle.compute(machine)  # This step is also done automatically in add_procedure
         circle.plot()
 
 
@@ -256,7 +259,8 @@ Core classes
 Base classes
 ^^^^^^^^^^^^
 .. autoclass:: conjuror.plans.machine.MachineBase
-.. autoclass:: conjuror.plans.plan_generator.QAProcedureBase
+.. autopydantic_model:: conjuror.plans.plan_generator.QAProcedureBase
+   :show-inheritance:
 .. autoclass:: conjuror.plans.beam.Beam
 
 Derived classes - TrueBeam
