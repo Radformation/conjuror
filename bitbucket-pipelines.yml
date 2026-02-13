@@ -80,3 +80,5 @@ pipelines:
   branches:
     master:
       - step: *push-to-github
+    joss_paper:
+      - step: *push-to-github

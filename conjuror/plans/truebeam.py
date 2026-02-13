@@ -1631,6 +1631,23 @@ class VMATDRGS(QAProcedure):
             "alternative reference beam."
         ),
     )
+    couch_vrt: float = Field(
+        default=0, title="Couch Vertical", description="The couch vertical position."
+    )
+    couch_lat: float = Field(
+        default=0, title="Couch Lateral", description="The couch lateral position."
+    )
+    couch_lng: float = Field(
+        default=1000,
+        title="Couch Longitudinal",
+        description="The couch longitudinal position.",
+    )
+    couch_rot: float = Field(
+        default=0,
+        title="Couch Rotation",
+        description="The couch rotation.",
+        json_schema_extra={"units": "degrees"},
+    )
 
     # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.
     _MIN_GANTRY_OFFSET: float = PrivateAttr(default=0.1)
@@ -1818,10 +1835,10 @@ class VMATDRGS(QAProcedure):
             y2=self._y2,
             mlc_positions=mlc,
             coll_angle=0,
-            couch_vrt=0,
-            couch_lat=0,
-            couch_lng=0,
-            couch_rot=0,
+            couch_vrt=self.couch_vrt,
+            couch_lat=self.couch_lat,
+            couch_lng=self.couch_lng,
+            couch_rot=self.couch_rot,
         )
 
     def plot_control_points(self, specs: MachineSpecs | None = None) -> None:
@@ -1983,6 +2000,23 @@ class VMATDRMLC(QAProcedure):
             "value. There will be no modulation of dose rate and gantry speeds, and can be used as an "
             "alternative reference beam."
         ),
+    )
+    couch_vrt: float = Field(
+        default=0, title="Couch Vertical", description="The couch vertical position."
+    )
+    couch_lat: float = Field(
+        default=0, title="Couch Lateral", description="The couch lateral position."
+    )
+    couch_lng: float = Field(
+        default=1000,
+        title="Couch Longitudinal",
+        description="The couch longitudinal position.",
+    )
+    couch_rot: float = Field(
+        default=0,
+        title="Couch Rotation",
+        description="The couch rotation.",
+        json_schema_extra={"units": "degrees"},
     )
 
     # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.
@@ -2171,10 +2205,10 @@ class VMATDRMLC(QAProcedure):
             y2=self._y2,
             mlc_positions=mlc,
             coll_angle=0,
-            couch_vrt=0,
-            couch_lat=0,
-            couch_lng=0,
-            couch_rot=0,
+            couch_vrt=self.couch_vrt,
+            couch_lat=self.couch_lat,
+            couch_lng=self.couch_lng,
+            couch_rot=self.couch_rot,
         )
 
     def plot_control_points(self, specs: MachineSpecs | None = None) -> None:
