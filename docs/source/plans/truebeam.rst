@@ -716,6 +716,7 @@ Picket Fence
    :show-inheritance:
 
 .. automethod:: conjuror.plans.truebeam.PicketFence.from_varian_reference
+   :no-index:
 
 Dose Rate
 ---------
@@ -742,6 +743,7 @@ VMAT Dose Rate & Gantry Speed
    :show-inheritance:
 
 .. automethod:: conjuror.plans.truebeam.VMATDRGS.from_varian_reference
+   :no-index:
 
 VMAT MLC Speed
 --------------
@@ -750,6 +752,7 @@ VMAT MLC Speed
    :show-inheritance:
 
 .. automethod:: conjuror.plans.truebeam.VMATDRMLC.from_varian_reference
+   :no-index:
 
 API Reference
 -------------
