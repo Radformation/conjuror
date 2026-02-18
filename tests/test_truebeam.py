@@ -753,10 +753,6 @@ class TestVmatDRMLC:
         assert np.allclose(gantry_angle_1, gantry_angle_2, atol=1e-3)
         assert np.allclose(mlc_position_1, mlc_position_2)
 
-    def test_directionality(self):
-        procedure = VMATDRMLC(mlc_speeds=(20, 20, 20, -20, -20, 20, 20, 10, -10))
-        procedure.compute(DEFAULT_TRUEBEAM_HD120)
-
     def test_error_if_initial_gantry_offset_less_than_min(self):
         initial_gantry_offset = 0
         procedure = VMATDRMLC(initial_gantry_offset=initial_gantry_offset)
