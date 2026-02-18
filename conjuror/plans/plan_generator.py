@@ -225,6 +225,7 @@ class PlanGenerator(Generic[TMachine]):
         base_plan.Modality = "RTPLAN"
         base_plan.PatientName = patient_name
         base_plan.PatientID = patient_id
+        base_plan.Manufacturer = "Conjuror"
 
         # Machine type specific tags required on the base plan
         sop, beam, tolerance_table = _get_datasets_from_machine_type(machine)
