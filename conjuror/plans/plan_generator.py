@@ -191,11 +191,11 @@ class PlanGenerator(Generic[TMachine]):
     def from_machine(
         cls,
         machine: MachineBase,
-        machine_name: str = "RadMachine",
-        plan_label: str = "Radformation",
-        plan_name: str = "Radformation",
-        patient_name: str = "RadMachine",
-        patient_id: str = "RadMachine",
+        machine_name: str = "Conjuror",
+        plan_label: str = "Conjuror",
+        plan_name: str = "Conjuror",
+        patient_name: str = "Conjuror",
+        patient_id: str = "Conjuror",
     ) -> Self:
         """Create a plan for a target machine type.
 
