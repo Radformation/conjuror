@@ -4,7 +4,7 @@ from abc import ABC
 from collections.abc import Iterable, Sequence
 from pydantic import BaseModel, Field, PrivateAttr
 from enum import StrEnum
-from typing import Self
+from typing import ClassVar, Self
 
 import numpy as np
 from plotly import graph_objects as go
@@ -221,6 +221,8 @@ class QAProcedure(QAProcedureBase[TrueBeamMachine], ABC):
 class OpenField(QAProcedure):
     """Create an open field beam."""
 
+    verbose_name: ClassVar[str] = "Open Field"
+
     x1: float = Field(
         title="X1",
         description="The left edge position.",
@@ -379,6 +381,8 @@ class MLCTransmission(QAProcedure):
     """Add MLC transmission beams to the plan.
     The beam is delivered with the MLCs closed and moved to one side underneath the jaws.
     """
+
+    verbose_name: ClassVar[str] = "MLC Transmission"
 
     mu_per_bank: int = Field(
         default=100,
@@ -550,6 +554,8 @@ class MLCTransmission(QAProcedure):
 class PicketFence(QAProcedure):
     """Add a picket fence beam to the plan."""
 
+    verbose_name: ClassVar[str] = "Picket Fence"
+
     picket_width: float = Field(
         default=1,
         title="Picket Width",
@@ -702,6 +708,8 @@ class WinstonLutz(QAProcedure):
     Field names are generated automatically based on the axes positions.
     """
 
+    verbose_name: ClassVar[str] = "Winston-Lutz"
+
     x1: float = Field(
         default=-10.0,
         title="X1",
@@ -827,6 +835,8 @@ class WinstonLutz(QAProcedure):
 
 class DosimetricLeafGap(QAProcedure):
     """Add beams to measure the Dosimetric Leaf Gap (DLG)."""
+
+    verbose_name: ClassVar[str] = "Dosimetric Leaf Gap"
 
     gap_widths: Sequence[float] = Field(
         default=(2, 4, 6, 10, 14, 16, 20),
@@ -977,6 +987,8 @@ class DoseRate(QAProcedure):
     created where all ROIs are delivered at the default dose rate for comparison.
     The field names are generated automatically based on the min and max dose rates tested.
     """
+
+    verbose_name: ClassVar[str] = "Dose Rate"
 
     dose_rates: tuple[int, ...] = Field(
         default=(100, 300, 500, 600),
@@ -1212,6 +1224,8 @@ class MLCSpeed(QAProcedure):
 
     """
 
+    verbose_name: ClassVar[str] = "MLC Speed"
+
     speeds: tuple[float, ...] = Field(
         default=(5, 10, 15, 20),
         title="Speeds",
@@ -1438,6 +1452,8 @@ class GantrySpeed(QAProcedure):
 
     """
 
+    verbose_name: ClassVar[str] = "Gantry Speed"
+
     speeds: tuple[float, ...] = Field(
         default=(2, 3, 4, 4.8),
         title="Speeds",
@@ -1628,6 +1644,8 @@ class GantrySpeed(QAProcedure):
 
 class VMATDRGS(QAProcedure):
     """Create beams like Clif Ling VMAT DRGS tests. The defaults use an optimized selection for a TrueBeam."""
+
+    verbose_name: ClassVar[str] = "VMAT DR-GS"
 
     dose_rates: tuple[float, ...] = Field(
         default=(600, 600, 600, 600, 500, 400, 200),
@@ -2020,6 +2038,8 @@ class VMATDRMLC(QAProcedure):
     """Create beams like Clif Ling VMAT DRMLC tests. The defaults use an optimized
     selection for a TrueBeam.
     """
+
+    verbose_name: ClassVar[str] = "VMAT DR-MLC"
 
     mlc_speeds: tuple[float, ...] = Field(
         default=(15.0, 20.0, 10.0, 5.0),
