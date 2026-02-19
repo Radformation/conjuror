@@ -368,7 +368,7 @@ class MLCTransmission(QAProcedure):
         json_schema_extra={"units": "mm"},
     )
     beam_names: list[str] = Field(
-        default_factory=lambda: ["MLC Tx - Ref", "MLC Tx - Bank-A", "MLC Tx - Bank-B"],
+        default=["MLC Tx - Ref", "MLC Tx - Bank-A", "MLC Tx - Bank-B"],
         title="Beam Names",
         description="A list containing the names of the beams to use in the following order: reference beam, transmission beam bank A, transmission beam bank B.",
     )
@@ -689,7 +689,7 @@ class WinstonLutz(QAProcedure):
         ),
     )
     fields: Iterable[WinstonLutzField] = Field(
-        default_factory=lambda: (WinstonLutzField(gantry=0, collimator=0, couch=0),),
+        default=(WinstonLutzField(gantry=0, collimator=0, couch=0),),
         title="Fields",
         description="The positions of the axes.",
     )
@@ -957,6 +957,7 @@ class DoseRate(QAProcedure):
     )
     max_sacrificial_move_mm: float = Field(
         default=50,
+        gt=0,
         title="Max Sacrificial Move",
         description=(
             "The maximum distance the sacrificial leaves can move in a given control point. "
@@ -1187,6 +1188,7 @@ class MLCSpeed(QAProcedure):
     )
     max_sacrificial_move_mm: float = Field(
         default=50,
+        gt=0,
         title="Max Sacrificial Move",
         description=(
             "The maximum distance the sacrificial leaves can move in a given control point. "

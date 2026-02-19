@@ -397,16 +397,22 @@ class TestDoseRate:
         )
 
     def test_dose_rate_too_wide(self):
+        procedure = DoseRate(
+            dose_rates=(100, 150, 200, 250, 300, 350, 400, 600),
+            roi_size_mm=30,
+            y1=-10,
+            y2=10,
+            desired_mu=123,
+            default_dose_rate=600,
+        )
         with pytest.raises(ValueError):
-            procedure = DoseRate(
-                dose_rates=(100, 150, 200, 250, 300, 350, 400, 600),
-                roi_size_mm=30,
-                y1=-10,
-                y2=10,
-                desired_mu=123,
-                default_dose_rate=600,
-            )
             self.pg.add_procedure(procedure)
+
+    @pytest.mark.parametrize("msm", [0, -1])
+    def test_error_if_incorrect_sacrificial_move(self, msm):
+        # msm = max_sacrificial_move
+        with pytest.raises(ValueError):
+            DoseRate(max_sacrificial_move_mm=msm)
 
 
 class TestMlcSpeed:
@@ -439,32 +445,38 @@ class TestMlcSpeed:
         assert dcm.BeamSequence[1].BeamType == "DYNAMIC"
 
     def test_mlc_speed_too_fast(self):
+        procedure = MLCSpeed(
+            speeds=(10, 20, 30, 40, 50),
+            y1=-100,
+            y2=100,
+        )
         with pytest.raises(ValueError):
-            procedure = MLCSpeed(
-                speeds=(10, 20, 30, 40, 50),
-                y1=-100,
-                y2=100,
-            )
             self.pg.add_procedure(procedure)
 
     def test_mlc_speed_too_wide(self):
+        procedure = MLCSpeed(
+            speeds=(0.5, 1, 1.5, 2),
+            roi_size_mm=50,
+            y1=-100,
+            y2=100,
+        )
         with pytest.raises(ValueError):
-            procedure = MLCSpeed(
-                speeds=(0.5, 1, 1.5, 2),
-                roi_size_mm=50,
-                y1=-100,
-                y2=100,
-            )
             self.pg.add_procedure(procedure)
 
     def test_0_mlc_speed(self):
+        procedure = MLCSpeed(
+            speeds=(0, 1, 2),
+            y1=-100,
+            y2=100,
+        )
         with pytest.raises(ValueError):
-            procedure = MLCSpeed(
-                speeds=(0, 1, 2),
-                y1=-100,
-                y2=100,
-            )
             self.pg.add_procedure(procedure)
+
+    @pytest.mark.parametrize("msm", [0, -1])
+    def test_error_if_incorrect_sacrificial_move(self, msm):
+        # msm = max_sacrificial_move
+        with pytest.raises(ValueError):
+            DoseRate(max_sacrificial_move_mm=msm)
 
 
 class TestGantrySpeed:
