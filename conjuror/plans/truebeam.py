@@ -1107,7 +1107,7 @@ class MLCSpeed(QAProcedure):
 
     """
 
-    speeds: tuple[float | int, ...] = Field(
+    speeds: tuple[float, ...] = Field(
         default=(5, 10, 15, 20),
         title="Speeds",
         description="The speeds to test. Each speed will have its own ROI.",
@@ -1333,7 +1333,7 @@ class GantrySpeed(QAProcedure):
 
     """
 
-    speeds: tuple[float | int, ...] = Field(
+    speeds: tuple[float, ...] = Field(
         default=(2, 3, 4, 4.8),
         title="Speeds",
         description="The gantry speeds to test. Each speed will have its own ROI.",
