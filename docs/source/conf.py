@@ -17,7 +17,7 @@ author = "Joao Silveira"
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 # sys.path.insert(0, os.path.abspath('.'))
 sys.path.insert(0, os.path.abspath("../.."))
-# sys.path.append(os.path.abspath('sphinxext'))
+sys.path.insert(0, os.path.abspath("."))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -37,13 +37,17 @@ extensions = [
     "sphinx_design",
     "sphinx_plotly_directive",
     "sphinxcontrib.autodoc_pydantic",
+    "sphinxext.toc_filters",
 ]
 
-autoclass_content = "both"
+autoclass_content = "class"
+toc_object_entries = True
 
 # -- autodoc-pydantic configuration ------------------------------------------
 autodoc_pydantic_model_show_json = False
 autodoc_pydantic_model_show_config_summary = False
+autodoc_pydantic_model_show_field_summary = False
+autodoc_pydantic_model_member_order = "bysource"
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

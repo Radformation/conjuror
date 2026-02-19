@@ -758,10 +758,6 @@ API Reference
 -------------
 
 .. autopydantic_model:: conjuror.plans.truebeam.OpenField
-   :show-inheritance:
 .. autopydantic_model:: conjuror.plans.truebeam.MLCTransmission
-   :show-inheritance:
 .. autopydantic_model:: conjuror.plans.truebeam.DosimetricLeafGap
-   :show-inheritance:
 .. autopydantic_model:: conjuror.plans.truebeam.WinstonLutz
-   :show-inheritance:
