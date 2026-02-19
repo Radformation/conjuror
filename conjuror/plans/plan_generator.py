@@ -117,7 +117,8 @@ class PlanGenerator(Generic[TMachine]):
         plan.SeriesNumber = ""
 
         # General Equipment Module
-        plan.Manufacturer = ""
+        # Optional for Eclipse but mandatory for loading directly at machine
+        plan.Manufacturer = base_plan.Manufacturer
 
         # RT General Plan Module
         plan.RTPlanDate = date
@@ -131,8 +132,8 @@ class PlanGenerator(Generic[TMachine]):
         plan.RTPlanLabel = plan_label
         plan.RTPlanName = plan_name
 
-        #### Copy from base plan
         # RT Tolerance Tables Module - use first table from base plan
+        # Optional for Eclipse but mandatory for loading directly at machine
         plan.ToleranceTableSequence = (base_plan.ToleranceTableSequence[0],)
 
         #### Modules required for beams
@@ -224,6 +225,7 @@ class PlanGenerator(Generic[TMachine]):
         base_plan.Modality = "RTPLAN"
         base_plan.PatientName = patient_name
         base_plan.PatientID = patient_id
+        base_plan.Manufacturer = "Conjuror"
 
         # Machine type specific tags required on the base plan
         sop, beam, tolerance_table = _get_datasets_from_machine_type(machine)
