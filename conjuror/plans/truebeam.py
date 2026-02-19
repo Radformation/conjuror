@@ -52,19 +52,16 @@ class MLCLeafBoundaryAlignmentMode(StrEnum):
 
 class WinstonLutzField(BaseModel):
     gantry: float = Field(
-        title="Gantry",
+        title="Gantry [degrees]",
         description="Gantry angle.",
-        json_schema_extra={"units": "degrees"},
     )
     collimator: float = Field(
-        title="Collimator",
+        title="Collimator [degrees]",
         description="Collimator angle.",
-        json_schema_extra={"units": "degrees"},
     )
     couch: float = Field(
-        title="Couch",
+        title="Couch [degrees]",
         description="Couch rotation angle.",
-        json_schema_extra={"units": "degrees"},
     )
     name: str | None = Field(
         default=None, title="Name", description="Optional name for this field."
@@ -256,21 +253,18 @@ class OpenField(QAProcedure):
     )
     dose_rate: int = Field(
         default=600,
-        title="Dose Rate",
+        title="Dose Rate [MU/min]",
         description="The dose rate of the beam.",
-        json_schema_extra={"units": "MU/min"},
     )
     gantry_angle: float = Field(
         default=0,
-        title="Gantry Angle",
+        title="Gantry Angle [degrees]",
         description="The gantry angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     coll_angle: float = Field(
         default=0,
-        title="Collimator Angle",
+        title="Collimator Angle [degrees]",
         description="The collimator angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     couch_vrt: float = Field(
         default=0, title="Couch Vertical", description="The couch vertical position."
@@ -285,9 +279,8 @@ class OpenField(QAProcedure):
     )
     couch_rot: float = Field(
         default=0,
-        title="Couch Rotation",
+        title="Couch Rotation [degrees]",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
     )
     padding: float = Field(
         default=5,
@@ -363,9 +356,8 @@ class MLCTransmission(QAProcedure):
     )
     overreach: float = Field(
         default=10,
-        title="Overreach",
+        title="Overreach [mm]",
         description="The amount to tuck the MLCs under the jaws.",
-        json_schema_extra={"units": "mm"},
     )
     beam_names: list[str] = Field(
         default=["MLC Tx - Ref", "MLC Tx - Bank-A", "MLC Tx - Bank-B"],
@@ -382,33 +374,28 @@ class MLCTransmission(QAProcedure):
     )
     dose_rate: int = Field(
         default=600,
-        title="Dose Rate",
+        title="Dose Rate [MU/min]",
         description="The dose rate of the beam.",
-        json_schema_extra={"units": "MU/min"},
     )
     width: float = Field(
         default=100,
-        title="Width",
+        title="Width [mm]",
         description="The width of the reference field.",
-        json_schema_extra={"units": "mm"},
     )
     height: float = Field(
         default=100,
-        title="Height",
+        title="Height [mm]",
         description="The height of the reference field.",
-        json_schema_extra={"units": "mm"},
     )
     gantry_angle: float = Field(
         default=0,
-        title="Gantry Angle",
+        title="Gantry Angle [degrees]",
         description="The gantry angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     coll_angle: float = Field(
         default=0,
-        title="Collimator Angle",
+        title="Collimator Angle [degrees]",
         description="The collimator angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     couch_vrt: float = Field(
         default=0, title="Couch Vertical", description="The couch vertical position."
@@ -423,9 +410,8 @@ class MLCTransmission(QAProcedure):
     )
     couch_rot: float = Field(
         default=0,
-        title="Couch Rotation",
+        title="Couch Rotation [degrees]",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
     )
 
     # private attributes: common to all beams to facilitate creation
@@ -511,15 +497,13 @@ class PicketFence(QAProcedure):
 
     picket_width: float = Field(
         default=1,
-        title="Picket Width",
+        title="Picket Width [mm]",
         description="The width of the pickets.",
-        json_schema_extra={"units": "mm"},
     )
     picket_positions: Sequence[float] = Field(
         default=(-75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75),
-        title="Picket Positions",
+        title="Picket Positions [mm]",
         description="The positions of the pickets relative to the center of the image.",
-        json_schema_extra={"units": "mm"},
     )
     mu_per_picket: float = Field(
         default=10,
@@ -546,21 +530,18 @@ class PicketFence(QAProcedure):
     )
     dose_rate: int = Field(
         default=600,
-        title="Dose Rate",
+        title="Dose Rate [MU/min]",
         description="The dose rate of the beam.",
-        json_schema_extra={"units": "MU/min"},
     )
     gantry_angle: float = Field(
         default=0,
-        title="Gantry Angle",
+        title="Gantry Angle [degrees]",
         description="The gantry angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     coll_angle: float = Field(
         default=0,
-        title="Collimator Angle",
+        title="Collimator Angle [degrees]",
         description="The collimator angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     couch_vrt: float = Field(
         default=0, title="Couch Vertical", description="The couch vertical position."
@@ -575,9 +556,8 @@ class PicketFence(QAProcedure):
     )
     couch_rot: float = Field(
         default=0,
-        title="Couch Rotation",
+        title="Couch Rotation [degrees]",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
     )
     jaw_padding: float = Field(
         default=10, title="Jaw Padding", description="The padding to add to the X jaws."
@@ -756,21 +736,18 @@ class DosimetricLeafGap(QAProcedure):
 
     gap_widths: Sequence[float] = Field(
         default=(2, 4, 6, 10, 14, 16, 20),
-        title="Gap Widths",
+        title="Gap Widths [mm]",
         description="The gap widths for the MLC sweeps.",
-        json_schema_extra={"units": "mm"},
     )
     start_position: float = Field(
         default=-60,
-        title="Start Position",
+        title="Start Position [mm]",
         description="The start position of the MLC gap.",
-        json_schema_extra={"units": "mm"},
     )
     final_position: float = Field(
         default=60,
-        title="Final Position",
+        title="Final Position [mm]",
         description="The final position of the MLC gap.",
-        json_schema_extra={"units": "mm"},
     )
     mu: int = Field(
         default=100,
@@ -787,21 +764,18 @@ class DosimetricLeafGap(QAProcedure):
     )
     dose_rate: int = Field(
         default=600,
-        title="Dose Rate",
+        title="Dose Rate [MU/min]",
         description="The dose rate of the beam.",
-        json_schema_extra={"units": "MU/min"},
     )
     gantry_angle: float = Field(
         default=0,
-        title="Gantry Angle",
+        title="Gantry Angle [degrees]",
         description="The gantry angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     coll_angle: float = Field(
         default=0,
-        title="Collimator Angle",
+        title="Collimator Angle [degrees]",
         description="The collimator angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     couch_vrt: float = Field(
         default=0, title="Couch Vertical", description="The couch vertical position."
@@ -816,9 +790,8 @@ class DosimetricLeafGap(QAProcedure):
     )
     couch_rot: float = Field(
         default=0,
-        title="Couch Rotation",
+        title="Couch Rotation [degrees]",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
     )
     x1: float = Field(default=-50, title="X1", description="The left edge position.")
     x2: float = Field(default=50, title="X2", description="The right edge position.")
@@ -875,24 +848,21 @@ class DoseRate(QAProcedure):
 
     dose_rates: tuple[int, ...] = Field(
         default=(100, 300, 500, 600),
-        title="Dose Rates",
+        title="Dose Rates [MU/min]",
         description="The dose rates to test. Each dose rate will have its own ROI.",
-        json_schema_extra={"units": "MU/min"},
     )
     default_dose_rate: int = Field(
         default=600,
-        title="Default Dose Rate",
+        title="Default Dose Rate [MU/min]",
         description=(
             "The default dose rate. Typically, this is the clinical default. "
             "The reference beam will be delivered at this dose rate for all ROIs."
         ),
-        json_schema_extra={"units": "MU/min"},
     )
     gantry_angle: float = Field(
         default=0,
-        title="Gantry Angle",
+        title="Gantry Angle [degrees]",
         description="The gantry angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     desired_mu: int = Field(
         default=50,
@@ -912,9 +882,8 @@ class DoseRate(QAProcedure):
     )
     coll_angle: float = Field(
         default=0,
-        title="Collimator Angle",
+        title="Collimator Angle [degrees]",
         description="The collimator angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     couch_vrt: float = Field(
         default=0, title="Couch Vertical", description="The couch vertical position."
@@ -929,21 +898,18 @@ class DoseRate(QAProcedure):
     )
     couch_rot: float = Field(
         default=0,
-        title="Couch Rotation",
+        title="Couch Rotation [degrees]",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
     )
     jaw_padding_mm: float = Field(
         default=5,
-        title="Jaw Padding",
+        title="Jaw Padding [mm]",
         description="The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.",
-        json_schema_extra={"units": "mm"},
     )
     roi_size_mm: float = Field(
         default=25,
-        title="ROI Size",
+        title="ROI Size [mm]",
         description="The width of the ROIs.",
-        json_schema_extra={"units": "mm"},
     )
     y1: float = Field(
         default=-100,
@@ -958,13 +924,12 @@ class DoseRate(QAProcedure):
     max_sacrificial_move_mm: float = Field(
         default=50,
         gt=0,
-        title="Max Sacrificial Move",
+        title="Max Sacrificial Move [mm]",
         description=(
             "The maximum distance the sacrificial leaves can move in a given control point. "
             "Smaller values generate more control points and more back-and-forth movement. "
             "Too large of values may cause deliverability issues."
         ),
-        json_schema_extra={"units": "mm"},
     )
 
     def compute(self, machine: TrueBeamMachine) -> None:
@@ -1109,39 +1074,34 @@ class MLCSpeed(QAProcedure):
 
     speeds: tuple[float, ...] = Field(
         default=(5, 10, 15, 20),
-        title="Speeds",
+        title="Speeds [mm/sec]",
         description="The speeds to test. Each speed will have its own ROI.",
-        json_schema_extra={"units": "mm/sec"},
     )
     roi_size_mm: float = Field(
         default=20,
-        title="ROI Size",
+        title="ROI Size [mm]",
         description="The width of the ROIs.",
-        json_schema_extra={"units": "mm"},
     )
     mu: int = Field(
         default=50, title="Monitor Units", description="The monitor units to deliver."
     )
     default_dose_rate: int = Field(
         default=600,
-        title="Default Dose Rate",
+        title="Default Dose Rate [MU/min]",
         description="The dose rate used for the reference beam.",
-        json_schema_extra={"units": "MU/min"},
     )
     gantry_angle: float = Field(
         default=0,
-        title="Gantry Angle",
+        title="Gantry Angle [degrees]",
         description="The gantry angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     energy: float = Field(
         default=6, title="Energy", description="The energy of the beam."
     )
     coll_angle: float = Field(
         default=0,
-        title="Collimator Angle",
+        title="Collimator Angle [degrees]",
         description="The collimator angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     couch_vrt: float = Field(
         default=0, title="Couch Vertical", description="The couch vertical position."
@@ -1156,9 +1116,8 @@ class MLCSpeed(QAProcedure):
     )
     couch_rot: float = Field(
         default=0,
-        title="Couch Rotation",
+        title="Couch Rotation [degrees]",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
     )
     fluence_mode: FluenceMode = Field(
         default=FluenceMode.STANDARD,
@@ -1167,9 +1126,8 @@ class MLCSpeed(QAProcedure):
     )
     jaw_padding_mm: float = Field(
         default=5,
-        title="Jaw Padding",
+        title="Jaw Padding [mm]",
         description="The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.",
-        json_schema_extra={"units": "mm"},
     )
     y1: float = Field(
         default=-100,
@@ -1189,13 +1147,12 @@ class MLCSpeed(QAProcedure):
     max_sacrificial_move_mm: float = Field(
         default=50,
         gt=0,
-        title="Max Sacrificial Move",
+        title="Max Sacrificial Move [mm]",
         description=(
             "The maximum distance the sacrificial leaves can move in a given control point. "
             "Smaller values generate more control points and more back-and-forth movement. "
             "Too large of values may cause deliverability issues."
         ),
-        json_schema_extra={"units": "mm"},
     )
 
     def compute(self, machine: TrueBeamMachine) -> None:
@@ -1335,19 +1292,17 @@ class GantrySpeed(QAProcedure):
 
     speeds: tuple[float, ...] = Field(
         default=(2, 3, 4, 4.8),
-        title="Speeds",
+        title="Speeds [deg/sec]",
         description="The gantry speeds to test. Each speed will have its own ROI.",
-        json_schema_extra={"units": "deg/sec"},
     )
     max_dose_rate: int = Field(
         default=600,
-        title="Max Dose Rate",
+        title="Max Dose Rate [MU/min]",
         description="The max dose rate clinically allowed for the energy.",
-        json_schema_extra={"units": "MU/min"},
     )
     start_gantry_angle: float = Field(
         default=179,
-        title="Start Gantry Angle",
+        title="Start Gantry Angle [degrees]",
         description=(
             "The starting gantry angle. The gantry will rotate around this point. "
             "It is up to the user to know the machine's limitations (e.g. don't go through "
@@ -1355,7 +1310,6 @@ class GantrySpeed(QAProcedure):
             "plus the sum of the gantry deltas generated by the speed ROIs. Slower speeds "
             "require more gantry angle to reach the same MU."
         ),
-        json_schema_extra={"units": "degrees"},
     )
     energy: float = Field(
         default=6, title="Energy", description="The energy of the beam."
@@ -1367,9 +1321,8 @@ class GantrySpeed(QAProcedure):
     )
     coll_angle: float = Field(
         default=0,
-        title="Collimator Angle",
+        title="Collimator Angle [degrees]",
         description="The collimator angle of the beam.",
-        json_schema_extra={"units": "degrees"},
     )
     couch_vrt: float = Field(
         default=0, title="Couch Vertical", description="The couch vertical position."
@@ -1384,9 +1337,8 @@ class GantrySpeed(QAProcedure):
     )
     couch_rot: float = Field(
         default=0,
-        title="Couch Rotation",
+        title="Couch Rotation [degrees]",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
     )
     beam_name: str = Field(
         default="GS", title="Beam Name", description="The name of the beam."
@@ -1398,15 +1350,13 @@ class GantrySpeed(QAProcedure):
     )
     jaw_padding_mm: float = Field(
         default=5,
-        title="Jaw Padding",
+        title="Jaw Padding [mm]",
         description="The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.",
-        json_schema_extra={"units": "mm"},
     )
     roi_size_mm: float = Field(
         default=30,
-        title="ROI Size",
+        title="ROI Size [mm]",
         description="The width of the ROIs.",
-        json_schema_extra={"units": "mm"},
     )
     y1: float = Field(
         default=-100,
@@ -1526,15 +1476,13 @@ class VMATDRGS(QAProcedure):
 
     dose_rates: tuple[float, ...] = Field(
         default=(600, 600, 600, 600, 500, 400, 200),
-        title="Dose Rates",
+        title="Dose Rates [MU/min]",
         description="The dose rates to test. Each dose rate will have its own ROI.",
-        json_schema_extra={"units": "MU/min"},
     )
     gantry_speeds: tuple[float, ...] = Field(
         default=(3, 4, 5, 6, 6, 6, 6),
-        title="Gantry Speeds",
+        title="Gantry Speeds [deg/sec]",
         description="The gantry speeds to test. Each gantry speed will have its own ROI.",
-        json_schema_extra={"units": "deg/sec"},
     )
     mu_per_segment: float = Field(
         default=48.0,
@@ -1553,9 +1501,8 @@ class VMATDRGS(QAProcedure):
     )
     gantry_motion_per_transition: float = Field(
         default=10.0,
-        title="Gantry Motion Per Transition",
+        title="Gantry Motion Per Transition [degrees]",
         description="The number of degrees that the gantry should rotate while the MLCs move from one ROI to the next.",
-        json_schema_extra={"units": "degrees"},
     )
     gantry_rotation_clockwise: bool = Field(
         default=True,
@@ -1564,19 +1511,17 @@ class VMATDRGS(QAProcedure):
     )
     initial_gantry_offset: float = Field(
         default=1.0,
-        title="Initial Gantry Offset",
+        title="Initial Gantry Offset [degrees]",
         description=(
             "The initial gantry offset. E.g. if initial_gantry_offset=1 and "
             "gantry_rotation_clockwise=True, then start angle = 181 IEC. "
             "If gantry_rotation_clockwise=False, then start angle = 179 IEC."
         ),
-        json_schema_extra={"units": "degrees"},
     )
     mlc_span: float = Field(
         default=138.0,
-        title="MLC Span",
+        title="MLC Span [mm]",
         description="The total size of the field. Initial/final MLC position = +/- mlc_span/2.",
-        json_schema_extra={"units": "mm"},
     )
     mlc_motion_reverse: bool = Field(
         default=True,
@@ -1585,15 +1530,13 @@ class VMATDRGS(QAProcedure):
     )
     mlc_gap: float = Field(
         default=2.0,
-        title="MLC Gap",
+        title="MLC Gap [mm]",
         description="The MLC gap between ROIs. This creates a darker region to help visualize the ROIs boundaries.",
-        json_schema_extra={"units": "mm"},
     )
     jaw_padding: float = Field(
         default=0.0,
-        title="Jaw Padding",
+        title="Jaw Padding [mm]",
         description="The added jaw position with respect to the initial/final MLC positions.",
-        json_schema_extra={"units": "mm"},
     )
     energy: float = Field(
         default=6, title="Energy", description="The energy of the beam."
@@ -1605,9 +1548,8 @@ class VMATDRGS(QAProcedure):
     )
     max_dose_rate: int = Field(
         default=600,
-        title="Max Dose Rate",
+        title="Max Dose Rate [MU/min]",
         description="The max dose rate. This is used to compute the control point sequence to achieve the test dose_rates.",
-        json_schema_extra={"units": "MU/min"},
     )
     reference_beam_mu: float = Field(
         default=100.0,
@@ -1646,9 +1588,8 @@ class VMATDRGS(QAProcedure):
     )
     couch_rot: float = Field(
         default=0,
-        title="Couch Rotation",
+        title="Couch Rotation [degrees]",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
     )
 
     # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.
@@ -1918,21 +1859,18 @@ class VMATDRMLC(QAProcedure):
 
     mlc_speeds: tuple[float, ...] = Field(
         default=(15.0, 20.0, 10.0, 5.0),
-        title="MLC Speeds",
+        title="MLC Speeds [mm/sec]",
         description="The MLC speeds to test. Each speed will have its own ROI.",
-        json_schema_extra={"units": "mm/sec"},
     )
     gantry_speeds: tuple[float, ...] | None = Field(
         default=None,
-        title="Gantry Speeds",
+        title="Gantry Speeds [deg/sec]",
         description="The gantry speeds. When None it will default to max gantry speed for all segments.",
-        json_schema_extra={"units": "deg/sec"},
     )
     segment_width: float = Field(
         default=30.0,
-        title="Segment Width",
+        title="Segment Width [mm]",
         description="The width of each exposed segment.",
-        json_schema_extra={"units": "mm"},
     )
     gantry_rotation_clockwise: bool = Field(
         default=False,
@@ -1941,13 +1879,12 @@ class VMATDRMLC(QAProcedure):
     )
     initial_gantry_offset: float = Field(
         default=10.0,
-        title="Initial Gantry Offset",
+        title="Initial Gantry Offset [degrees]",
         description=(
             "The initial gantry offset. E.g. if initial_gantry_offset=1 and "
             "gantry_rotation_clockwise=True, then start angle = 181 IEC. "
             "If gantry_rotation_clockwise=False, then start angle = 179 IEC."
         ),
-        json_schema_extra={"units": "degrees"},
     )
     mlc_motion_reverse: bool = Field(
         default=False,
@@ -1961,9 +1898,8 @@ class VMATDRMLC(QAProcedure):
     )
     jaw_padding: float = Field(
         default=0.0,
-        title="Jaw Padding",
+        title="Jaw Padding [mm]",
         description="The added jaw position with respect to the initial/final MLC positions.",
-        json_schema_extra={"units": "mm"},
     )
     energy: float = Field(
         default=6, title="Energy", description="The energy of the beam."
@@ -1975,9 +1911,8 @@ class VMATDRMLC(QAProcedure):
     )
     max_dose_rate: int = Field(
         default=600,
-        title="Max Dose Rate",
+        title="Max Dose Rate [MU/min]",
         description="The max dose rate. This is used to compute the control point sequence to achieve the test dose_rates.",
-        json_schema_extra={"units": "MU/min"},
     )
     reference_beam_mu: float = Field(
         default=100.0,
@@ -2016,9 +1951,8 @@ class VMATDRMLC(QAProcedure):
     )
     couch_rot: float = Field(
         default=0,
-        title="Couch Rotation",
+        title="Couch Rotation [degrees]",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
     )
 
     # Prevent using a gantry angle of 180°, which can cause ambiguity in the rotation direction.

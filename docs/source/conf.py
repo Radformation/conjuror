@@ -37,6 +37,7 @@ extensions = [
     "sphinx_design",
     "sphinx_plotly_directive",
     "sphinxcontrib.autodoc_pydantic",
+    "sphinxext.field_titles",
     "sphinxext.toc_filters",
 ]
 
