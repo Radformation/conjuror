@@ -1,9 +1,7 @@
 from abc import ABC
 from collections.abc import Sequence
 from enum import StrEnum
-from typing import ClassVar
-
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 import numpy as np
 from pydicom.dataset import Dataset
@@ -143,7 +141,7 @@ class QAProcedure(QAProcedureBase[HalcyonMachine], ABC):
 class PicketFence(QAProcedure):
     """Add a picket fence beam to the plan. The beam will be delivered with the MLCs stacked on top of each other."""
 
-    verbose_name: ClassVar[str] = "Picket Fence"
+    model_config = ConfigDict(title="Picket Fence")
 
     stack: Stack = Field(
         title="Stack",
