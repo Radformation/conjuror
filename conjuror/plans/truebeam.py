@@ -221,14 +221,31 @@ class QAProcedure(QAProcedureBase[TrueBeamMachine], ABC):
 class OpenField(QAProcedure):
     """Create an open field beam."""
 
-    x1: float = Field(title="X1", description="The left edge position.")
-    x2: float = Field(title="X2", description="The right edge position.")
-    y1: float = Field(title="Y1", description="The bottom edge position.")
-    y2: float = Field(title="Y2", description="The top edge position.")
+    x1: float = Field(
+        title="X1",
+        description="The left edge position.",
+        json_schema_extra={"units": "mm"},
+    )
+    x2: float = Field(
+        title="X2",
+        description="The right edge position.",
+        json_schema_extra={"units": "mm"},
+    )
+    y1: float = Field(
+        title="Y1",
+        description="The bottom edge position.",
+        json_schema_extra={"units": "mm"},
+    )
+    y2: float = Field(
+        title="Y2",
+        description="The top edge position.",
+        json_schema_extra={"units": "mm"},
+    )
     mu: float = Field(
         default=100.0,
         title="Monitor Units",
         description="The monitor units of the beam.",
+        json_schema_extra={"units": "MU"},
     )
     defined_by_mlc: bool = Field(
         default=True,
@@ -247,7 +264,10 @@ class OpenField(QAProcedure):
         ),
     )
     energy: float = Field(
-        default=6, title="Energy", description="The energy of the beam."
+        default=6,
+        title="Energy",
+        description="The energy of the beam.",
+        json_schema_extra={"units": "MV"},
     )
     fluence_mode: FluenceMode = Field(
         default=FluenceMode.STANDARD,
@@ -264,35 +284,43 @@ class OpenField(QAProcedure):
         default=0,
         title="Gantry Angle",
         description="The gantry angle of the beam.",
-        json_schema_extra={"units": "degrees"},
+        json_schema_extra={"units": "deg"},
     )
     coll_angle: float = Field(
         default=0,
         title="Collimator Angle",
         description="The collimator angle of the beam.",
-        json_schema_extra={"units": "degrees"},
+        json_schema_extra={"units": "deg"},
     )
     couch_vrt: float = Field(
-        default=0, title="Couch Vertical", description="The couch vertical position."
+        default=0,
+        title="Couch Vertical",
+        description="The couch vertical position.",
+        json_schema_extra={"units": "mm"},
     )
     couch_lng: float = Field(
         default=1000,
         title="Couch Longitudinal",
         description="The couch longitudinal position.",
+        json_schema_extra={"units": "mm"},
     )
     couch_lat: float = Field(
-        default=0, title="Couch Lateral", description="The couch lateral position."
+        default=0,
+        title="Couch Lateral",
+        description="The couch lateral position.",
+        json_schema_extra={"units": "mm"},
     )
     couch_rot: float = Field(
         default=0,
         title="Couch Rotation",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
+        json_schema_extra={"units": "deg"},
     )
     padding: float = Field(
         default=5,
         title="Padding",
         description="The padding to add to the jaws or MLCs.",
+        json_schema_extra={"units": "mm"},
     )
     beam_name: str = Field(
         default="Open", title="Beam Name", description="The name of the beam."
@@ -301,6 +329,7 @@ class OpenField(QAProcedure):
         default=5,
         title="Outside Strip Width",
         description="The width of the strip of MLCs outside the field. The MLCs will be placed to the left, under the X1 jaw by 20mm.",
+        json_schema_extra={"units": "mm"},
     )
 
     def compute(self, machine: TrueBeamMachine) -> None:
@@ -355,11 +384,13 @@ class MLCTransmission(QAProcedure):
         default=100,
         title="MU Per Bank",
         description="The monitor units to deliver for each bank transmission test.",
+        json_schema_extra={"units": "MU"},
     )
     mu_per_ref: int = Field(
         default=100,
         title="MU Per Ref",
         description="The monitor units to deliver for the reference open field.",
+        json_schema_extra={"units": "MU"},
     )
     overreach: float = Field(
         default=10,
@@ -373,7 +404,10 @@ class MLCTransmission(QAProcedure):
         description="A list containing the names of the beams to use in the following order: reference beam, transmission beam bank A, transmission beam bank B.",
     )
     energy: int = Field(
-        default=6, title="Energy", description="The energy of the beam."
+        default=6,
+        title="Energy",
+        description="The energy of the beam.",
+        json_schema_extra={"units": "MV"},
     )
     fluence_mode: FluenceMode = Field(
         default=FluenceMode.STANDARD,
@@ -402,30 +436,37 @@ class MLCTransmission(QAProcedure):
         default=0,
         title="Gantry Angle",
         description="The gantry angle of the beam.",
-        json_schema_extra={"units": "degrees"},
+        json_schema_extra={"units": "deg"},
     )
     coll_angle: float = Field(
         default=0,
         title="Collimator Angle",
         description="The collimator angle of the beam.",
-        json_schema_extra={"units": "degrees"},
+        json_schema_extra={"units": "deg"},
     )
     couch_vrt: float = Field(
-        default=0, title="Couch Vertical", description="The couch vertical position."
+        default=0,
+        title="Couch Vertical",
+        description="The couch vertical position.",
+        json_schema_extra={"units": "mm"},
     )
     couch_lat: float = Field(
-        default=0, title="Couch Lateral", description="The couch lateral position."
+        default=0,
+        title="Couch Lateral",
+        description="The couch lateral position.",
+        json_schema_extra={"units": "mm"},
     )
     couch_lng: float = Field(
         default=1000,
         title="Couch Longitudinal",
         description="The couch longitudinal position.",
+        json_schema_extra={"units": "mm"},
     )
     couch_rot: float = Field(
         default=0,
         title="Couch Rotation",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
+        json_schema_extra={"units": "deg"},
     )
 
     # private attributes: common to all beams to facilitate creation
@@ -661,16 +702,35 @@ class WinstonLutz(QAProcedure):
     Field names are generated automatically based on the axes positions.
     """
 
-    x1: float = Field(default=-10.0, title="X1", description="The left edge position.")
-    x2: float = Field(default=10.0, title="X2", description="The right edge position.")
-    y1: float = Field(
-        default=-10.0, title="Y1", description="The bottom edge position."
+    x1: float = Field(
+        default=-10.0,
+        title="X1",
+        description="The left edge position.",
+        json_schema_extra={"units": "mm"},
     )
-    y2: float = Field(default=10.0, title="Y2", description="The top edge position.")
+    x2: float = Field(
+        default=10.0,
+        title="X2",
+        description="The right edge position.",
+        json_schema_extra={"units": "mm"},
+    )
+    y1: float = Field(
+        default=-10.0,
+        title="Y1",
+        description="The bottom edge position.",
+        json_schema_extra={"units": "mm"},
+    )
+    y2: float = Field(
+        default=10.0,
+        title="Y2",
+        description="The top edge position.",
+        json_schema_extra={"units": "mm"},
+    )
     mu: float = Field(
         default=10.0,
         title="Monitor Units",
         description="The monitor units of the beam.",
+        json_schema_extra={"units": "MU"},
     )
     defined_by_mlc: bool = Field(
         default=True,
@@ -694,7 +754,10 @@ class WinstonLutz(QAProcedure):
         description="The positions of the axes.",
     )
     energy: float = Field(
-        default=6, title="Energy", description="The energy of the beam."
+        default=6,
+        title="Energy",
+        description="The energy of the beam.",
+        json_schema_extra={"units": "MV"},
     )
     fluence_mode: FluenceMode = Field(
         default=FluenceMode.STANDARD,
@@ -702,23 +765,34 @@ class WinstonLutz(QAProcedure):
         description="The fluence mode of the beam.",
     )
     dose_rate: int = Field(
-        default=600, title="Dose Rate", description="The dose rate of the beam."
+        default=600,
+        title="Dose Rate",
+        description="The dose rate of the beam.",
+        json_schema_extra={"units": "MU/min"},
     )
     couch_vrt: float = Field(
-        default=0, title="Couch Vertical", description="The couch vertical position."
+        default=0,
+        title="Couch Vertical",
+        description="The couch vertical position.",
+        json_schema_extra={"units": "mm"},
     )
     couch_lng: float = Field(
         default=1000,
         title="Couch Longitudinal",
         description="The couch longitudinal position.",
+        json_schema_extra={"units": "mm"},
     )
     couch_lat: float = Field(
-        default=0, title="Couch Lateral", description="The couch lateral position."
+        default=0,
+        title="Couch Lateral",
+        description="The couch lateral position.",
+        json_schema_extra={"units": "mm"},
     )
     padding: float = Field(
         default=5,
         title="Padding",
         description="The padding to add to the jaws or MLCs.",
+        json_schema_extra={"units": "mm"},
     )
 
     def compute(self, machine: TrueBeamMachine) -> None:
@@ -776,9 +850,13 @@ class DosimetricLeafGap(QAProcedure):
         default=100,
         title="Monitor Units",
         description="The monitor units of each beam.",
+        json_schema_extra={"units": "MU"},
     )
     energy: float = Field(
-        default=6, title="Energy", description="The energy of the beam."
+        default=6,
+        title="Energy",
+        description="The energy of the beam.",
+        json_schema_extra={"units": "MV"},
     )
     fluence_mode: FluenceMode = Field(
         default=FluenceMode.STANDARD,
@@ -791,39 +869,66 @@ class DosimetricLeafGap(QAProcedure):
         description="The dose rate of the beam.",
         json_schema_extra={"units": "MU/min"},
     )
+    x1: float = Field(
+        default=-50,
+        title="X1",
+        description="The left edge position.",
+        json_schema_extra={"units": "mm"},
+    )
+    x2: float = Field(
+        default=50,
+        title="X2",
+        description="The right edge position.",
+        json_schema_extra={"units": "mm"},
+    )
+    y1: float = Field(
+        default=-50,
+        title="Y1",
+        description="The bottom edge position.",
+        json_schema_extra={"units": "mm"},
+    )
+    y2: float = Field(
+        default=50,
+        title="Y2",
+        description="The top edge position.",
+        json_schema_extra={"units": "mm"},
+    )
     gantry_angle: float = Field(
         default=0,
         title="Gantry Angle",
         description="The gantry angle of the beam.",
-        json_schema_extra={"units": "degrees"},
+        json_schema_extra={"units": "deg"},
     )
     coll_angle: float = Field(
         default=0,
         title="Collimator Angle",
         description="The collimator angle of the beam.",
-        json_schema_extra={"units": "degrees"},
+        json_schema_extra={"units": "deg"},
     )
     couch_vrt: float = Field(
-        default=0, title="Couch Vertical", description="The couch vertical position."
+        default=0,
+        title="Couch Vertical",
+        description="The couch vertical position.",
+        json_schema_extra={"units": "mm"},
     )
     couch_lat: float = Field(
-        default=0, title="Couch Lateral", description="The couch lateral position."
+        default=0,
+        title="Couch Lateral",
+        description="The couch lateral position.",
+        json_schema_extra={"units": "mm"},
     )
     couch_lng: float = Field(
         default=1000,
         title="Couch Longitudinal",
         description="The couch longitudinal position.",
+        json_schema_extra={"units": "mm"},
     )
     couch_rot: float = Field(
         default=0,
         title="Couch Rotation",
         description="The couch rotation.",
-        json_schema_extra={"units": "degrees"},
+        json_schema_extra={"units": "deg"},
     )
-    x1: float = Field(default=-50, title="X1", description="The left edge position.")
-    x2: float = Field(default=50, title="X2", description="The right edge position.")
-    y1: float = Field(default=-50, title="Y1", description="The bottom edge position.")
-    y2: float = Field(default=50, title="Y2", description="The top edge position.")
 
     def compute(self, machine: TrueBeamMachine) -> None:
         # validate x_jaw positions
