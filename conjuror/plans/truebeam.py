@@ -536,12 +536,12 @@ class PicketFence(QAProcedure):
     )
     mu_per_picket: float = Field(
         default=10,
-        title="MU Per Picket",
+        title="MU Per Picket [MU]",
         description="The monitor units for each picket.",
     )
     mu_per_transition: float = Field(
         default=2,
-        title="MU Per Transition",
+        title="MU Per Transition [MU]",
         description="The monitor units for MLC transitions between pickets.",
     )
     skip_first_picket: bool = Field(
@@ -550,7 +550,7 @@ class PicketFence(QAProcedure):
         description="Whether to skip the first picket.",
     )
     energy: float = Field(
-        default=6, title="Energy", description="The energy of the beam."
+        default=6, title="Energy [MV]", description="The energy of the beam."
     )
     fluence_mode: FluenceMode = Field(
         default=FluenceMode.STANDARD,
@@ -564,32 +564,36 @@ class PicketFence(QAProcedure):
     )
     gantry_angle: float = Field(
         default=0,
-        title="Gantry Angle [degrees]",
+        title="Gantry Angle [deg]",
         description="The gantry angle of the beam.",
     )
     coll_angle: float = Field(
         default=0,
-        title="Collimator Angle [degrees]",
+        title="Collimator Angle [deg]",
         description="The collimator angle of the beam.",
     )
     couch_vrt: float = Field(
-        default=0, title="Couch Vertical", description="The couch vertical position."
+        default=0,
+        title="Couch Vertical [mm]",
+        description="The couch vertical " "position.",
     )
     couch_lng: float = Field(
         default=1000,
-        title="Couch Longitudinal",
+        title="Couch Longitudinal [mm]",
         description="The couch longitudinal position.",
     )
     couch_lat: float = Field(
-        default=0, title="Couch Lateral", description="The couch lateral position."
+        default=0, title="Couch Lateral [mm]", description="The couch lateral position."
     )
     couch_rot: float = Field(
         default=0,
-        title="Couch Rotation [degrees]",
+        title="Couch Rotation [deg]",
         description="The couch rotation.",
     )
     jaw_padding: float = Field(
-        default=10, title="Jaw Padding", description="The padding to add to the X jaws."
+        default=10,
+        title="Jaw Padding [mm]",
+        description="The padding to add to the X jaws.",
     )
     beam_name: str = Field(
         default="Picket fence", title="Beam Name", description="The name of the beam."
