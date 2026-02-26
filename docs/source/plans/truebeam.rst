@@ -712,11 +712,102 @@ See :ref:`truebeam-open-field` for additional context on open field geometry.
 Picket Fence
 ------------
 
-.. autopydantic_model:: conjuror.plans.truebeam.PicketFence
-   :show-inheritance:
+The ``PicketFence`` procedure creates a single beam with alternating
+deliver-and-transition control points that form a sequence of narrow MLC strips
+("pickets"). This is commonly used for qualitative and quantitative checks of
+MLC positioning.
 
-.. automethod:: conjuror.plans.truebeam.PicketFence.from_varian_reference
-   :no-index:
+Basic Usage
+^^^^^^^^^^^
+
+To include a picket fence test in a generated plan:
+
+.. code-block:: python
+
+    import pydicom
+    from conjuror.plans.plan_generator import PlanGenerator
+    from conjuror.plans.truebeam import FluenceMode, PicketFence
+
+    base_plan = pydicom.dcmread(r"C:\path\to\base_plan.dcm")
+    generator = PlanGenerator(base_plan, plan_name="Picket Fence", plan_label="PF")
+
+    procedure = PicketFence(
+        picket_positions=(-60, -45, -30, -15, 0, 15, 30, 45, 60),  # mm
+        picket_width=1.0,  # mm
+    )
+    generator.add_procedure(procedure)
+
+    generator.to_file("picket_fence_plan.dcm")
+
+The following visualizations show the generated MLC motion and fluence map (gap used
+is 5mm for illustrative purposes):
+
+.. grid:: 2
+    :gutter: 2
+
+    .. grid-item::
+        :columns: 6
+
+        .. plotly::
+            :iframe-width: 100%
+            :iframe-height: 450px
+
+            from conjuror.plans.truebeam import PicketFence, TrueBeamMachine
+
+            procedure = PicketFence(picket_width=5.0)
+            machine = TrueBeamMachine(mlc_is_hd=False)
+            procedure.compute(machine)
+            beam = procedure.beams[0]
+            beam.animate_mlc(show=False)
+
+    .. grid-item::
+        :columns: 6
+
+        .. plotly::
+            :iframe-width: 100%
+            :iframe-height: 450px
+
+            from conjuror.images.simulators import IMAGER_AS1200
+            from conjuror.plans.truebeam import PicketFence, TrueBeamMachine
+
+            procedure = PicketFence(picket_width=5.0)
+            machine = TrueBeamMachine(mlc_is_hd=False)
+            procedure.compute(machine)
+            beam = procedure.beams[0]
+            beam.plot_fluence(IMAGER_AS1200, show=False)
+
+Customizing Parameters
+^^^^^^^^^^^^^^^^^^^^^^
+
+You can control picket geometry and delivery pacing through
+``picket_positions``, ``picket_width``, ``mu_per_picket``,
+``mu_per_transition``, ``skip_first_picket``, and ``jaw_padding``.
+Standard beam parameters (energy, fluence mode, dose rate, gantry/collimator
+angles, couch positions, beam name) are also available.
+
+.. code-block:: python
+
+    from conjuror.plans.machine import FluenceMode
+    from conjuror.plans.truebeam import PicketFence
+
+    procedure = PicketFence(
+        picket_positions=(-60, -45, -30, -15, 0, 15, 30, 45, 60),  # mm
+        picket_width=1.0,            # mm
+        mu_per_picket=8.0,           # MU
+        mu_per_transition=2.0,       # MU
+        skip_first_picket=True,
+        jaw_padding=10,              # mm
+        energy=6,
+        fluence_mode=FluenceMode.STANDARD,
+        dose_rate=600,               # MU/min
+        gantry_angle=0,
+        coll_angle=0,
+        couch_vrt=0,
+        couch_lng=1000,
+        couch_lat=0,
+        couch_rot=0,
+        beam_name="PF Custom",
+    )
 
 Dose Rate
 ---------
@@ -761,3 +852,4 @@ API Reference
 .. autopydantic_model:: conjuror.plans.truebeam.MLCTransmission
 .. autopydantic_model:: conjuror.plans.truebeam.DosimetricLeafGap
 .. autopydantic_model:: conjuror.plans.truebeam.WinstonLutz
+.. autopydantic_model:: conjuror.plans.truebeam.PicketFence
