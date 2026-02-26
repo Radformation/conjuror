@@ -575,7 +575,7 @@ class PicketFence(QAProcedure):
     couch_vrt: float = Field(
         default=0,
         title="Couch Vertical [mm]",
-        description="The couch vertical " "position.",
+        description="The couch vertical position.",
     )
     couch_lng: float = Field(
         default=1000,
