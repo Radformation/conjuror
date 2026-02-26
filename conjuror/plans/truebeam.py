@@ -1583,11 +1583,6 @@ class VMATDRGS(QAProcedure):
         title="MU Per Transition",
         description="The number of MUs to deliver while the MLCs move from one ROI to the next.",
     )
-    correct_fluence: bool = Field(
-        default=True,
-        title="Correct Fluence",
-        description="The original DRGS plans have an incorrect fluence on the initial and final transitions. Use False to replicate the original plans, otherwise use True to have a more uniform fluence.",
-    )
     gantry_motion_per_transition: float = Field(
         default=10.0,
         title="Gantry Motion Per Transition [degrees]",
@@ -1645,25 +1640,6 @@ class VMATDRGS(QAProcedure):
         title="Reference Beam MU",
         description="The number of MU's to be delivered in the reference beam (static beam).",
     )
-    reference_beam_add_before: bool = Field(
-        default=False,
-        title="Reference Beam Add Before",
-        description=(
-            "Whether to add the reference_beam before or after the dynamic beam. "
-            "If True, the gantry angle is set to the initial gantry angle of the dynamic beam. "
-            "If False, the gantry angle is set to the final gantry angle of the dynamic beam."
-        ),
-    )
-    dynamic_delivery_at_static_gantry: tuple[float, ...] = Field(
-        default=(),
-        title="Dynamic Delivery At Static Gantry",
-        description=(
-            "There is one beam created for each static gantry angle. These beams contain the same "
-            "control point sequence as the dynamic beam, but the gantry angle is replaced by a single "
-            "value. There will be no modulation of dose rate and gantry speeds, and can be used as an "
-            "alternative reference beam."
-        ),
-    )
     couch_vrt: float = Field(
         default=0, title="Couch Vertical", description="The couch vertical position."
     )
@@ -1715,7 +1691,6 @@ class VMATDRGS(QAProcedure):
             gantry_speeds=(2.75, 3.056, 3.438, 4.296, 4.8, 4.8, 4.8),
             mu_per_segment=48.0,
             mu_per_transition=8.0,
-            correct_fluence=False,
             gantry_motion_per_transition=10.0,
             gantry_rotation_clockwise=False,
             initial_gantry_offset=1.0,
@@ -1798,9 +1773,6 @@ class VMATDRGS(QAProcedure):
 
         # Finalize values
         dose_motion = np.array(dm)
-        if self.correct_fluence:
-            correction_factor = 1 - self.mlc_gap / strip_spacing
-            dose_motion[[1, -1]] = mu_per_transition * correction_factor
         cumulative_mu = np.cumsum(dose_motion)
         gantry_angles_without_offset = np.cumsum(gm)
         gantry_angles_var = gantry_angles_without_offset + self.initial_gantry_offset
@@ -1822,23 +1794,14 @@ class VMATDRGS(QAProcedure):
 
         # Create reference beam
         ref_meterset = [0, self.reference_beam_mu]
-        ref_ga = 2 * [float(gantry_angles[0 if self.reference_beam_add_before else -1])]
+        ref_ga = 2 * [float(gantry_angles[-1])]
         ref_mlc = 2 * [shaper.get_shape(Strip(0, self.mlc_span))]
         reference_beam = self._beam("VMAT-DRGS-Ref", ref_meterset, ref_ga, ref_mlc)
 
-        # Append the dynamic and reference beams according to the order defined in init
-        beams: list[Beam | None] = 2 * [None]
-        self._dynamic_beam_idx = 1 if self.reference_beam_add_before else 0
-        self._reference_beam_idx = 0 if self.reference_beam_add_before else 1
-        beams[self._dynamic_beam_idx] = dynamic_beam
-        beams[self._reference_beam_idx] = reference_beam
-
-        # Add static beams
-        for gantry_angle in self.dynamic_delivery_at_static_gantry:
-            beam = self._beam(
-                f"VMAT-DRGS-G{gantry_angle:03.0f}", cumulative_mu, [gantry_angle], mlc
-            )
-            beams.append(beam)
+        # Store beams
+        beams = [dynamic_beam, reference_beam]
+        self._dynamic_beam_idx = 0
+        self._reference_beam_idx = 1
 
         self.beams = beams
 
@@ -2010,25 +1973,6 @@ class VMATDRMLC(QAProcedure):
         title="Reference Beam MU",
         description="The number of MU's to be delivered in the reference beam (static beam).",
     )
-    reference_beam_add_before: bool = Field(
-        default=False,
-        title="Reference Beam Add Before",
-        description=(
-            "Whether to add the reference_beam before or after the dynamic beam. "
-            "If True, the gantry angle is set to the initial gantry angle of the dynamic beam. "
-            "If False, the gantry angle is set to the final gantry angle of the dynamic beam."
-        ),
-    )
-    dynamic_delivery_at_static_gantry: tuple[float, ...] = Field(
-        default=(),
-        title="Dynamic Delivery At Static Gantry",
-        description=(
-            "There is one beam created for each static gantry angle. These beams contain the same "
-            "control point sequence as the dynamic beam, but the gantry angle is replaced by a single "
-            "value. There will be no modulation of dose rate and gantry speeds, and can be used as an "
-            "alternative reference beam."
-        ),
-    )
     couch_vrt: float = Field(
         default=0, title="Couch Vertical", description="The couch vertical position."
     )
@@ -2086,7 +2030,6 @@ class VMATDRMLC(QAProcedure):
             jaw_padding=0.0,
             max_dose_rate=600,
             reference_beam_mu=120.0,
-            reference_beam_add_before=False,
         )
 
     def compute(self, machine: TrueBeamMachine):
@@ -2188,23 +2131,14 @@ class VMATDRMLC(QAProcedure):
 
         # Create reference beam
         ref_meterset = [0, self.reference_beam_mu]
-        ref_ga = 2 * [float(gantry_angles[0 if self.reference_beam_add_before else -1])]
+        ref_ga = 2 * [float(gantry_angles[-1])]
         ref_mlc = 2 * [shaper.get_shape(Strip.from_minmax(min(mlc_b), max(mlc_a)))]
         ref_beam = self._beam("VMAT-DRMLC-Ref", ref_meterset, ref_ga, ref_mlc)
 
-        # Append the dynamic and reference beams according to the order defined in init
-        beams: list[Beam | None] = 2 * [None]
-        self._dynamic_beam_idx = 1 if self.reference_beam_add_before else 0
-        self._reference_beam_idx = 0 if self.reference_beam_add_before else 1
-        beams[self._dynamic_beam_idx] = dynamic_beam
-        beams[self._reference_beam_idx] = ref_beam
-
-        # Add static beams
-        for gantry_angle in self.dynamic_delivery_at_static_gantry:
-            beam = self._beam(
-                f"VMAT-DRMLC-G{gantry_angle:03.0f}", cumulative_mu, [gantry_angle], mlc
-            )
-            beams.append(beam)
+        # Store beams
+        beams = [dynamic_beam, ref_beam]
+        self._dynamic_beam_idx = 0
+        self._reference_beam_idx = 1
 
         self.beams = beams
 
