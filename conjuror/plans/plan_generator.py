@@ -91,40 +91,10 @@ class PlanGenerator(Generic[TMachine]):
         date = datetime.datetime.now().strftime("%Y%m%d")
         time = datetime.datetime.now().strftime("%H%M%S")
 
-        #### Create mandatory tags (empty if not applicable)
-        plan = Dataset()
-
-        # SOP Common Module
-        plan.SOPClassUID = base_plan.SOPClassUID
+        plan = base_plan.copy()
         plan.SOPInstanceUID = generate_uid()
-
-        # Patient Module
-        plan.PatientBirthDate = ""
-        plan.PatientSex = ""
-
-        # General Study Module
-        plan.StudyDate = date
-        plan.StudyTime = time
-        plan.AccessionNumber = ""
-        plan.ReferringPhysicianName = ""
-        plan.StudyInstanceUID = generate_uid()
-        plan.StudyID = ""
-
-        # RT Series Module
-        plan.Modality = "RTPLAN"
-        plan.OperatorsName = ""
-        plan.SeriesInstanceUID = generate_uid()
-        plan.SeriesNumber = ""
-
-        # General Equipment Module
-        # Optional for Eclipse but mandatory for loading directly at machine
-        plan.Manufacturer = "Conjuror"
-
-        # RT General Plan Module
-        plan.RTPlanDate = date
-        plan.RTPlanTime = time
-        plan.RTPlanGeometry = "TREATMENT_DEVICE"
-        plan.PlanIntent = "MACHINE_QA"
+        plan.InstanceCreationDate = date
+        plan.InstanceCreationTime = time
 
         #### Input parameters
         plan.PatientName = patient_name
@@ -132,13 +102,6 @@ class PlanGenerator(Generic[TMachine]):
         plan.RTPlanLabel = plan_label
         plan.RTPlanName = plan_name
 
-        # RT Tolerance Tables Module - use first table from base plan
-        # Optional for Eclipse but mandatory for loading directly at machine
-        plan.ToleranceTableSequence = (base_plan.ToleranceTableSequence[0],)
-
-        #### Modules required for beams
-        # Use 1-indexing for sequence number per:
-        # https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_7.5.html
         # Patient Setup Sequence
         patient_setup = Dataset()
         patient_setup.PatientPosition = "HFS"
