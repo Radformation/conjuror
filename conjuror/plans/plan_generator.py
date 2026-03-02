@@ -118,7 +118,7 @@ class PlanGenerator(Generic[TMachine]):
 
         # General Equipment Module
         # Optional for Eclipse but mandatory for loading directly at machine
-        plan.Manufacturer = base_plan.Manufacturer
+        plan.Manufacturer = "Conjuror"
 
         # RT General Plan Module
         plan.RTPlanDate = date
