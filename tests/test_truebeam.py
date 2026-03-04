@@ -456,7 +456,7 @@ class TestMlcSpeed:
     def test_mlc_speed_too_wide(self):
         procedure = MLCSpeed(
             speeds=(0.5, 1, 1.5, 2),
-            roi_size_mm=50,
+            roi_size=50,
             y1=-100,
             y2=100,
         )
