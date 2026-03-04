@@ -1009,7 +1009,7 @@ class DoseRate(QAProcedure):
     max_sacrificial_move: float = Field(
         default=50,
         gt=0,
-        title="Max Sacrificial Move",
+        title="Max Sacrificial Move [mm]",
         description=(
             "The maximum distance the sacrificial leaves can move in a given control point. "
             "Smaller values generate more control points and more back-and-forth movement. "
