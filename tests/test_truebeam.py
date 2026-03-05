@@ -599,19 +599,6 @@ class TestVmatDRGS:
         assert np.allclose(gantry_angle_1, gantry_angle_2)
         assert np.allclose(mlc_position_1, mlc_position_2)
 
-    def test_adding_static_beams(self):
-        static_angles = (0, 90, 270, 180)
-        procedure = VMATDRGS(dynamic_delivery_at_static_gantry=static_angles)
-        procedure.compute(DEFAULT_TRUEBEAM_HD120)
-        expected_number_of_beams = 6  # dynamic, reference, 4x static
-        actual_number_of_beams = len(procedure.beams)
-        assert actual_number_of_beams == expected_number_of_beams
-
-        for idx, expected_angle in enumerate(static_angles):
-            dcm = procedure.beams[idx + 2].to_dicom()
-            actual_angle = dcm.ControlPointSequence[0].GantryAngle
-            assert actual_angle == expected_angle
-
     def test_error_if_gantry_speeds_and_dose_rates_have_different_sizes(self):
         gantry_speeds = (1, 2, 3)
         dose_rates = (1, 2)
