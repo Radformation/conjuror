@@ -1,3 +1,4 @@
+import copy
 import datetime
 import inspect
 import sys
@@ -91,7 +92,8 @@ class PlanGenerator(Generic[TMachine]):
         date = datetime.datetime.now().strftime("%Y%m%d")
         time = datetime.datetime.now().strftime("%H%M%S")
 
-        plan = base_plan.copy()
+        # prevent mutating base plan
+        plan = copy.deepcopy(base_plan)
         plan.SOPInstanceUID = generate_uid()
         plan.InstanceCreationDate = date
         plan.InstanceCreationTime = time
