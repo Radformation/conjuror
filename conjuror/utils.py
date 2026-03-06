@@ -1,4 +1,6 @@
 from datetime import datetime
+from enum import StrEnum
+from typing import Any
 
 import numpy as np
 from numpy import ndarray
@@ -143,3 +145,24 @@ def array_to_dicom(
     for key, value in extra_tags.items():
         setattr(ds, key, value)
     return ds
+
+
+class LabeledStrEnum(StrEnum):
+    """StrEnum with explicit (value, label) tuples and pydantic JSON schema support.
+
+    Each member is defined as ``NAME = "value", "Display Label"``. If the label
+    is omitted, it defaults to the title-cased value.
+    """
+
+    def __new__(cls, value: str, label: str = "") -> "LabeledStrEnum":
+        obj = str.__new__(cls, value)
+        obj._value_ = value
+        obj.label = label or value.replace("_", " ").title()
+        return obj
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict:
+        json_schema = handler(core_schema)
+        json_schema = handler.resolve_ref_schema(json_schema)
+        json_schema["x-enum-labels"] = {str(m.value): m.label for m in cls}
+        return json_schema
