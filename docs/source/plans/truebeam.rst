@@ -812,8 +812,113 @@ angles, couch positions, beam name) are also available.
 Dose Rate
 ---------
 
-.. autopydantic_model:: conjuror.plans.truebeam.DoseRate
-   :show-inheritance:
+The ``DoseRate`` procedure adds two dynamic beams to test dose rate constancy
+using a sequence of rectangular ROIs across the field.
+
+- **Reference**: reference delivery with no modulation.
+- **Modulated**: modulated delivery intended to achieve different dose rates per ROI.
+
+Basic Usage
+^^^^^^^^^^^
+
+.. code-block:: python
+
+    import pydicom
+    from conjuror.plans.plan_generator import PlanGenerator
+    from conjuror.plans.truebeam import DoseRate
+
+    base_plan = pydicom.dcmread(r"C:\path\to\base_plan.dcm")
+    generator = PlanGenerator(base_plan, plan_name="Dose Rate", plan_label="DR")
+
+    procedure = DoseRate(
+        dose_rates=(100, 300, 500, 600),  # MU/min (one ROI per value)
+        roi_size_mm=25,
+        desired_mu=50,
+        y1=-100,
+        y2=100,
+    )
+    generator.add_procedure(procedure)
+    generator.to_file("dose_rate_plan.dcm")
+
+How the modulation works
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Modulation is done through “sacrifices”, or “throws”, of MLC movement. Given that
+(for Varian at least) all axes move as fast as they can, the beam will not use a
+slower dose rate unless something else is slowing it down. In Conjuror, the axes are
+slowed down by moving the first and last MLC pair by a certain distance. Given a max
+leaf speed, the movement will take a known amount of time. This time is then used to
+calculate the dose rate. By constraining the desired MU of a given ROI with the
+sacrificial movements, the dose rate can be modulated to a target value.
+
+.. grid:: 2
+    :gutter: 2
+
+    .. grid-item::
+        :columns: 6
+
+        .. plotly::
+            :iframe-width: 100%
+            :iframe-height: 450px
+
+            from conjuror.plans.truebeam import DoseRate, TrueBeamMachine
+
+            procedure = DoseRate(dose_rates=(100, 300, 500, 600), y1=-100, y2=100)
+            machine = TrueBeamMachine(mlc_is_hd=False)
+            procedure.compute(machine)
+
+            # beams[0] = DR Ref, beams[1] = DRmin-max
+            beam = procedure.beams[1]
+            beam.animate_mlc(show=False)
+
+    .. grid-item::
+        :columns: 6
+
+        .. plotly::
+            :iframe-width: 100%
+            :iframe-height: 450px
+
+            from conjuror.images.simulators import IMAGER_AS1200
+            from conjuror.plans.truebeam import DoseRate, TrueBeamMachine
+
+            procedure = DoseRate(dose_rates=(100, 300, 500, 600), y1=-100, y2=100)
+            machine = TrueBeamMachine(mlc_is_hd=False)
+            procedure.compute(machine)
+            beam = procedure.beams[1]
+            beam.plot_fluence(IMAGER_AS1200, show=False)
+
+Customizing Parameters
+^^^^^^^^^^^^^^^^^^^^^^
+
+You can adjust the ROIs to test (``dose_rates``, ``roi_size``), the jaw geometry
+(``y1``, ``y2``, ``jaw_padding``), and delivery/modulation parameters such as
+``desired_mu``, ``default_dose_rate``, and ``max_sacrificial_move``. Standard
+beam parameters (energy, fluence mode, gantry/collimator angles, couch positions)
+are also available.
+
+.. code-block:: python
+
+    from conjuror.plans.machine import FluenceMode
+    from conjuror.plans.truebeam import DoseRate
+
+    procedure = DoseRate(
+        dose_rates=(100, 200, 400, 600),
+        default_dose_rate=600,
+        roi_size=25,
+        jaw_padding=5,
+        y1=-50,
+        y2=50,
+        desired_mu=100,
+        max_sacrificial_move=30,
+        energy=6,
+        fluence_mode=FluenceMode.STANDARD,
+        gantry_angle=0,
+        coll_angle=0,
+        couch_vrt=0,
+        couch_lng=1000,
+        couch_lat=0,
+        couch_rot=0,
+    )
 
 MLC Speed
 ---------
@@ -957,4 +1062,5 @@ API Reference
 .. autopydantic_model:: conjuror.plans.truebeam.DosimetricLeafGap
 .. autopydantic_model:: conjuror.plans.truebeam.WinstonLutz
 .. autopydantic_model:: conjuror.plans.truebeam.PicketFence
+.. autopydantic_model:: conjuror.plans.truebeam.DoseRate
 .. autopydantic_model:: conjuror.plans.truebeam.MLCSpeed
