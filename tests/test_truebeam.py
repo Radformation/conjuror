@@ -399,7 +399,7 @@ class TestDoseRate:
     def test_dose_rate_too_wide(self):
         procedure = DoseRate(
             dose_rates=(100, 150, 200, 250, 300, 350, 400, 600),
-            roi_size_mm=30,
+            roi_size=30,
             y1=-10,
             y2=10,
             desired_mu=123,
@@ -412,7 +412,7 @@ class TestDoseRate:
     def test_error_if_incorrect_sacrificial_move(self, msm):
         # msm = max_sacrificial_move
         with pytest.raises(ValueError):
-            DoseRate(max_sacrificial_move_mm=msm)
+            DoseRate(max_sacrificial_move=msm)
 
 
 class TestMlcSpeed:
@@ -476,7 +476,7 @@ class TestMlcSpeed:
     def test_error_if_incorrect_sacrificial_move(self, msm):
         # msm = max_sacrificial_move
         with pytest.raises(ValueError):
-            DoseRate(max_sacrificial_move_mm=msm)
+            DoseRate(max_sacrificial_move=msm)
 
 
 class TestGantrySpeed:

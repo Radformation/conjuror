@@ -944,19 +944,19 @@ class DoseRate(QAProcedure):
     )
     gantry_angle: float = Field(
         default=0,
-        title="Gantry Angle [degrees]",
+        title="Gantry Angle [deg]",
         description="The gantry angle of the beam.",
     )
     desired_mu: int = Field(
         default=50,
-        title="Desired MU",
+        title="Desired MU [MU]",
         description=(
             "The desired monitor units to deliver. Based on the dose rates requested, "
             "the actual MU required might be higher than this value."
         ),
     )
     energy: float = Field(
-        default=6, title="Energy", description="The energy of the beam."
+        default=6, title="Energy [MV]", description="The energy of the beam."
     )
     fluence_mode: FluenceMode = Field(
         default=FluenceMode.STANDARD,
@@ -965,46 +965,48 @@ class DoseRate(QAProcedure):
     )
     coll_angle: float = Field(
         default=0,
-        title="Collimator Angle [degrees]",
+        title="Collimator Angle [deg]",
         description="The collimator angle of the beam.",
     )
     couch_vrt: float = Field(
-        default=0, title="Couch Vertical", description="The couch vertical position."
+        default=0,
+        title="Couch Vertical [mm]",
+        description="The couch vertical " "position.",
     )
     couch_lat: float = Field(
-        default=0, title="Couch Lateral", description="The couch lateral position."
+        default=0, title="Couch Lateral [mm]", description="The couch lateral position."
     )
     couch_lng: float = Field(
         default=1000,
-        title="Couch Longitudinal",
+        title="Couch Longitudinal [mm]",
         description="The couch longitudinal position.",
     )
     couch_rot: float = Field(
         default=0,
-        title="Couch Rotation [degrees]",
+        title="Couch Rotation [deg]",
         description="The couch rotation.",
     )
-    jaw_padding_mm: float = Field(
+    jaw_padding: float = Field(
         default=5,
         title="Jaw Padding [mm]",
         description="The padding to add to the X jaws. The X-jaws will close around the ROIs plus this padding.",
     )
-    roi_size_mm: float = Field(
+    roi_size: float = Field(
         default=25,
         title="ROI Size [mm]",
         description="The width of the ROIs.",
     )
     y1: float = Field(
         default=-100,
-        title="Y1",
+        title="Y1 [mm]",
         description="The bottom jaw position. Usually negative. More negative is lower.",
     )
     y2: float = Field(
         default=100,
-        title="Y2",
+        title="Y2 [mm]",
         description="The top jaw position. Usually positive. More positive is higher.",
     )
-    max_sacrificial_move_mm: float = Field(
+    max_sacrificial_move: float = Field(
         default=50,
         gt=0,
         title="Max Sacrificial Move [mm]",
@@ -1016,12 +1018,12 @@ class DoseRate(QAProcedure):
     )
 
     def compute(self, machine: TrueBeamMachine) -> None:
-        if self.roi_size_mm * len(self.dose_rates) > machine.specs.max_mlc_overtravel:
+        if self.roi_size * len(self.dose_rates) > machine.specs.max_mlc_overtravel:
             raise ValueError(
                 "The ROI size * number of dose rates must be less than the overall MLC allowable width"
             )
         # calculate MU
-        mlc_transition_time = self.roi_size_mm / machine.specs.max_mlc_speed
+        mlc_transition_time = self.roi_size / machine.specs.max_mlc_speed
         min_mu = mlc_transition_time * max(self.dose_rates) * len(self.dose_rates) / 60
         mu = max(self.desired_mu, math.ceil(min_mu))
 
@@ -1035,31 +1037,31 @@ class DoseRate(QAProcedure):
         ]
 
         mlc = Beam.create_modulator(
-            machine, sacrifice_max_move_mm=self.max_sacrificial_move_mm
+            machine, sacrifice_max_move_mm=self.max_sacrificial_move
         )
         ref_mlc = Beam.create_modulator(machine)
 
         roi_centers = np.linspace(
-            -self.roi_size_mm * len(self.dose_rates) / 2 + self.roi_size_mm / 2,
-            self.roi_size_mm * len(self.dose_rates) / 2 - self.roi_size_mm / 2,
+            -self.roi_size * len(self.dose_rates) / 2 + self.roi_size / 2,
+            self.roi_size * len(self.dose_rates) / 2 - self.roi_size / 2,
             len(self.dose_rates),
         )
         # we have a starting and ending strip
         ref_mlc.add_strip(
-            position_mm=float(roi_centers[0] - self.roi_size_mm / 2),
+            position_mm=float(roi_centers[0] - self.roi_size / 2),
             strip_width_mm=0,
             meterset_at_target=0,
         )
         mlc.add_strip(
-            position_mm=float(roi_centers[0] - self.roi_size_mm / 2),
+            position_mm=float(roi_centers[0] - self.roi_size / 2),
             strip_width_mm=0,
             meterset_at_target=0,
             initial_sacrificial_gap_mm=5,
         )
         for sacrifice_distance, center in zip(sacrificial_movements, roi_centers):
             ref_mlc.add_rectangle(
-                left_position=center - self.roi_size_mm / 2,
-                right_position=center + self.roi_size_mm / 2,
+                left_position=center - self.roi_size / 2,
+                right_position=center + self.roi_size / 2,
                 x_outfield_position=-200,
                 top_position=max(machine.mlc_boundaries),
                 bottom_position=min(machine.mlc_boundaries),
@@ -1069,15 +1071,15 @@ class DoseRate(QAProcedure):
                 sacrificial_distance=0,
             )
             ref_mlc.add_strip(
-                position_mm=center + self.roi_size_mm / 2,
+                position_mm=center + self.roi_size / 2,
                 strip_width_mm=0,
                 meterset_at_target=0,
                 meterset_transition=0.5 / len(self.dose_rates),
                 sacrificial_distance_mm=0,
             )
             mlc.add_rectangle(
-                left_position=center - self.roi_size_mm / 2,
-                right_position=center + self.roi_size_mm / 2,
+                left_position=center - self.roi_size / 2,
+                right_position=center + self.roi_size / 2,
                 x_outfield_position=-200,  # not used
                 top_position=max(machine.mlc_boundaries),
                 bottom_position=min(machine.mlc_boundaries),
@@ -1087,7 +1089,7 @@ class DoseRate(QAProcedure):
                 sacrificial_distance=sacrifice_distance,
             )
             mlc.add_strip(
-                position_mm=center + self.roi_size_mm / 2,
+                position_mm=center + self.roi_size / 2,
                 strip_width_mm=0,
                 meterset_at_target=0,
                 meterset_transition=0.5 / len(self.dose_rates),
@@ -1097,8 +1099,8 @@ class DoseRate(QAProcedure):
             beam_name="DR Ref",
             energy=self.energy,
             dose_rate=self.default_dose_rate,
-            x1=float(roi_centers[0] - self.roi_size_mm / 2 - self.jaw_padding_mm),
-            x2=float(roi_centers[-1] + self.roi_size_mm / 2 + self.jaw_padding_mm),
+            x1=float(roi_centers[0] - self.roi_size / 2 - self.jaw_padding),
+            x2=float(roi_centers[-1] + self.roi_size / 2 + self.jaw_padding),
             y1=self.y1,
             y2=self.y2,
             gantry_angles=self.gantry_angle,
@@ -1117,8 +1119,8 @@ class DoseRate(QAProcedure):
             beam_name=f"DR{min(self.dose_rates)}-{max(self.dose_rates)}",
             energy=self.energy,
             dose_rate=self.default_dose_rate,
-            x1=float(roi_centers[0] - self.roi_size_mm / 2 - self.jaw_padding_mm),
-            x2=float(roi_centers[-1] + self.roi_size_mm / 2 + self.jaw_padding_mm),
+            x1=float(roi_centers[0] - self.roi_size / 2 - self.jaw_padding),
+            x2=float(roi_centers[-1] + self.roi_size / 2 + self.jaw_padding),
             y1=self.y1,
             y2=self.y2,
             gantry_angles=self.gantry_angle,
