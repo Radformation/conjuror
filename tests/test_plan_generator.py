@@ -87,6 +87,13 @@ class TestPlanGeneratorCreation:
         assert ds.RTPlanLabel == "label"
         assert len(ds.BeamSequence) == 1
 
+    def test_base_plan_is_not_mutated(self):
+        """Test that creating a plan generator from a file doesn't mutate the original file's dataset."""
+        dataset = pydicom.dcmread(TB_MIL_PLAN_FILE)
+        assert len(dataset.BeamSequence) > 0
+        PlanGenerator(dataset, plan_label="label", plan_name="name")
+        assert len(dataset.BeamSequence) > 0
+
 
 class TestPlanGeneratorParameters:
     def test_no_patient_id(self):
