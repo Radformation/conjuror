@@ -3,7 +3,6 @@ import warnings
 from abc import ABC
 from collections.abc import Iterable, Sequence
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
-from enum import StrEnum
 from typing import Self
 
 import numpy as np
@@ -22,7 +21,7 @@ from conjuror.plans.machine import (
     FluenceMode,
 )
 from conjuror.plans.beam import Beam as BeamBase
-from conjuror.utils import wrap360
+from conjuror.utils import wrap360, LabeledStrEnum
 
 # MLC boundaries are immutable by design, so they are stored as tuples.
 # However, pydicom expects lists, so these are converted to lists when necessary (Beam).
@@ -42,11 +41,11 @@ DEFAULT_SPECS_TB = MachineSpecs(
 )
 
 
-class MLCLeafBoundaryAlignmentMode(StrEnum):
-    EXACT = RectangleMode.EXACT
-    ROUND = RectangleMode.ROUND
-    INWARD = RectangleMode.INWARD
-    OUTWARD = RectangleMode.OUTWARD
+class MLCLeafBoundaryAlignmentMode(LabeledStrEnum):
+    EXACT = RectangleMode.EXACT, "Exact"
+    ROUND = RectangleMode.ROUND, "Round"
+    INWARD = RectangleMode.INWARD, "Inward"
+    OUTWARD = RectangleMode.OUTWARD, "Outward"
 
 
 class WinstonLutzField(BaseModel):

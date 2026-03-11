@@ -3,6 +3,8 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Self, TypeVar
 
+from conjuror.utils import LabeledStrEnum
+
 
 @dataclass(frozen=True)
 class MachineSpecs:
@@ -39,10 +41,10 @@ class MachineBase(ABC):
 TMachine = TypeVar("TMachine", bound=MachineBase)
 
 
-class GantryDirection(StrEnum):
-    CLOCKWISE = "CW"
-    COUNTER_CLOCKWISE = "CC"
-    NONE = "NONE"
+class GantryDirection(LabeledStrEnum):
+    CLOCKWISE = "CW", "Clockwise"
+    COUNTER_CLOCKWISE = "CC", "Counter-Clockwise"
+    NONE = "NONE", "None"
 
 
 class GantrySpeedTransition(StrEnum):
@@ -50,7 +52,7 @@ class GantrySpeedTransition(StrEnum):
     TRAILING = "trailing"
 
 
-class FluenceMode(StrEnum):
-    STANDARD = "STANDARD"
-    FFF = "FFF"
-    SRS = "SRS"
+class FluenceMode(LabeledStrEnum):
+    STANDARD = "STANDARD", "Standard"
+    FFF = "FFF", "FFF"
+    SRS = "SRS", "SRS"

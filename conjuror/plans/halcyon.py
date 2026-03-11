@@ -1,12 +1,12 @@
 from abc import ABC
 from collections.abc import Sequence
-from enum import StrEnum
 from pydantic import ConfigDict, Field
 
 import numpy as np
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
 
+from conjuror.utils import LabeledStrEnum
 from conjuror.plans.mlc import MLCModulator
 from conjuror.plans.plan_generator import QAProcedureBase
 from conjuror.plans.machine import MachineSpecs, MachineBase, FluenceMode
@@ -32,10 +32,10 @@ class HalcyonMachine(MachineBase):
         self.mlc_boundaries_prox = MLC_BOUNDARIES_HAL_PROX
 
 
-class Stack(StrEnum):
-    DISTAL = "distal"
-    PROXIMAL = "proximal"
-    BOTH = "both"
+class Stack(LabeledStrEnum):
+    DISTAL = "distal", "Distal"
+    PROXIMAL = "proximal", "Proximal"
+    BOTH = "both", "Both"
 
 
 class Beam(BeamBase[HalcyonMachine]):
