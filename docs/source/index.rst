@@ -19,3 +19,9 @@
    plans/overview
    plans/users_guide
    plans/truebeam
+
+.. toctree::
+   :hidden:
+   :caption: Reference
+
+   changelog

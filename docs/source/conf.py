@@ -12,6 +12,11 @@ project = "Conjuror"
 copyright = "2025, Joao Silveira"
 author = "Joao Silveira"
 
+from conjuror.version import __version__  # noqa
+
+version = ".".join(__version__.split(".")[:-1])  # chop off patch number
+release = __version__  # The full version, including alpha/beta/rc tags.
+
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
