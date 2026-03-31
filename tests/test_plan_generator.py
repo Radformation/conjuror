@@ -7,7 +7,7 @@ from plotly.graph_objects import Figure
 
 from conjuror.images.simulators import IMAGER_AS1200
 from conjuror.plans.plan_generator import PlanGenerator
-from conjuror.plans.machine import FluenceMode, TMachine
+from conjuror.plans.machine import FluenceMode
 from conjuror.plans.beam import Beam as BeamBase
 from conjuror.plans.halcyon import HalcyonMachine
 from conjuror.plans.truebeam import TrueBeamMachine, OpenField, Beam
@@ -42,19 +42,6 @@ class TestPlanGeneratorCreation:
             TB_MIL_PLAN_FILE, plan_label="label", plan_name="name"
         )
         assert pg.ds.Modality == "RTPLAN"
-
-    MACHINE_TEST_PARAMS = [
-        TrueBeamMachine(True),
-        TrueBeamMachine(False),
-        HalcyonMachine(),
-    ]
-
-    @pytest.mark.parametrize("machine", MACHINE_TEST_PARAMS)
-    def test_from_machine(self, machine: TMachine):
-        pg = PlanGenerator.from_machine(machine)
-        assert isinstance(pg.machine, type(machine))
-        if isinstance(machine, TrueBeamMachine):
-            assert machine.mlc_is_hd == pg.machine.mlc_is_hd
 
     MACHINE_TYPE_TEST_PARAMS = [
         (TB_MIL_PLAN_FILE, TrueBeamMachine, False),
@@ -93,6 +80,16 @@ class TestPlanGeneratorCreation:
         assert len(dataset.BeamSequence) > 0
         PlanGenerator(dataset, plan_label="label", plan_name="name")
         assert len(dataset.BeamSequence) > 0
+
+    def test_beam_manufacturer_copied_from_base_plan(self):
+        dataset = pydicom.dcmread(TB_MIL_PLAN_FILE)
+        expected_manufacturer = dataset.BeamSequence[0].Manufacturer
+        expected_model = dataset.BeamSequence[0].ManufacturerModelName
+        pg = PlanGenerator(dataset, plan_label="label", plan_name="name")
+        pg.add_procedure(OpenField(x1=-5, x2=5, y1=-5, y2=5))
+        for beam in pg.ds.BeamSequence:
+            assert beam.Manufacturer == expected_manufacturer
+            assert beam.ManufacturerModelName == expected_model
 
 
 class TestPlanGeneratorParameters:

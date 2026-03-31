@@ -696,8 +696,6 @@ class Beam(Generic[TMachine], BeamDynamicsMixin, BeamVisualizationMixin, ABC):
         number_of_control_points: int,
     ) -> Dataset:
         beam = Dataset()
-        beam.Manufacturer = "Conjuror"
-        beam.ManufacturerModelName = "Conjuror"
         beam.PrimaryDosimeterUnit = "MU"
         beam.SourceAxisDistance = 1000.0
 

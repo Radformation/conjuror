@@ -26,23 +26,16 @@ Typical use
 Creating a generator
 --------------------
 
-There are two ways to create a Plan Generator:
+To create a Plan Generator, a base RT Plan file (or dataset) from the target
+machine and institution is required. While plans created with the Plan
+Generator can, in principle, be loaded directly onto the treatment machine,
+it is recommended to first import them into Eclipse. Eclipse performs
+comprehensive plan validation, ensuring all tags conform to machine
+specifications. After validation, the plan can then be exported from Eclipse
+for delivery on the machine.
 
-* **Using a base plan file** -- Use this option when planning for a specific
-  machine available at the institution. It provides the simplest workflow for
-  importing the plan into Eclipse.
-* **Selecting a machine type directly** -- Use this option when no specific
-  machine is recommended, for example when sharing plans or creating plans
-  that apply to multiple machines.
-
-While plans created with the Plan Generator can, in principle, be loaded
-directly onto the treatment machine, it is recommended to first import them
-into Eclipse. Eclipse performs comprehensive plan validation, ensuring all
-tags conform to machine specifications. After validation, the plan can then
-be exported from Eclipse for delivery on the machine.
-
-Use case 1: Using a base plan
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Using a base plan
+^^^^^^^^^^^^^^^^^
 
 To use the Plan Generator with a base plan, a base RT Plan file (or dataset)
 is required from the specific machine and institution for which the plans will
@@ -110,41 +103,12 @@ new plan.
   this machine when importing.
 * Tolerance Table Sequence (300A, 0046) - The *first Tolerance Table* in this
   sequence is copied to the new plan.
-* BeamSequence (300A, 00B0) - At least on beam in this sequence must contain
+* BeamSequence (300A, 00B0) - At least one beam in this sequence must contain
   MLC positions. This is required to identify the machine type.
-
-Use case 2: Selecting a machine
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Alternatively, you can create a Plan Generator by directly specifying the machine type. This approach is useful when you don't have a base plan file available or when creating plans that don't need to be associated with a specific machine in a clinical database. The machine type determines the MLC configuration and other machine-specific parameters.
-
-.. code-block:: python
-
-    from conjuror.plans.plan_generator import PlanGenerator
-    from conjuror.plans.truebeam import TrueBeamMachine
-    from conjuror.plans.halcyon import HalcyonMachine
-
-    # create generator for a TrueBeam machine
-    machine = TrueBeamMachine(mlc_is_hd=False)
-    generator = PlanGenerator.from_machine(
-        machine,
-        machine_name="TrueBeam",
-        plan_name="New QA Plan",
-        plan_label="New QA",
-        patient_name="QA Patient",
-        patient_id="QA001"
-    )
-
-    # or create generator for a Halcyon machine
-    halcyon_machine = HalcyonMachine()
-    generator = PlanGenerator.from_machine(
-        halcyon_machine,
-        machine_name="Halcyon",
-        plan_name="New QA Plan",
-        plan_label="New QA",
-        patient_name="QA Patient",
-        patient_id="QA001"
-    )
+* Manufacturer (0008, 0070) - Copied to each generated beam item so that the
+  treatment machine accepts the plan during mode-up.
+* Manufacturer's Model Name (0008, 1090) - Copied to each generated beam item
+  for the same reason.
 
 Adding procedures
 -----------------
