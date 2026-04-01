@@ -19,6 +19,12 @@ General
 
 * :bdg-success:`Feature` Added versioning structure and changelog.
 
+Creating a generator
+^^^^^^^^^^^^^^^^^^^^
+
+* :bdg-warning:`Fixed` The beam ``Manufacturer`` and ``ManufacturerModelName`` are now
+  imported from the base plan.
+
 v 0.1.2
 -------
 
