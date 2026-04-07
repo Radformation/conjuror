@@ -31,8 +31,8 @@ definitions:
               - "**.py"
               - "docs/**"
         script:
-          - pip install nox
-          - nox -s build_docs
+          - uv sync --group docs
+          - uv run nox -s build_docs
 
     - step: &run-tests
         name: Run Tests
@@ -43,7 +43,7 @@ definitions:
               - "**.py"
               - "pyproject.toml"
         script:
-          - uv pip install .[developer] --system
+          - uv sync --group dev
           - uv run pytest --junitxml=./test-reports/conjuror_results.xml
 
     - step: &push-to-github

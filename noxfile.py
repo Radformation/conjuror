@@ -2,9 +2,16 @@ import nox
 from nox import Session
 
 
+def install_project_groups(session: Session, *groups: str) -> None:
+    args = ["sync", "--active", "--locked", "--no-default-groups"]
+    for group in groups:
+        args.extend(["--group", group])
+    session.run_install("uv", *args, external=True)
+
+
 @nox.session(reuse_venv=True, venv_backend="uv|virtualenv")
 def serve_docs(session: Session):
-    session.install(".[docs]")
+    install_project_groups(session, "docs")
     session.run(
         "sphinx-autobuild",
         "docs/source",
@@ -18,7 +25,7 @@ def serve_docs(session: Session):
 @nox.session(reuse_venv=True, venv_backend="uv|virtualenv")
 def build_docs(session: Session):
     """Build the docs; used in CI pipelines to test the build. Will always rebuild and will always fail if there are any warnings"""
-    session.install(".[docs]")
+    install_project_groups(session, "docs")
     session.run(
         "sphinx-build",
         "docs/source",
