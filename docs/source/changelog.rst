@@ -15,7 +15,7 @@ v 0.2.1
 -------
 
 Truebeam
-^^^^^^^
+^^^^^^^^
 
 * :bdg-warning:`Fixed` Removed X and Y from beam limiting devices sequence. Now
   it consists of ASYMX, ASYMY and MLC.
