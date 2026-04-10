@@ -38,7 +38,7 @@ class TestBeam:
         )
         pg.add_procedure(OpenField(x1=-10, x2=10, y1=-10, y2=10))
         dataset = pg.ds
-        beam_sequence = dataset.beam_sequence[0]
+        beam_sequence = dataset.BeamSequence[0]
         beam_limiting_device_sequence = beam_sequence.BeamLimitingDeviceSequence
         actual_numer_of_beam_limiting_device_sequence = len(
             beam_limiting_device_sequence
