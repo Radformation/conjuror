@@ -139,12 +139,6 @@ class Beam(BeamBase[TrueBeamMachine]):
         couch_rot : float
             The couch rotation.
         """
-        jaw_x = Dataset()
-        jaw_x.RTBeamLimitingDeviceType = "X"
-        jaw_x.NumberOfLeafJawPairs = 1
-        jaw_y = Dataset()
-        jaw_y.RTBeamLimitingDeviceType = "Y"
-        jaw_y.NumberOfLeafJawPairs = 1
         jaw_asymx = Dataset()
         jaw_asymx.RTBeamLimitingDeviceType = "ASYMX"
         jaw_asymx.NumberOfLeafJawPairs = 1
@@ -158,7 +152,7 @@ class Beam(BeamBase[TrueBeamMachine]):
             MLC_BOUNDARIES_TB_HD120 if mlc_is_hd else MLC_BOUNDARIES_TB_MIL120
         )
 
-        bld_sequence = DicomSequence((jaw_x, jaw_y, jaw_asymx, jaw_asymy, mlc))
+        bld_sequence = DicomSequence((jaw_asymx, jaw_asymy, mlc))
 
         beam_limiting_device_positions = {
             "ASYMX": [[x1, x2]],

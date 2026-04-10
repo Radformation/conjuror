@@ -11,6 +11,15 @@ Legend
   boost or code cleanup.
 * :bdg-danger:`Change` denotes a change that may break existing code.
 
+v 0.2.1
+-------
+
+Truebeam
+^^^^^^^^
+
+* :bdg-warning:`Fixed` Removed X and Y from beam limiting devices sequence. Now
+  it consists of ASYMX, ASYMY and MLC.
+
 v 0.2.0
 -------
 
