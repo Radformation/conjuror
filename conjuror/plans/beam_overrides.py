@@ -1,6 +1,9 @@
+import re
 from collections.abc import Callable
 from functools import partial
 from typing import Any, Literal, TypeAlias
+
+from pydicom.sequence import Sequence as DicomSequence
 
 BeamOverrideTag: TypeAlias = Literal[
     "BeamName",
@@ -81,3 +84,84 @@ def validate_overrides(
                 raise ValueError(
                     f"Invalid value for tag '{tag}' on beam number {beam_num}: {e}"
                 ) from e
+
+
+# DICOM keywords are letters only (PascalCase); optional [n] for SQ indexing.
+DICOM_TAG_RE = re.compile(r"^([A-Z][A-Za-z]*)(?:\[(\d+)\])?$")
+
+
+def parse_dicom_path_segment(segment: str) -> tuple[str, int | None]:
+    m = DICOM_TAG_RE.fullmatch(segment.strip())
+    if not m:
+        raise ValueError(f"Invalid DICOM path segment: {segment!r}")
+    name, idx_s = m.group(1), m.group(2)
+    return name, int(idx_s) if idx_s is not None else None
+
+
+def apply_beam_override(
+    beam_sequence: DicomSequence,
+    beam_index: int,
+    dicom_path: str,
+    value: Any,
+) -> None:
+    """Set ``value`` on one beam item using a dotted path (``BeamName`` or ``Seq[0].Leaf``).
+
+    Preconditions:
+    - Path and value should already be validated
+    - Each keyword along the path must exist on the current dataset
+    - Sequence segments must use ``Name[index]`` syntax.
+    """
+    if beam_index < 0 or beam_index >= len(beam_sequence):
+        raise IndexError(f"beam_index {beam_index} out of range for BeamSequence")
+
+    current = beam_sequence[beam_index]
+    parts = dicom_path.split(".")
+    for i, segment in enumerate(parts):
+        name, idx = parse_dicom_path_segment(segment)
+        is_last = i == len(parts) - 1
+        if is_last:
+            # Update Tag if we're at the leaf node
+            if idx is not None:
+                raise ValueError(
+                    f"Final path segment must not use indexing: {segment} in {dicom_path}"
+                )
+            if name not in current:
+                raise KeyError(
+                    f"Beam {beam_index}: keyword {name} not present for path {dicom_path}"
+                )
+            setattr(current, name, value)
+            return
+
+        # To iterate into a sequence, we must have an index.
+        if idx is None:
+            raise ValueError(
+                f"Beam {beam_index}: segment {segment} in {dicom_path} must use "
+                f"indexing (e.g. {name}[0]) before further components"
+            )
+        if name not in current:
+            raise KeyError(
+                f"Beam {beam_index}: keyword {name} not present for path {dicom_path}"
+            )
+        elem = current[name]
+        if elem.VR != "SQ":
+            raise ValueError(
+                f"Beam {beam_index}: {name} is not a sequence (VR={elem.VR}) in {dicom_path}"
+            )
+        sq: DicomSequence = elem.value
+        if idx < 0 or idx >= len(sq):
+            raise IndexError(
+                f"Beam {beam_index}: index [{idx}] out of range for {name} "
+                f"(len={len(sq)}) in {dicom_path}"
+            )
+        current = sq[idx]
+
+
+def apply_beam_overrides(
+    beam_sequence: DicomSequence,
+    overrides: BeamOverrides,
+    beam_start: int,
+) -> None:
+    """Apply all overrides; ``beam_start`` is the BeamSequence index of procedure-local beam 0."""
+    for tag, per_beam in overrides.items():
+        for local_idx, val in per_beam.items():
+            apply_beam_override(beam_sequence, beam_start + local_idx, tag, val)

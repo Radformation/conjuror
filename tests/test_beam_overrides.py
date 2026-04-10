@@ -2,12 +2,19 @@ import inspect
 import unittest
 from typing import Any, get_args
 
+import pytest
 from parameterized import parameterized
 
 from conjuror.plans import halcyon, truebeam
+from pydicom.dataset import Dataset
+from pydicom.sequence import Sequence as DicomSequence
+
 from conjuror.plans.beam_overrides import (
     BEAM_OVERRIDE_VALIDATORS,
     BeamOverrideTag,
+    apply_beam_override,
+    apply_beam_overrides,
+    parse_dicom_path_segment,
 )
 from conjuror.plans.plan_generator import PlanGenerator, QAProcedureBase
 from tests.utils import get_file_from_cloud_test_repo
@@ -41,6 +48,16 @@ VALID_OVERRIDES = {
     "ControlPointSequence[0].PatientSupportAngle": 45.0,
 }
 
+# Quick helpers to validate that the overrides were successful. Uses the
+# overrides defined above.
+VALIDATE_OVERRIDES = {
+    "BeamName": lambda beam: beam.BeamName == VALID_OVERRIDES["BeamName"],
+    "ControlPointSequence[0].PatientSupportAngle": lambda beam: beam.ControlPointSequence[
+        0
+    ].PatientSupportAngle
+    == VALID_OVERRIDES["ControlPointSequence[0].PatientSupportAngle"],
+}
+
 INVALID_OVERRIDES = {
     "BeamName": "",
     "ControlPointSequence[0].PatientSupportAngle": 400.0,
@@ -51,6 +68,50 @@ def test_literal_tags_match_validator_keys():
     literal_tags = set(get_args(BeamOverrideTag))
     validator_tags = set(BEAM_OVERRIDE_VALIDATORS)
     assert literal_tags == validator_tags
+
+
+@pytest.mark.parametrize(
+    ("segment", "expected"),
+    [
+        ("BeamName", ("BeamName", None)),
+        ("PatientSupportAngle", ("PatientSupportAngle", None)),
+        ("A", ("A", None)),
+        ("XY", ("XY", None)),
+        ("ControlPointSequence[0]", ("ControlPointSequence", 0)),
+        ("ControlPointSequence[999]", ("ControlPointSequence", 999)),
+        ("BeamName[0]", ("BeamName", 0)),
+        ("  BeamName  ", ("BeamName", None)),
+        ("ControlPointSequence[12] ", ("ControlPointSequence", 12)),
+    ],
+)
+def test_valid_parse_dicom_path_segment(
+    segment: str, expected: tuple[str, int | None]
+) -> None:
+    assert parse_dicom_path_segment(segment) == expected
+
+
+@pytest.mark.parametrize(
+    "segment",
+    [
+        "",
+        " ",
+        "beamName",
+        "Beam_name",
+        "Beam0",
+        "0Beam",
+        "Beam Name",
+        "ControlPointSequence[]",
+        "ControlPointSequence[x]",
+        "ControlPointSequence[1a]",
+        "ControlPointSequence[",
+        "[0]",
+        "[[0]]",
+        ".BeamName",
+    ],
+)
+def test_invalid_parse_dicom_path_segment(segment: str) -> None:
+    with pytest.raises(ValueError, match="Invalid DICOM path segment"):
+        parse_dicom_path_segment(segment)
 
 
 class TestBeamOverrideProcedureAllowLists(unittest.TestCase):
@@ -125,8 +186,8 @@ class TestAddProcedureBeamOverride(unittest.TestCase):
         before = len(pg.ds.BeamSequence)
         pg.add_procedure(proc, beam_overrides={tag: {0: VALID_OVERRIDES[tag]}})
 
-        # Just check that the override was valid and the beams were added
         assert len(pg.ds.BeamSequence) == before + len(proc.beams)
+        assert VALIDATE_OVERRIDES[tag](pg.ds.BeamSequence[before])
 
     @parameterized.expand(
         [
@@ -170,8 +231,8 @@ class TestAddProcedureBeamOverride(unittest.TestCase):
         before = len(pg.ds.BeamSequence)
         pg.add_procedure(proc, beam_overrides={tag: {0: VALID_OVERRIDES[tag]}})
 
-        # Just check that the override was valid and the beams were added
         assert len(pg.ds.BeamSequence) == before + len(proc.beams)
+        assert VALIDATE_OVERRIDES[tag](pg.ds.BeamSequence[before])
 
     @parameterized.expand(
         [
@@ -195,3 +256,59 @@ class TestAddProcedureBeamOverride(unittest.TestCase):
 
         # No beams added to plan
         assert len(pg.ds.BeamSequence) == before
+
+
+class TestApplyBeamOverride(unittest.TestCase):
+    @staticmethod
+    def _beam_with_cp() -> Dataset:
+        cp = Dataset()
+        cp.PatientSupportAngle = 0.0
+        b = Dataset()
+        b.BeamName = "orig"
+        b.ControlPointSequence = DicomSequence([cp])
+        return b
+
+    def test_sets_beam_name_leaf(self) -> None:
+        seq = DicomSequence([self._beam_with_cp()])
+        assert seq[0].BeamName == "orig"
+        apply_beam_override(seq, 0, "BeamName", "newname")
+        assert seq[0].BeamName == "newname"
+
+    def test_sets_nested_patient_support_angle(self) -> None:
+        seq = DicomSequence([self._beam_with_cp()])
+        assert seq[0].ControlPointSequence[0].PatientSupportAngle == 0.0
+        apply_beam_override(seq, 0, "ControlPointSequence[0].PatientSupportAngle", 88.5)
+        assert seq[0].ControlPointSequence[0].PatientSupportAngle == 88.5
+
+    def test_beam_index_out_of_range(self) -> None:
+        seq = DicomSequence([Dataset()])
+        with self.assertRaises(IndexError):
+            apply_beam_override(seq, 1, "BeamName", "x")
+
+    def test_missing_leaf_keyword(self) -> None:
+        b = Dataset()
+        b.BeamName = "a"
+        seq = DicomSequence([b])
+        with self.assertRaises(KeyError):
+            apply_beam_override(seq, 0, "GantryAngle", 0.0)
+
+    def test_sequence_segment_without_index_raises(self) -> None:
+        seq = DicomSequence([self._beam_with_cp()])
+        with self.assertRaises(ValueError):
+            apply_beam_override(seq, 0, "ControlPointSequence.PatientSupportAngle", 1.0)
+
+    def test_apply_beam_overrides_multiple_beams(self) -> None:
+        beams = DicomSequence([self._beam_with_cp(), self._beam_with_cp()])
+        apply_beam_overrides(
+            beams,
+            {"BeamName": {0: "B0", 1: "B1"}},
+            beam_start=0,
+        )
+        assert beams[0].BeamName == "B0"
+        assert beams[1].BeamName == "B1"
+
+    def test_apply_beam_overrides_beam_start_offset(self) -> None:
+        beams = DicomSequence([self._beam_with_cp(), self._beam_with_cp()])
+        apply_beam_overrides(beams, {"BeamName": {0: "second"}}, beam_start=1)
+        assert beams[0].BeamName == "orig"
+        assert beams[1].BeamName == "second"

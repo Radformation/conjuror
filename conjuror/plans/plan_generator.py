@@ -20,6 +20,7 @@ from conjuror.plans.beam import Beam
 from conjuror.plans.beam_overrides import (
     BeamOverrideTag,
     BeamOverrides,
+    apply_beam_overrides,
     validate_overrides,
 )
 from conjuror.plans.machine import TMachine, MachineSpecs
@@ -212,8 +213,12 @@ class PlanGenerator(Generic[TMachine]):
                 max_beams=len(procedure.beams),
             )
 
+        beam_start = len(self.ds.BeamSequence)
         for beam in procedure.beams:
             self.add_beam(beam)
+
+        if beam_overrides:
+            apply_beam_overrides(self.ds.BeamSequence, beam_overrides, beam_start)
 
     def to_file(self, filename: str | Path) -> None:
         """Write the DICOM dataset to file"""
