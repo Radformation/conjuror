@@ -29,6 +29,27 @@ DEFAULT_TRUEBEAM_HD120 = TrueBeamMachine(mlc_is_hd=True)
 RUN_PLOT_TESTS = True
 
 
+class TestBeam:
+    def test_blds(self):
+        pg = PlanGenerator.from_rt_plan_file(
+            TB_MIL_PLAN_FILE,
+            plan_label="label",
+            plan_name="my name",
+        )
+        pg.add_procedure(OpenField(x1=-10, x2=10, y1=-10, y2=10))
+        dataset = pg.ds
+        beam_sequence = dataset.beam_sequence[0]
+        beam_limiting_device_sequence = beam_sequence.BeamLimitingDeviceSequence
+        actual_numer_of_beam_limiting_device_sequence = len(
+            beam_limiting_device_sequence
+        )
+        expected_numer_of_beam_limiting_device_sequence = 3
+        assert (
+            actual_numer_of_beam_limiting_device_sequence
+            == expected_numer_of_beam_limiting_device_sequence
+        )
+
+
 class TestProcedures:
     def test_adding_procedure(self):
         pg = PlanGenerator.from_rt_plan_file(
