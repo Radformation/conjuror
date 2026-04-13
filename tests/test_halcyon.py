@@ -25,13 +25,12 @@ class TestHalcyonPrefabs:
         procedure = PicketFence(
             stack=Stack.PROXIMAL,
             mu=123,
-            beam_name="Picket Fence",
             strip_positions_mm=(-50, -30, -10, 10, 30, 50),
         )
         self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         assert len(dcm.BeamSequence) == 1
-        assert dcm.BeamSequence[0].BeamName == "Picket Fence"
+        assert dcm.BeamSequence[0].BeamName == "PF"
         assert dcm.BeamSequence[0].BeamNumber == 1
         assert dcm.FractionGroupSequence[0].NumberOfBeams == 1
         assert (
@@ -59,13 +58,12 @@ class TestHalcyonPrefabs:
         procedure = PicketFence(
             stack=Stack.DISTAL,
             mu=123,
-            beam_name="Picket Fence",
             strip_positions_mm=(-50, -30, -10, 10, 30, 50),
         )
         self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         assert len(dcm.BeamSequence) == 1
-        assert dcm.BeamSequence[0].BeamName == "Picket Fence"
+        assert dcm.BeamSequence[0].BeamName == "PF"
         assert dcm.BeamSequence[0].BeamNumber == 1
         assert dcm.FractionGroupSequence[0].NumberOfBeams == 1
         assert (
@@ -93,13 +91,12 @@ class TestHalcyonPrefabs:
         procedure = PicketFence(
             stack=Stack.BOTH,
             mu=123,
-            beam_name="Picket Fence",
             strip_positions_mm=(-50, -30, -10, 10, 30, 50),
         )
         self.pg.add_procedure(procedure)
         dcm = self.pg.as_dicom()
         assert len(dcm.BeamSequence) == 1
-        assert dcm.BeamSequence[0].BeamName == "Picket Fence"
+        assert dcm.BeamSequence[0].BeamName == "PF"
         assert dcm.BeamSequence[0].BeamNumber == 1
         assert dcm.FractionGroupSequence[0].NumberOfBeams == 1
         assert (

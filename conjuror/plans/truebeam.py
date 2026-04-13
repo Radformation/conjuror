@@ -3,6 +3,7 @@ import warnings
 from abc import ABC
 from collections.abc import Iterable, Sequence
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic.json_schema import SkipJsonSchema
 from typing import Self
 
 import numpy as np
@@ -299,7 +300,7 @@ class OpenField(QAProcedure):
         title="Padding [mm]",
         description="The padding to add to the jaws or MLCs.",
     )
-    beam_name: str = Field(
+    beam_name: SkipJsonSchema[str] = Field(
         default="Open", title="Beam Name", description="The name of the beam."
     )
     outside_strip_width: float = Field(
@@ -373,11 +374,6 @@ class MLCTransmission(QAProcedure):
         title="Overreach [mm]",
         description="The amount to tuck the MLCs under the jaws.",
     )
-    beam_names: list[str] = Field(
-        default=["MLC Tx - Ref", "MLC Tx - Bank-A", "MLC Tx - Bank-B"],
-        title="Beam Names",
-        description="A list containing the names of the beams to use in the following order: reference beam, transmission beam bank A, transmission beam bank B.",
-    )
     energy: int = Field(
         default=6,
         title="Energy [MV]",
@@ -448,8 +444,7 @@ class MLCTransmission(QAProcedure):
         self._y2 = self.height / 2
         self._mlc_is_hd = machine.mlc_is_hd
 
-        keys = ["Ref", "A", "B"]
-        names = dict(zip(keys, self.beam_names))
+        names = {"Ref": "MLC Tx - Ref", "A": "MLC Tx - Bank-A", "B": "MLC Tx - Bank-B"}
         shaper = Beam.create_shaper(machine)
 
         # Reference field
@@ -588,9 +583,6 @@ class PicketFence(QAProcedure):
         title="Jaw Padding [mm]",
         description="The padding to add to the X jaws.",
     )
-    beam_name: str = Field(
-        default="Picket fence", title="Beam Name", description="The name of the beam."
-    )
 
     @classmethod
     def from_varian_reference(cls) -> Self:
@@ -641,7 +633,7 @@ class PicketFence(QAProcedure):
         metersets = np.cumsum(mu)
 
         beam = Beam(
-            beam_name=self.beam_name,
+            beam_name="Picket fence",
             energy=self.energy,
             dose_rate=self.dose_rate,
             x1=x1,
@@ -1221,11 +1213,6 @@ class MLCSpeed(QAProcedure):
         title="Y2 [mm]",
         description="The top jaw position. Usually positive. More positive is higher.",
     )
-    beam_name: str = Field(
-        default="MLC Speed",
-        title="Beam Name",
-        description="The name of the beam. The reference beam will be named '{beam_name} Ref'.",
-    )
     max_sacrificial_move: float = Field(
         default=50,
         gt=0,
@@ -1314,7 +1301,7 @@ class MLCSpeed(QAProcedure):
                 sacrificial_distance_mm=sacrifice_distance,
             )
         ref_beam = Beam(
-            beam_name=f"{self.beam_name} Ref",
+            beam_name="MLC Speed Ref",
             energy=self.energy,
             dose_rate=self.default_dose_rate,
             x1=float(roi_centers[0] - self.roi_size / 2 - self.jaw_padding),
@@ -1334,7 +1321,7 @@ class MLCSpeed(QAProcedure):
         )
         self.beams.append(ref_beam)
         beam = Beam(
-            beam_name=self.beam_name,
+            beam_name="MLC Speed",
             energy=self.energy,
             dose_rate=self.default_dose_rate,
             x1=float(roi_centers[0] - self.roi_size / 2 - self.jaw_padding),
@@ -1424,9 +1411,6 @@ class GantrySpeed(QAProcedure):
         title="Couch Rotation [degrees]",
         description="The couch rotation.",
     )
-    beam_name: str = Field(
-        default="GS", title="Beam Name", description="The name of the beam."
-    )
     gantry_rot_dir: GantryDirection = Field(
         default=GantryDirection.CLOCKWISE,
         title="Gantry Rotation Direction",
@@ -1514,7 +1498,7 @@ class GantrySpeed(QAProcedure):
             )
 
         beam = Beam(
-            beam_name=self.beam_name,
+            beam_name="GS",
             energy=self.energy,
             dose_rate=self.max_dose_rate,
             x1=min(roi_centers) - self.roi_size_mm - self.jaw_padding_mm,
@@ -1534,7 +1518,7 @@ class GantrySpeed(QAProcedure):
         )
         self.beams.append(beam)
         ref_beam = Beam(
-            beam_name=f"{self.beam_name} Ref",
+            beam_name="GS Ref",
             energy=self.energy,
             dose_rate=self.max_dose_rate,
             x1=min(roi_centers) - self.roi_size_mm - self.jaw_padding_mm,

@@ -199,13 +199,6 @@ class TestMLCTransmission:
             assert np.all(bld["ASYMX"] == [[-50, -50], [50, 50]])
             assert np.all(bld["ASYMY"] == [[-50, -50], [50, 50]])
 
-    def test_beam_names(self):
-        beam_names = ["Ref", "A", "B"]
-        procedure = MLCTransmission(beam_names=beam_names)
-        procedure.compute(DEFAULT_TRUEBEAM_HD120)
-        actual = [b.beam_name for b in procedure.beams]
-        assert beam_names == actual
-
 
 class TestPicketFence:
     def test_defaults(self):
