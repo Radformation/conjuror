@@ -173,6 +173,37 @@ supported methods for creating custom machine specifications:
     generator = PlanGenerator(..., machine_specs=specs)
 
 
+Override DICOM tags in beams
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Beam overrides allow per-beam DICOM tag modifications to be applied after a
+procedure has been computed. They are passed as an optional argument to
+``add_procedure``. The overrides are specified as a dictionary mapping a tag
+name to a dictionary of beam index / value pairs. Beam indices are 0-based
+and local to the procedure being added.
+
+The two currently supported tags are:
+
+* ``BeamName`` -- The name of the beam. Must be a non-empty string with a
+  maximum length of 64 characters.
+* ``ControlPointSequence[0].PatientSupportAngle`` -- The couch angle on
+  the first control point. Must be a numeric value between -360.0 and 360.0
+  degrees (inclusive).
+
+.. code-block:: python
+
+    from conjuror.plans.truebeam import OpenField
+
+    procedure = OpenField(x1=-5, x2=5, y1=-10, y2=10)
+    generator.add_procedure(
+        procedure,
+        beam_overrides={
+            "BeamName": {0: "My Custom Beam Name"},
+            "ControlPointSequence[0].PatientSupportAngle": {0: 90.0},
+        },
+    )
+
+
 Create custom procedures
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
