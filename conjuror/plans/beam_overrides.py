@@ -23,6 +23,21 @@ BeamOverride: TypeAlias = dict[int, Any]
 BeamOverrides: TypeAlias = dict[BeamOverrideTag, BeamOverride]
 
 
+class BeamOverrideError(Exception):
+    """Structured error for beam overrides."""
+
+    def __init__(
+        self,
+        message: str,
+        beam_index: int | None = None,
+        dicom_tag: str | None = None,
+    ) -> None:
+        self.beam_index = beam_index
+        self.dicom_tag = dicom_tag
+        self.message = message
+        super().__init__(message)
+
+
 def validate_dicom_keyword_value(keyword: str, value: Any) -> None:
     """Validate *value* against the VR of the given DICOM keyword.
 
@@ -71,32 +86,43 @@ def validate_overrides(
     """Validate that the overrides are in the correct format and that the tags are valid."""
     for tag, beam_override in overrides.items():
         if tag not in valid_tags:
-            raise ValueError(
-                f"Invalid tag '{tag}' in overrides. Valid tags are: {valid_tags}"
+            raise BeamOverrideError(
+                f"Invalid tag in overrides. Valid tags are: {valid_tags}",
+                dicom_tag=tag,
             )
         if not isinstance(beam_override, dict):
-            raise ValueError(
-                f"Beam override for tag '{tag}' must be a dictionary of beam number to value."
+            raise BeamOverrideError(
+                "Beam override must be a dictionary of beam number to value.",
+                dicom_tag=tag,
             )
         for beam_num, value in beam_override.items():
             if not isinstance(beam_num, int):
-                raise ValueError(
-                    f"Beam number '{beam_num}' in overrides for tag '{tag}' must be an integer."
+                raise BeamOverrideError(
+                    "Beam number must be an integer.",
+                    beam_index=beam_num,
+                    dicom_tag=tag,
                 )
             if beam_num < 0 or beam_num >= max_beams:
-                raise ValueError(
-                    f"Beam number '{beam_num}' in overrides for tag '{tag}' must be between 0 and {max_beams - 1}."
+                raise BeamOverrideError(
+                    f"Beam number must be between 0 and {max_beams - 1}.",
+                    beam_index=beam_num,
+                    dicom_tag=tag,
                 )
-            # Validate the value using the appropriate validator for the tag
             validator = BEAM_OVERRIDE_VALIDATORS.get(tag)
             if not validator:
-                raise ValueError(f"No validator found for tag '{tag}'")
+                raise BeamOverrideError(
+                    "No validator found for tag",
+                    beam_index=beam_num,
+                    dicom_tag=tag,
+                )
 
             try:
                 validator(value)
             except Exception as e:
-                raise ValueError(
-                    f"Invalid value for tag '{tag}' on beam number {beam_num}: {e}"
+                raise BeamOverrideError(
+                    str(e),
+                    beam_index=beam_num,
+                    dicom_tag=tag,
                 ) from e
 
 
@@ -178,4 +204,11 @@ def apply_beam_overrides(
     """Apply all overrides; ``beam_start`` is the BeamSequence index of procedure-local beam 0."""
     for tag, per_beam in overrides.items():
         for local_idx, val in per_beam.items():
-            apply_beam_override(beam_sequence, beam_start + local_idx, tag, val)
+            try:
+                apply_beam_override(beam_sequence, beam_start + local_idx, tag, val)
+            except Exception as e:
+                raise BeamOverrideError(
+                    str(e),
+                    beam_index=local_idx,
+                    dicom_tag=tag,
+                ) from e

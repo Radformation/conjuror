@@ -11,6 +11,7 @@ from pydicom.sequence import Sequence as DicomSequence
 
 from conjuror.plans.beam_overrides import (
     BEAM_OVERRIDE_VALIDATORS,
+    BeamOverrideError,
     BeamOverrideTag,
     apply_beam_override,
     apply_beam_overrides,
@@ -207,10 +208,11 @@ class TestAddProcedureBeamOverride(unittest.TestCase):
         kwargs = PARAMS_OVERRIDE.get(cls, {})
         proc = cls(**kwargs)
         before = len(pg.ds.BeamSequence)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(BeamOverrideError) as ctx:
             pg.add_procedure(proc, beam_overrides={tag: {0: INVALID_OVERRIDES[tag]}})
 
-        # No beams added to plan
+        assert ctx.exception.beam_index == 0
+        assert ctx.exception.dicom_tag == tag
         assert len(pg.ds.BeamSequence) == before
 
     @parameterized.expand(
@@ -252,10 +254,11 @@ class TestAddProcedureBeamOverride(unittest.TestCase):
         kwargs = PARAMS_OVERRIDE.get(cls, {})
         proc = cls(**kwargs)
         before = len(pg.ds.BeamSequence)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(BeamOverrideError) as ctx:
             pg.add_procedure(proc, beam_overrides={tag: {0: INVALID_OVERRIDES[tag]}})
 
-        # No beams added to plan
+        assert ctx.exception.beam_index == 0
+        assert ctx.exception.dicom_tag == tag
         assert len(pg.ds.BeamSequence) == before
 
 
