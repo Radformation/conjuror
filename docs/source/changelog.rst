@@ -11,7 +11,7 @@ Legend
   boost or code cleanup.
 * :bdg-danger:`Change` denotes a change that may break existing code.
 
-v 0.2.2
+v 0.3.0
 -------
 
 General

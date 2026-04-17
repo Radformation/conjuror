@@ -84,9 +84,7 @@ def test_literal_tags_match_validator_keys():
         ("ControlPointSequence[12] ", ("ControlPointSequence", 12)),
     ],
 )
-def test_valid_parse_dicom_path_segment(
-    segment: str, expected: tuple[str, int | None]
-) -> None:
+def test_valid_parse_dicom_path_segment(segment: str, expected: tuple[str, int | None]):
     assert parse_dicom_path_segment(segment) == expected
 
 
@@ -109,14 +107,14 @@ def test_valid_parse_dicom_path_segment(
         ".BeamName",
     ],
 )
-def test_invalid_parse_dicom_path_segment(segment: str) -> None:
+def test_invalid_parse_dicom_path_segment(segment: str):
     with pytest.raises(ValueError, match="Invalid DICOM path segment"):
         parse_dicom_path_segment(segment)
 
 
 class TestBeamOverrideProcedureAllowLists(unittest.TestCase):
     @parameterized.expand(PROCEDURE_CLASSES)
-    def test_allow_list_tags_have_validators(self, cls: type[QAProcedureBase]) -> None:
+    def test_allow_list_tags_have_validators(self, cls: type[QAProcedureBase]):
         assert set(cls.BEAM_OVERRIDE_ALLOW_LIST).issubset(set(BEAM_OVERRIDE_VALIDATORS))
 
 
@@ -178,7 +176,7 @@ class TestAddProcedureBeamOverride(unittest.TestCase):
     )
     def test_valid_override_truebeam(
         self, cls: type[QAProcedureBase], tag: BeamOverrideTag
-    ) -> None:
+    ):
         pg = PlanGenerator.from_rt_plan_file(
             TB_MIL_PLAN_FILE, plan_label="label", plan_name="name"
         )
@@ -200,7 +198,7 @@ class TestAddProcedureBeamOverride(unittest.TestCase):
     )
     def test_invalid_override_truebeam(
         self, cls: type[QAProcedureBase], tag: BeamOverrideTag
-    ) -> None:
+    ):
         pg = PlanGenerator.from_rt_plan_file(
             TB_MIL_PLAN_FILE, plan_label="label", plan_name="name"
         )
@@ -223,7 +221,7 @@ class TestAddProcedureBeamOverride(unittest.TestCase):
     )
     def test_valid_override_halcyon(
         self, cls: type[QAProcedureBase], tag: BeamOverrideTag
-    ) -> None:
+    ):
         pg = PlanGenerator.from_rt_plan_file(
             HAL_PLAN_FILE, plan_label="label", plan_name="name"
         )
@@ -245,7 +243,7 @@ class TestAddProcedureBeamOverride(unittest.TestCase):
     )
     def test_invalid_override_halcyon(
         self, cls: type[QAProcedureBase], tag: BeamOverrideTag
-    ) -> None:
+    ):
         pg = PlanGenerator.from_rt_plan_file(
             HAL_PLAN_FILE, plan_label="label", plan_name="name"
         )
@@ -269,36 +267,36 @@ class TestApplyBeamOverride(unittest.TestCase):
         b.ControlPointSequence = DicomSequence([cp])
         return b
 
-    def test_sets_beam_name_leaf(self) -> None:
+    def test_sets_beam_name_leaf(self):
         seq = DicomSequence([self._beam_with_cp()])
         assert seq[0].BeamName == "orig"
         apply_beam_override(seq, 0, "BeamName", "newname")
         assert seq[0].BeamName == "newname"
 
-    def test_sets_nested_patient_support_angle(self) -> None:
+    def test_sets_nested_patient_support_angle(self):
         seq = DicomSequence([self._beam_with_cp()])
         assert seq[0].ControlPointSequence[0].PatientSupportAngle == 0.0
         apply_beam_override(seq, 0, "ControlPointSequence[0].PatientSupportAngle", 88.5)
         assert seq[0].ControlPointSequence[0].PatientSupportAngle == 88.5
 
-    def test_beam_index_out_of_range(self) -> None:
+    def test_beam_index_out_of_range(self):
         seq = DicomSequence([Dataset()])
         with self.assertRaises(IndexError):
             apply_beam_override(seq, 1, "BeamName", "x")
 
-    def test_missing_leaf_keyword(self) -> None:
+    def test_missing_leaf_keyword(self):
         b = Dataset()
         b.BeamName = "a"
         seq = DicomSequence([b])
         with self.assertRaises(KeyError):
             apply_beam_override(seq, 0, "GantryAngle", 0.0)
 
-    def test_sequence_segment_without_index_raises(self) -> None:
+    def test_sequence_segment_without_index_raises(self):
         seq = DicomSequence([self._beam_with_cp()])
         with self.assertRaises(ValueError):
             apply_beam_override(seq, 0, "ControlPointSequence.PatientSupportAngle", 1.0)
 
-    def test_apply_beam_overrides_multiple_beams(self) -> None:
+    def test_apply_beam_overrides_multiple_beams(self):
         beams = DicomSequence([self._beam_with_cp(), self._beam_with_cp()])
         apply_beam_overrides(
             beams,
@@ -308,7 +306,7 @@ class TestApplyBeamOverride(unittest.TestCase):
         assert beams[0].BeamName == "B0"
         assert beams[1].BeamName == "B1"
 
-    def test_apply_beam_overrides_beam_start_offset(self) -> None:
+    def test_apply_beam_overrides_beam_start_offset(self):
         beams = DicomSequence([self._beam_with_cp(), self._beam_with_cp()])
         apply_beam_overrides(beams, {"BeamName": {0: "second"}}, beam_start=1)
         assert beams[0].BeamName == "orig"
