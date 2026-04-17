@@ -3,6 +3,9 @@ from collections.abc import Callable
 from functools import partial
 from typing import Any, Literal, TypeAlias
 
+from pydicom import config
+from pydicom.datadict import dictionary_VR, tag_for_keyword
+from pydicom.dataelem import DataElement
 from pydicom.sequence import Sequence as DicomSequence
 
 BeamOverrideTag: TypeAlias = Literal[
@@ -20,33 +23,44 @@ BeamOverride: TypeAlias = dict[int, Any]
 BeamOverrides: TypeAlias = dict[BeamOverrideTag, BeamOverride]
 
 
+def validate_dicom_keyword_value(keyword: str, value: Any) -> None:
+    """Validate *value* against the VR of the given DICOM keyword.
+
+    Looks up the tag and VR via pydicom's data dictionary, then constructs
+    a DataElement to run pydicom's full VR-specific validation and type
+    coercion.
+    """
+    tag = tag_for_keyword(keyword)
+    if tag is None:
+        raise ValueError(f"{keyword}: Unknown DICOM keyword")
+    vr = dictionary_VR(tag)
+    try:
+        DataElement(tag, vr, value, validation_mode=config.RAISE)
+    except Exception as e:
+        raise ValueError(f"{keyword}: {str(e)}") from e
+
+
 def validate_long_string(
-    value: Any, field_label: str = "LO", max_length: int = 64, required=True
+    value: Any, keyword: str = "BeamName", required: bool = True
 ) -> None:
     """Validate a value for DICOM Long String (LO) semantics."""
-    if not isinstance(value, str):
-        raise TypeError(f"{field_label} must be str")
-    if len(value) > max_length:
-        raise ValueError(f"{field_label} exceeds max length {max_length}")
-    if required and len(value) == 0:
-        raise ValueError(f"{field_label} is required and cannot be empty")
+    validate_dicom_keyword_value(keyword, value)
+    if required and (value is None or len(str(value)) == 0):
+        raise ValueError(f"{keyword}: is required and cannot be empty")
 
 
-def validate_angle(
-    value: Any, field_label: str, min_deg: float, max_deg: float
-) -> None:
+def validate_angle(value: Any, keyword: str, min_deg: float, max_deg: float) -> None:
     """Validate a numeric angle in degrees."""
-    if not isinstance(value, (int, float)):
-        raise TypeError(f"{field_label} must be int or float")
-
-    if not (min_deg <= value <= max_deg):
-        raise ValueError(f"{field_label} must be in [{min_deg}, {max_deg}] degrees")
+    validate_dicom_keyword_value(keyword, value)
+    num = float(value)
+    if not (min_deg <= num <= max_deg):
+        raise ValueError(f"{keyword}: must be in [{min_deg}, {max_deg}] degrees")
 
 
 BEAM_OVERRIDE_VALIDATORS: dict[BeamOverrideTag, Callable[[Any], None]] = {
-    "BeamName": partial(validate_long_string, field_label="BeamName"),
+    "BeamName": partial(validate_long_string, keyword="BeamName"),
     "ControlPointSequence[0].PatientSupportAngle": partial(
-        validate_angle, field_label="PatientSupportAngle", min_deg=-360.0, max_deg=360.0
+        validate_angle, keyword="PatientSupportAngle", min_deg=-360.0, max_deg=360.0
     ),
 }
 

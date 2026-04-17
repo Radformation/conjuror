@@ -129,9 +129,10 @@ class TestBeamNameValidator(unittest.TestCase):
 
     @parameterized.expand(
         [
+            (None, "is required"),
             ("", "is required"),
-            (1, "must be str"),
-            ("a" * 65, "exceeds max length 64"),
+            (1, "cannot be assigned"),
+            ("a" * 65, "exceeds"),
         ]
     )
     def test_invalid(self, value: Any, message_substring: str):
@@ -144,13 +145,13 @@ class TestBeamNameValidator(unittest.TestCase):
 class TestPatientSupportAngleValidator(unittest.TestCase):
     validator = BEAM_OVERRIDE_VALIDATORS["ControlPointSequence[0].PatientSupportAngle"]
 
-    @parameterized.expand([0, -180.5, 360.0])
+    @parameterized.expand([0, -180.5, 360.0, "90"])
     def test_valid(self, value: float):
         assert self.validator(value) is None
 
     @parameterized.expand(
         [
-            ("90", "must be int or float"),
+            ("not a number", "Invalid value"),
             (400.0, "must be in [-360.0, 360.0]"),
             (-400.0, "must be in [-360.0, 360.0]"),
         ]
