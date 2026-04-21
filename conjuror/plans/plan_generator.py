@@ -4,7 +4,7 @@ import inspect
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Self, Generic
+from typing import ClassVar, Generic, Self
 
 from plotly import graph_objects as go
 from pydantic import BaseModel, Field, ConfigDict
@@ -17,6 +17,12 @@ from pydicom.uid import generate_uid
 from conjuror.images.layers import ArrayLayer
 from conjuror.images.simulators import Imager, Simulator
 from conjuror.plans.beam import Beam
+from conjuror.plans.beam_overrides import (
+    BeamOverrideTag,
+    BeamOverrides,
+    apply_beam_overrides,
+    validate_overrides,
+)
 from conjuror.plans.machine import TMachine, MachineSpecs
 from conjuror.plans.visualization import plot_fluences
 
@@ -27,6 +33,13 @@ class QAProcedureBase(BaseModel, Generic[TMachine], ABC):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     beams: SkipJsonSchema[list[Beam[TMachine]]] = Field(default_factory=list)
+
+    BEAM_OVERRIDE_ALLOW_LIST: ClassVar[frozenset[BeamOverrideTag]] = frozenset(
+        {
+            "BeamName",
+            "ControlPointSequence[0].PatientSupportAngle",
+        }
+    )
 
     @abstractmethod
     def compute(self, machine: TMachine):
@@ -186,10 +199,26 @@ class PlanGenerator(Generic[TMachine]):
         referenced_beam.ReferencedDoseReferenceUID = dose_reference_uid
         self.ds.FractionGroupSequence[0].ReferencedBeamSequence.append(referenced_beam)
 
-    def add_procedure(self, procedure: QAProcedureBase) -> None:
+    def add_procedure(
+        self, procedure: QAProcedureBase, beam_overrides: BeamOverrides | None = None
+    ) -> None:
+        procedure.beams = []
         procedure.compute(self.machine)
+
+        beam_overrides = beam_overrides or {}
+        if beam_overrides:
+            validate_overrides(
+                beam_overrides,
+                procedure.BEAM_OVERRIDE_ALLOW_LIST,
+                max_beams=len(procedure.beams),
+            )
+
+        beam_start = len(self.ds.BeamSequence)
         for beam in procedure.beams:
             self.add_beam(beam)
+
+        if beam_overrides:
+            apply_beam_overrides(self.ds.BeamSequence, beam_overrides, beam_start)
 
     def to_file(self, filename: str | Path) -> None:
         """Write the DICOM dataset to file"""

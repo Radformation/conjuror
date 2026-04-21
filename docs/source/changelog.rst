@@ -11,6 +11,20 @@ Legend
   boost or code cleanup.
 * :bdg-danger:`Change` denotes a change that may break existing code.
 
+v 0.3.0
+-------
+
+General
+^^^^^^^
+
+* :bdg-success:`Feature` Added support for overriding DICOM Tags in generated beams. Overrides
+  can be provided via ``PlanGenerator.add_procedure``. Initial supported tags are ``BeamName``
+  and ``ControlPointSequence[0].PatientSupportAngle``.
+
+* :bdg-warning:`Change` The ``beam_name``/``beam_names`` parameter was removed from all
+  ``Procedure`` classes. Beam Names will now be generated automatically, with the option
+  to override them via the new beam overrides feature.
+
 v 0.2.1
 -------
 

@@ -185,9 +185,6 @@ class PicketFence(QAProcedure):
     mu: int = Field(
         default=200, title="Monitor Units", description="The monitor units of the beam."
     )
-    beam_name: str = Field(
-        default="PF", title="Beam Name", description="The name of the beam."
-    )
 
     def compute(self, machine: HalcyonMachine) -> None:
         prox_mlc, dist_mlc = Beam.create_mlc(machine)
@@ -221,7 +218,7 @@ class PicketFence(QAProcedure):
                     dist_mlc.park(meterset=meterset)
 
         beam = Beam(
-            beam_name=self.beam_name,
+            beam_name="PF",
             gantry_angles=self.gantry_angle,
             coll_angle=self.coll_angle,
             couch_vrt=self.couch_vrt,
