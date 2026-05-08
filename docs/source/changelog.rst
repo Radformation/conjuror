@@ -11,6 +11,15 @@ Legend
   boost or code cleanup.
 * :bdg-danger:`Change` denotes a change that may break existing code.
 
+v 0.3.1
+-------
+
+General
+^^^^^^^
+
+* :bdg-warning:`Fixed` Removed the ``(3253,1000)`` ExtendedVAPlanInterface
+  private tag to avoid conflicts with the generated beams.
+
 v 0.3.0
 -------
 

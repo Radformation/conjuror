@@ -144,6 +144,11 @@ class PlanGenerator(Generic[TMachine]):
         frxn_gp.ReferencedBeamSequence = DicomSequence()
         plan.FractionGroupSequence = DicomSequence((frxn_gp,))
 
+        # Remove ExtendedVAPlanInterface private tag
+        tag = (0x3253, 0x1000)
+        if tag in plan:
+            del plan[tag]
+
         # Store attributes
         self._base_plan = base_plan
         self.ds = plan

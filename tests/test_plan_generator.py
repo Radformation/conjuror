@@ -91,6 +91,13 @@ class TestPlanGeneratorCreation:
             assert beam.Manufacturer == expected_manufacturer
             assert beam.ManufacturerModelName == expected_model
 
+    def test_remove_private_tag(self):
+        tag = (0x3253, 0x1000)
+        dataset = pydicom.dcmread(TB_MIL_PLAN_FILE)
+        dataset.add_new(tag, "OB", b"remove-me")
+        pg = PlanGenerator(dataset, plan_label="label", plan_name="name")
+        assert tag not in pg.ds
+
 
 class TestPlanGeneratorParameters:
     def test_no_patient_id(self):
