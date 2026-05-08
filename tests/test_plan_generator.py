@@ -35,7 +35,7 @@ class TestPlanGeneratorCreation:
         dataset = pydicom.dcmread(TB_MIL_PLAN_FILE)
         pg = PlanGenerator(dataset, plan_label="label", plan_name="name")
         assert pg.ds.Modality == "RTPLAN"
-        assert len(pg.ds) == 47
+        assert len(pg.ds) == 46
 
     def test_from_rt_file(self):
         pg = PlanGenerator.from_rt_plan_file(
