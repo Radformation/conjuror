@@ -54,6 +54,13 @@ class TestBeamCreation:
         beam = BeamBase.from_dicom(ds, 0)
         assert beam.number_of_control_points == 2
 
+    def test_from_dicom_non_standard_fluence_mode(self):
+        ds = pydicom.dcmread(TB_MIL_PLAN_FILE)
+        ds.BeamSequence[0].PrimaryFluenceModeSequence[0].FluenceMode = "NON_STANDARD"
+        ds.BeamSequence[0].PrimaryFluenceModeSequence[0].FluenceModeID = "FFF"
+        beam = BeamBase.from_dicom(ds, 0)
+        assert beam.number_of_control_points == 2
+
     def test_from_dicom_without_primary_fluence_mode_sequence(self):
         # E.g. the picket fence RT plan does not have PrimaryFluenceModeSequence
         ds = pydicom.dcmread(TB_MIL_PLAN_FILE)

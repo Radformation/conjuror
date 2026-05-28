@@ -512,7 +512,7 @@ class Beam(Generic[TMachine], BeamDynamicsMixin, BeamVisualizationMixin, ABC):
         fluence_mode = FluenceMode.STANDARD
         pfms = beam.get("PrimaryFluenceModeSequence")
         if pfms and pfms[0].get("FluenceMode") == "NON_STANDARD":
-            match pfms.FluenceModeID:
+            match pfms[0].FluenceModeID:
                 case "FFF":
                     fluence_mode = FluenceMode.FFF
                 case "SRS":

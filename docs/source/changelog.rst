@@ -11,6 +11,15 @@ Legend
   boost or code cleanup.
 * :bdg-danger:`Change` denotes a change that may break existing code.
 
+v 0.3.2
+-------
+
+General
+^^^^^^^
+
+* :bdg-warning:`Fixed` Fixed a bug in Beam.from_dicom which would cause it to
+  raise an exception when the Beam had a non-standard Fluence Mode.
+
 v 0.3.1
 -------
 
