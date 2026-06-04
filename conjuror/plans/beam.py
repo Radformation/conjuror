@@ -455,8 +455,8 @@ class Beam(Generic[TMachine], BeamDynamicsMixin, BeamVisualizationMixin, ABC):
             The couch rotation.
         """
 
-        if len(beam_name) > 16:
-            raise ValueError("Beam name must be less than or equal to 16 characters")
+        if len(beam_name) > 64:
+            raise ValueError("Beam name must be less than or equal to 64 characters")
 
         # Private attributes used for dicom creation only
         self._fluence_mode = fluence_mode
