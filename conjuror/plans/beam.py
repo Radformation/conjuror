@@ -456,6 +456,8 @@ class Beam(Generic[TMachine], BeamDynamicsMixin, BeamVisualizationMixin, ABC):
         """
 
         if len(beam_name) > 64:
+            # BeamName's can accept up to 64 characters:
+            # https://dicom.innolitics.com/ciods/rt-plan/rt-beams/300a00b0/300a00c2
             raise ValueError("Beam name must be less than or equal to 64 characters")
 
         # Private attributes used for dicom creation only
