@@ -11,6 +11,15 @@ Legend
   boost or code cleanup.
 * :bdg-danger:`Change` denotes a change that may break existing code.
 
+v 0.3.3
+-------
+
+General
+^^^^^^^
+
+* :bdg-warning:`Fixed` Fixed a bug in Beam creation to accept BeamNames up to
+  64 characters long, as per DICOM standard.
+
 v 0.3.2
 -------
 

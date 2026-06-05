@@ -1,6 +1,9 @@
 import numpy as np
 import pydicom
 import pytest
+from pydicom import config
+from pydicom import DataElement
+from pydicom.datadict import tag_for_keyword, dictionary_VR
 
 from conjuror.images.simulators import IMAGER_AS1200, Imager
 from conjuror.plans.beam import Beam as BeamBase
@@ -79,9 +82,33 @@ class TestBeamCreation:
         with pytest.raises(ValueError):
             Beam.from_dicom(ds, 1)
 
+    def test_valid_beam_name(self):
+        beam_name = "a" * 64
+
+        # validate that pydicom accepts the beam name
+        tag = tag_for_keyword("BeamName")
+        vr = dictionary_VR(tag)
+        DataElement(tag, vr, beam_name, validation_mode=config.RAISE)
+
+        # Validate our handling matches pydicom
+        beam = create_beam(beam_name=beam_name)
+        beam_dcm = beam.to_dicom()
+        assert beam_dcm.BeamName == beam_name
+
     def test_error_if_beam_name_too_long(self):
+        # BeamName in DICOM is limited to 64 characters, so raise
+        # an error if the name is too long to prevent generating invalid DICOM
+        beam_name = "a" * 65
+
+        # validate that pydicom rejects the beam name
+        tag = tag_for_keyword("BeamName")
+        vr = dictionary_VR(tag)
         with pytest.raises(ValueError):
-            create_beam(beam_name="superlongbeamname")
+            DataElement(tag, vr, beam_name, validation_mode=config.RAISE)
+
+        # Validate our handling matches pydicom
+        with pytest.raises(ValueError):
+            create_beam(beam_name=beam_name)
 
 
 class TestBeamType:
