@@ -62,11 +62,15 @@ class BeamVisualizationMixin:
         jaws_y = next(
             val for key, val in positions_by_device.items() if key in ["ASYMY", "Y"]
         )
-        if np.any(np.diff(jaws_x, axis=1)) or np.any(np.diff(jaws_y, axis=1)):
-            raise ValueError("The jaws must be static")
-
-        col_mask = (x >= jaws_x[0, 0]) & (x <= jaws_x[1, 0])
-        row_mask = (y >= jaws_y[0, 0]) & (y <= jaws_y[1, 0])
+        jaws_are_static = not (
+            np.any(np.diff(jaws_x, axis=1)) or np.any(np.diff(jaws_y, axis=1))
+        )
+        if jaws_are_static:
+            col_mask = (x >= jaws_x[0, 0]) & (x <= jaws_x[1, 0])
+            row_mask = (y >= jaws_y[0, 0]) & (y <= jaws_y[1, 0])
+        else:
+            col_mask = (x >= np.min(jaws_x[0, :])) & (x <= np.max(jaws_x[1, :]))
+            row_mask = (y >= np.min(jaws_y[0, :])) & (y <= np.max(jaws_y[1, :]))
         x = x[col_mask]
         y = y[row_mask]
 
@@ -101,6 +105,9 @@ class BeamVisualizationMixin:
         t = range(num_cp)  # abscissas for interpolation (used t since x is imager axis)
         t_ = np.linspace(0, num_cp - 1, num_cp_)  # evaluated abscissas
         metersets = make_interp_spline(t, self.metersets, k=1)(t_)
+        if not jaws_are_static:
+            jaws_x = make_interp_spline(t, jaws_x, k=1, axis=1)(t_)
+            jaws_y = make_interp_spline(t, jaws_y, k=1, axis=1)(t_)
         for bld in blds.values():
             bld.leaves_a = make_interp_spline(t, bld.leaves_a, k=1, axis=1)(t_)
             bld.leaves_b = make_interp_spline(t, bld.leaves_b, k=1, axis=1)(t_)
@@ -126,6 +133,11 @@ class BeamVisualizationMixin:
                 else:
                     np.logical_and(cp_open, bld_open, out=cp_open)
             if cp_open is not None:
+                if not jaws_are_static:
+                    cp_open &= (x >= jaws_x[0, cp_idx]) & (x <= jaws_x[1, cp_idx])
+                    cp_open &= ((y >= jaws_y[0, cp_idx]) & (y <= jaws_y[1, cp_idx]))[
+                        :, np.newaxis
+                    ]
                 fluence_open[cp_open] += meterset_per_cp[cp_idx]
 
         fluence = np.zeros(imager.shape)

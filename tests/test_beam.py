@@ -236,6 +236,32 @@ class TestVisualizations:
         assert not np.any(fluence[: 50 - 12, :])
         assert not np.any(fluence[50 + 15 :, :])
 
+    def test_dynamic_jaws(self):
+        image = Imager(pixel_size=1, shape=(100, 100))
+        beam = create_beam(
+            mlc_positions=2 * [60 * [-50] + 60 * [50]],
+            metersets=[0, 100],
+            x1=-20,
+            x2=20,
+            y1=-20,
+            y2=20,
+        )
+        beam.beam_limiting_device_positions["ASYMX"] = np.array([[-20, 0], [0, 20]])
+        beam.beam_limiting_device_positions["ASYMY"] = np.array([[-20, 0], [0, 20]])
+
+        fluence = beam.generate_fluence(image, interpolation_factor=2)
+
+        x = image.pixel_size * (np.arange(image.shape[1]) - (image.shape[1] - 1) / 2)
+        y = image.pixel_size * (np.arange(image.shape[0]) - (image.shape[0] - 1) / 2)
+        midpoint_jaws = ((x >= -10) & (x <= 10))[np.newaxis, :] & (
+            (y >= -10) & (y <= 10)
+        )[:, np.newaxis]
+        final_jaws = ((x >= 0) & (x <= 20))[np.newaxis, :] & ((y >= 0) & (y <= 20))[
+            :, np.newaxis
+        ]
+        nominal = 50 * midpoint_jaws + 50 * final_jaws
+        assert np.all(fluence == nominal)
+
     def test_animate_mlc(self):
         procedure = PicketFence()
         procedure.compute(DEFAULT_TRUEBEAM_HD120)
