@@ -11,6 +11,15 @@ Legend
   boost or code cleanup.
 * :bdg-danger:`Change` denotes a change that may break existing code.
 
+v 0.3.4
+-------
+
+Optimization
+^^^^^^^^^^^^
+
+* :bdg-primary:`Refactor` Refactored ``generate_fluence``/``plot_fluence`` to provide a ~10x
+  speedup.
+
 v 0.3.3
 -------
 

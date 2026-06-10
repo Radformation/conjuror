@@ -22,6 +22,8 @@ class _BeamLimitingDevice:
     leaf_position_boundaries: list[float]
     # This maps an imager rows to a given leaf (e.g. rows 450-470 -> leaf #10)
     row_to_leaf_map: np.ndarray
+    active_rows: np.ndarray
+    active_row_to_leaf_map: np.ndarray
     leaves_a: np.ndarray
     leaves_b: np.ndarray
 
@@ -52,17 +54,47 @@ class BeamVisualizationMixin:
         x = imager.pixel_size * (np.arange(imager.shape[1]) - (imager.shape[1] - 1) / 2)
         y = imager.pixel_size * (np.arange(imager.shape[0]) - (imager.shape[0] - 1) / 2)
 
+        # Jaws
+        positions_by_device = self.beam_limiting_device_positions
+        jaws_x = next(
+            val for key, val in positions_by_device.items() if key in ["ASYMX", "X"]
+        )
+        jaws_y = next(
+            val for key, val in positions_by_device.items() if key in ["ASYMY", "Y"]
+        )
+        jaws_are_static = not (
+            np.any(np.diff(jaws_x, axis=1)) or np.any(np.diff(jaws_y, axis=1))
+        )
+        if jaws_are_static:
+            col_mask = (x >= jaws_x[0, 0]) & (x <= jaws_x[1, 0])
+            row_mask = (y >= jaws_y[0, 0]) & (y <= jaws_y[1, 0])
+        else:
+            col_mask = (x >= np.min(jaws_x[0, :])) & (x <= np.max(jaws_x[1, :]))
+            row_mask = (y >= np.min(jaws_y[0, :])) & (y <= np.max(jaws_y[1, :]))
+        x = x[col_mask]
+        y = y[row_mask]
+
         # Store MLC data in a single dictionary
         bldseq = self.beam_limiting_device_sequence
         blds = dict[str, _BeamLimitingDevice]()
-        for key, positions in self.beam_limiting_device_positions.items():
+        for key, positions in positions_by_device.items():
             if "MLC" not in key:
                 continue
             bld = next(blds for blds in bldseq if blds.RTBeamLimitingDeviceType == key)
+            row_to_leaf_map = (
+                np.argmax(
+                    np.array([bld.LeafPositionBoundaries]).T - y > 0,
+                    axis=0,
+                )
+                - 1
+            )
+            active_rows = row_to_leaf_map >= 0
             blds[key] = _BeamLimitingDevice(
                 bld.NumberOfLeafJawPairs,
                 bld.LeafPositionBoundaries,
-                np.argmax(np.array([bld.LeafPositionBoundaries]).T - y > 0, axis=0) - 1,
+                row_to_leaf_map,
+                active_rows,
+                row_to_leaf_map[active_rows],
                 positions[bld.NumberOfLeafJawPairs :, :],
                 positions[: bld.NumberOfLeafJawPairs, :],
             )
@@ -73,40 +105,43 @@ class BeamVisualizationMixin:
         t = range(num_cp)  # abscissas for interpolation (used t since x is imager axis)
         t_ = np.linspace(0, num_cp - 1, num_cp_)  # evaluated abscissas
         metersets = make_interp_spline(t, self.metersets, k=1)(t_)
+        if not jaws_are_static:
+            jaws_x = make_interp_spline(t, jaws_x, k=1, axis=1)(t_)
+            jaws_y = make_interp_spline(t, jaws_y, k=1, axis=1)(t_)
         for bld in blds.values():
             bld.leaves_a = make_interp_spline(t, bld.leaves_a, k=1, axis=1)(t_)
             bld.leaves_b = make_interp_spline(t, bld.leaves_b, k=1, axis=1)(t_)
 
         meterset_per_cp = np.diff(metersets, prepend=0)
-        fluence = np.zeros(imager.shape)
+        fluence_open = np.zeros((len(y), len(x)))
         for cp_idx in range(1, num_cp_):
-            stack_fluences = list()
+            cp_open = None
             for bld in blds.values():
                 leaves_b = bld.leaves_b[:, cp_idx : cp_idx + 1]
                 leaves_a = bld.leaves_a[:, cp_idx : cp_idx + 1]
-                mu = meterset_per_cp[cp_idx]
                 # The mask contains the fluence boolean values, where the y-axis corresponds
                 # to the leaves and the x-axis indicates whether a given pixel is irradiated.
                 stack_compact = (x > leaves_b) & (x <= leaves_a)
-                # This loop expands stack_compact into the full size image stack_fluence
-                stack_fluence = np.zeros(imager.shape)
-                for row in range(len(y)):
-                    leaf = bld.row_to_leaf_map[row]
-                    if leaf < 0:
-                        continue
-                    stack_fluence[row, stack_compact[leaf, :]] = mu
-                stack_fluences.append(stack_fluence)
-            cp_fluence = np.min(stack_fluences, axis=0)
-            fluence += cp_fluence
+                # Expand stack_compact into the jaw-open image without a Python row loop.
+                bld_open = np.zeros_like(fluence_open, dtype=bool)
+                bld_open[bld.active_rows, :] = stack_compact[
+                    bld.active_row_to_leaf_map,
+                    :,
+                ]
+                if cp_open is None:
+                    cp_open = bld_open
+                else:
+                    np.logical_and(cp_open, bld_open, out=cp_open)
+            if cp_open is not None:
+                if not jaws_are_static:
+                    cp_open &= (x >= jaws_x[0, cp_idx]) & (x <= jaws_x[1, cp_idx])
+                    cp_open &= ((y >= jaws_y[0, cp_idx]) & (y <= jaws_y[1, cp_idx]))[
+                        :, np.newaxis
+                    ]
+                fluence_open[cp_open] += meterset_per_cp[cp_idx]
 
-        # Jaws
-        blds = self.beam_limiting_device_positions
-        jaws_x = next(val for key, val in blds.items() if key in ["ASYMX", "X"])
-        jaws_y = next(val for key, val in blds.items() if key in ["ASYMY", "Y"])
-        if np.any(np.diff(jaws_x, axis=1)) or np.any(np.diff(jaws_y, axis=1)):
-            raise ValueError("The jaws must be static")
-        fluence[:, (x < jaws_x[0, 0]) | (x > jaws_x[1, 0])] = 0
-        fluence[(y < jaws_y[0, 0]) | (y > jaws_y[1, 0]), :] = 0
+        fluence = np.zeros(imager.shape)
+        fluence[np.ix_(row_mask, col_mask)] = fluence_open
 
         return fluence
 
