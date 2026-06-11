@@ -144,6 +144,7 @@ class PicketFence(QAProcedure):
     model_config = ConfigDict(title="Picket Fence")
 
     stack: Stack = Field(
+        default=Stack.DISTAL,
         title="Stack",
         description="Which MLC stack to use for the beam. The other stack will be parked.",
     )
