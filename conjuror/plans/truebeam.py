@@ -1897,10 +1897,10 @@ class VMATDRMLC(QAProcedure):
         title="MLC Speeds [mm/sec]",
         description="The MLC speeds to test. Each speed will have its own ROI.",
     )
-    gantry_speeds: tuple[float, ...] | None = Field(
-        default=None,
+    gantry_speeds: tuple[float, ...] = Field(
+        default=(),
         title="Gantry Speeds [deg/sec]",
-        description="The gantry speeds. When None it will default to max gantry speed for all segments.",
+        description="The gantry speeds. When empty, it will default to max gantry speed for all segments.",
     )
     segment_width: float = Field(
         default=30.0,
